@@ -415,8 +415,17 @@ const HANDLERS = Object.freeze({
 
         const characterId = event.characterId;
         const character = requireCharacter(state, characterId);
-        if (character.alive === false || character.status === 'dead' || character.status === 'missing') {
-            fail(`Cannot play as "${characterId}": the character is dead or missing`);
+        if (character.status === 'missing') {
+            fail(`Cannot play as "${characterId}": the character is missing`);
+        }
+        if (character.alive === false || character.status === 'dead') {
+            const badEndRecord = state.badEnds?.[characterId] ?? null;
+            const allowed = event.allowDeadContinuation === true
+                && character.status === 'dead'
+                && Boolean(badEndRecord);
+            if (!allowed) {
+                fail(`Cannot play as "${characterId}": the character is dead or missing`);
+            }
         }
 
         if (previousCharacter && previousCharacter.charId !== character.charId) {
@@ -428,6 +437,112 @@ const HANDLERS = Object.freeze({
             identity: 'canon',
             characterId: character.charId,
             personaNotes,
+        };
+    },
+
+    CONTINUE_BAD_END(state, event) {
+        const action = event.action;
+        if (action !== 'self' && action !== 'other' && action !== 'end') {
+            fail(`Unknown bad-end continuation "${String(action)}"`);
+        }
+        if (action === 'end') {
+            // End-here is a UI choice, not a mutation. Do not invent an ending.
+            return;
+        }
+
+        const previousCharacter = state.player.identity === 'canon'
+            ? state.characters[state.player.characterId] ?? null
+            : null;
+        const personaNotes = state.player?.personaNotes ?? '';
+        const turn = state.meta?.turn ?? 0;
+
+        if (action === 'self') {
+            const characterId = event.characterId;
+            const character = requireCharacter(state, characterId);
+            const record = state.badEnds?.[characterId] ?? null;
+            if (!record) {
+                fail(`Cannot continue as "${characterId}": no bad end record exists`);
+            }
+            if (character.status === 'missing') {
+                fail(`Cannot continue as "${characterId}": the character is missing`);
+            }
+            const isDead = character.status === 'dead' || character.alive === false;
+            if (isDead && (event.allowDeadContinuation !== true || character.status !== 'dead')) {
+                fail(`Cannot continue as "${characterId}": dead continuation is not enabled`);
+            }
+            if (previousCharacter && previousCharacter.charId !== character.charId) {
+                previousCharacter.controlledBy = 'npc';
+            }
+            character.controlledBy = 'player';
+            state.player = {
+                ...cloneWorldState(character),
+                identity: 'canon',
+                characterId: character.charId,
+                personaNotes,
+            };
+            state.flags = {
+                ...(isObject(state.flags) ? state.flags : {}),
+                badEndContinuation: {
+                    characterId: character.charId,
+                    choice: 'self',
+                    turn,
+                },
+            };
+            return;
+        }
+
+        if (event.identity !== 'custom' && event.identity !== 'canon') {
+            fail(`Unknown player identity "${String(event.identity)}"`);
+        }
+
+        if (event.identity === 'custom') {
+            if (previousCharacter) {
+                previousCharacter.controlledBy = 'npc';
+            }
+            state.player = createCustomPlayer({
+                displayName: typeof event.displayName === 'string' && event.displayName.length > 0
+                    ? event.displayName
+                    : 'The Player',
+                personaNotes,
+                locationId: state.scene?.locationId ?? null,
+            });
+            state.flags = {
+                ...(isObject(state.flags) ? state.flags : {}),
+                badEndContinuation: {
+                    characterId: null,
+                    choice: 'other',
+                    turn,
+                },
+            };
+            return;
+        }
+
+        const characterId = event.characterId;
+        const character = requireCharacter(state, characterId);
+        if (character.alive !== true || character.status === 'dead' || character.status === 'missing') {
+            fail(`Cannot play as "${characterId}": the character is not alive`);
+        }
+        const targetBadEnd = state.badEnds?.[characterId] ?? null;
+        if (targetBadEnd && targetBadEnd.reversed !== true) {
+            fail(`Cannot play as "${characterId}": the character has an active bad-end record`);
+        }
+        if (previousCharacter && previousCharacter.charId !== character.charId) {
+            previousCharacter.controlledBy = 'npc';
+        }
+        character.controlledBy = 'player';
+        state.player = {
+            ...cloneWorldState(character),
+            identity: 'canon',
+            characterId: character.charId,
+            personaNotes,
+        };
+        state.flags = {
+            ...(isObject(state.flags) ? state.flags : {}),
+            badEndContinuation: {
+                characterId: character.charId,
+                choice: 'other',
+                turn,
+            },
         };
     },
 

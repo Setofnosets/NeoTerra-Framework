@@ -20,6 +20,7 @@ export const BAD_END_PROMPT_PLACEHOLDERS = Object.freeze([
     '{{state}}',
     '{{recentEvents}}',
     '{{limits}}',
+    '{{candidates}}',
 ]);
 
 function freezeDeep(value) {
@@ -79,6 +80,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
     badEnds: {
         enabled: false,
         allowDeadContinuation: false,
+        minConfidence: 0.6,
         prompt: DEFAULT_BAD_END_PROMPT,
         epiloguePrompt: DEFAULT_BAD_END_EPILOGUE_PROMPT,
     },

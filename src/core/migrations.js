@@ -124,10 +124,14 @@ function normalizeCyoa(cyoa, defaults) {
 }
 
 function normalizeBadEnds(badEnds, defaults) {
+    const minConfidence = badEnds.minConfidence === undefined || badEnds.minConfidence === null
+        ? defaults.minConfidence
+        : asNumber(badEnds.minConfidence, defaults.minConfidence, { min: 0, max: 1 });
     return {
         ...badEnds,
         enabled: asBoolean(badEnds.enabled, defaults.enabled),
         allowDeadContinuation: asBoolean(badEnds.allowDeadContinuation, defaults.allowDeadContinuation),
+        minConfidence,
         prompt: asString(badEnds.prompt, defaults.prompt),
         epiloguePrompt: asString(badEnds.epiloguePrompt, defaults.epiloguePrompt),
     };

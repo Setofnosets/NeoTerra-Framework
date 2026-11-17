@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neoterra.local/schemas/bad-end.schema.json",
+  "title": "Neo Terra bad-end records and agent responses",
+  "description": "Documentation for WorldState.badEnds[characterId] plus the bad-end detector confirmation and epilogue response shapes. Validation is performed in JavaScript by validateWorldState and validateJsonSchema.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "worldStateBadEnd": {
+      "$ref": "#/$defs/badEndRecord"
+    },
+    "confirmation": {
+      "$ref": "#/$defs/confirmation"
+    },
+    "epilogue": {
+      "$ref": "#/$defs/epilogue"
+    }
+  },
+  "$defs": {
+    "badEndType": {
+      "type": "string",
+      "enum": [
+        "death",
+        "identity-loss",
+        "autonomy-loss",
+        "corruption",
+        "imprisonment",
+        "retirement"
+      ]
+    },
+    "badEndRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "severity",
+        "cause",
+        "sourceCharacterId",
+        "sourceFactionId",
+        "turn",
+        "date",
+        "locationId",
+        "epilogueText",
+        "playableAs",
+        "continuityKey",
+        "reversibility",
+        "notes",
+        "records",
+        "reversed",
+        "reversedTurn",
+        "reversalReason"
+      ],
+      "properties": {
+        "type": { "$ref": "#/$defs/badEndType" },
+        "severity": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" }
+          ]
+        },
+        "cause": { "type": "string" },
+        "sourceCharacterId": { "type": ["string", "null"] },
+        "sourceFactionId": { "type": ["string", "null"] },
+        "turn": { "type": "integer", "minimum": 0 },
+        "date": { "type": ["string", "null"] },
+        "locationId": { "type": ["string", "null"] },
+        "epilogueText": { "type": "string" },
+        "playableAs": { "type": "boolean" },
+        "continuityKey": { "type": "string" },
+        "reversibility": { "type": "string" },
+        "notes": { "type": "string" },
+        "records": {
+          "type": "array",
+          "description": "Prior records for the same character, preserved when a new continuity key supersedes an older record.",
+          "items": { "type": "object" }
+        },
+        "reversed": { "type": "boolean" },
+        "reversedTurn": { "type": ["integer", "null"], "minimum": 0 },
+        "reversalReason": { "type": ["string", "null"] },
+        "restoredStatus": {
+          "type": "string",
+          "description": "Present after REVERSE_BAD_END; one of CHARACTER_STATUSES."
+        }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confirmed",
+        "characterId",
+        "type",
+        "severity",
+        "confidence",
+        "cause",
+        "playableAs",
+        "reversibility",
+        "rationale"
+      ],
+      "properties": {
+        "confirmed": { "type": "boolean" },
+        "characterId": { "type": "string" },
+        "type": { "$ref": "#/$defs/badEndType" },
+        "severity": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" }
+          ]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "cause": { "type": "string", "maxLength": 600 },
+        "sourceCharacterId": { "type": ["string", "null"] },
+        "sourceFactionId": { "type": ["string", "null"] },
+        "playableAs": { "type": "boolean" },
+        "reversibility": { "type": "string" },
+        "rationale": { "type": "string", "maxLength": 600 }
+      }
+    },
+    "epilogue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["epilogueText"],
+      "properties": {
+        "epilogueText": {
+          "type": "string",
+          "minLength": 60,
+          "maxLength": 2400,
+          "description": "One to three paragraphs written against the recorded cause, location, and continuity key."
+        },
+        "notes": { "type": "string", "maxLength": 600 }
+      }
+    }
+  }
+}

@@ -6,11 +6,27 @@
  */
 
 import { UI_IDS } from '../core/constants.js';
+import {
+    DEFAULT_BAD_END_EPILOGUE_PROMPT,
+    DEFAULT_BAD_END_PROMPT,
+} from '../core/defaults.js';
 import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings, saveSettings, setByPath } from '../core/settings.js';
 
 const logger = createLogger('settings-ui');
+
+/** Default values restored by the per-prompt reset buttons. */
+export const PROMPT_RESET_DEFAULTS = Object.freeze({
+    'badEnds.prompt': DEFAULT_BAD_END_PROMPT,
+    'badEnds.epiloguePrompt': DEFAULT_BAD_END_EPILOGUE_PROMPT,
+});
+
+export function defaultPromptFor(path) {
+    return Object.hasOwn(PROMPT_RESET_DEFAULTS, path)
+        ? PROMPT_RESET_DEFAULTS[path]
+        : null;
+}
 
 let panelAbort = null;
 let mountedCtx = null;
@@ -94,6 +110,19 @@ function onReset(ctx, root) {
     logger.info('Settings reset to defaults');
 }
 
+function onResetPrompt(ctx, root, path) {
+    const value = defaultPromptFor(path);
+    if (value === null) {
+        return;
+    }
+    const settings = getSettings(ctx);
+    setByPath(settings, path, value);
+    const saved = saveSettings(ctx, settings);
+    paintSettingsPanel(ctx, root);
+    syncDependentFields(root, saved);
+    bus.emit(EVENTS.SETTINGS_CHANGED, { path, settings: saved });
+}
+
 /**
  * Fetch and mount the settings panel into SillyTavern's extension settings.
  * Safe to call on every initialize; duplicate mounts are ignored.
@@ -142,6 +171,11 @@ export async function mountSettingsPanel(ctx, { signal: externalSignal } = {}) {
 
     root.addEventListener('change', event => onChange(ctx, root, event), { signal });
     root.addEventListener('click', event => {
+        const promptButton = event.target.closest?.('[data-neoterra-reset-prompt]');
+        if (promptButton) {
+            onResetPrompt(ctx, root, promptButton.dataset.neoterraResetPrompt);
+            return;
+        }
         if (event.target.closest?.('[data-neoterra-reset]')) {
             onReset(ctx, root);
         }
