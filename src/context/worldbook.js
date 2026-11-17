@@ -17,6 +17,12 @@ const MAX_ENTRY_KEYS = 12;
 export const WORLD_BOOK_MARKER = 'neoterra:character:';
 
 /**
+ * Lore entries carry their own marker so merging lore never replaces or is
+ * replaced by generated character entries, and vice versa.
+ */
+export const WORLD_BOOK_LORE_MARKER = 'neoterra:lore:';
+
+/**
  * Full SillyTavern world-info entry shape. Generated entries always carry every
  * field so a host-side editor sees a complete entry rather than a sparse one.
  */
@@ -570,6 +576,478 @@ export function mergeWorldBookDocuments(existing, generated) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Lore entries and injection selection                                */
+/* ------------------------------------------------------------------ */
+
+const MAX_LORE_KEYS = 12;
+const MAX_LORE_KEY_CHARS = 100;
+const DEFAULT_LORE_MAX_TOKENS = 240;
+const DEFAULT_LORE_INJECTION_TOKENS = 900;
+
+function sanitizeIdSegment(id) {
+    if (typeof id !== 'string') {
+        return '';
+    }
+    return id
+        .trim()
+        .replace(/[^A-Za-z0-9._-]+/g, '-')
+        .replace(/^[-.]+|[-.]+$/g, '');
+}
+
+function loreKeys(candidates) {
+    const keys = [];
+    const seen = new Set();
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string') {
+            continue;
+        }
+        const value = candidate.trim().slice(0, MAX_LORE_KEY_CHARS).trim();
+        if (value.length === 0) {
+            continue;
+        }
+        const normalized = value.toLowerCase();
+        if (seen.has(normalized)) {
+            continue;
+        }
+        seen.add(normalized);
+        keys.push(value);
+        if (keys.length >= MAX_LORE_KEYS) {
+            break;
+        }
+    }
+    return keys;
+}
+
+function suffixFromComment(comment, marker) {
+    if (typeof comment !== 'string') {
+        return null;
+    }
+    const token = `[${marker}`;
+    const start = comment.indexOf(token);
+    if (start === -1) {
+        return null;
+    }
+    const rest = comment.slice(start + token.length);
+    const end = rest.indexOf(']');
+    const id = (end === -1 ? rest : rest.slice(0, end)).trim();
+    return id.length > 0 ? id : null;
+}
+
+/**
+ * Shape accepted by `buildLoreWorldBookEntry` and `mergeLoreEntries` when the
+ * agent or a normalizer supplies a lore record rather than a full ST entry.
+ *
+ * @typedef {object} LoreEntryInput
+ * @property {string} id        Opaque, season-scoped stable key.
+ * @property {string} title
+ * @property {string[]} [keys]
+ * @property {string} content
+ * @property {string[]} [tags]
+ * @property {number} [importance]
+ * @property {number} [depth]
+ * @property {number} [order]
+ */
+
+/**
+ * Build one complete SillyTavern world-info entry for a lore record.
+ *
+ * The id is opaque to callers but is sanitized into a marker-safe segment so
+ * it can round-trip through `parseGeneratedLoreEntryId`.
+ */
+export function buildLoreWorldBookEntry({
+    id,
+    title = '',
+    keys = [],
+    content = '',
+    tags = [],
+    depth = 4,
+    order = 200,
+    uid = 0,
+    gateLevel = 'full',
+    limits = {},
+    maxTokens = DEFAULT_LORE_MAX_TOKENS,
+} = {}) {
+    const loreId = sanitizeIdSegment(id);
+    if (!loreId) {
+        return null;
+    }
+    const label = typeof title === 'string' && title.trim().length > 0
+        ? title.trim().slice(0, 160)
+        : loreId;
+    if (typeof content !== 'string' || content.trim().length === 0) {
+        return null;
+    }
+
+    const gated = applyContentGate(content, gateLevel, limits, { characterId: null, isPlayer: false });
+    const trimmed = truncateToTokens(gated, maxTokens);
+    if (trimmed.text.trim().length === 0) {
+        return null;
+    }
+
+    return {
+        ...ST_WORLD_INFO_ENTRY_DEFAULTS,
+        key: loreKeys([label, ...asKeyList(keys), ...asKeyList(tags)]),
+        keysecondary: [],
+        comment: `Neo Terra — Lore: ${label} [${WORLD_BOOK_LORE_MARKER}${loreId}]`,
+        content: trimmed.text,
+        constant: false,
+        selective: true,
+        uid: Number.isInteger(uid) ? uid : 0,
+        order: Number.isInteger(order) ? order : 200,
+        depth: Number.isInteger(depth) ? depth : 4,
+        triggers: [],
+    };
+}
+
+/** Extract the generated lore id from an entry, if this is one of ours. */
+export function parseGeneratedLoreEntryId(entry) {
+    if (!isPlainObject(entry)) {
+        return null;
+    }
+    if (typeof entry.neoterraLoreId === 'string' && entry.neoterraLoreId.length > 0) {
+        return entry.neoterraLoreId;
+    }
+    return suffixFromComment(entry.comment, WORLD_BOOK_LORE_MARKER);
+}
+
+export function isGeneratedLoreEntry(entry) {
+    return parseGeneratedLoreEntryId(entry) !== null;
+}
+
+/** Lowercase, strip punctuation, collapse whitespace. */
+export function normalizeLoreText(text) {
+    return String(text ?? '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9\s]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function loreTokenSet(text) {
+    const normalized = normalizeLoreText(text);
+    return new Set(normalized.length > 0 ? normalized.split(' ') : []);
+}
+
+/**
+ * Exact normalized equality or token Jaccard >= 0.85 means "the same entry".
+ * Accepts either entries or plain strings.
+ */
+export function loreEntriesSimilar(a, b) {
+    const left = typeof a === 'string' ? a : a?.content;
+    const right = typeof b === 'string' ? b : b?.content;
+    const normalizedLeft = normalizeLoreText(left);
+    const normalizedRight = normalizeLoreText(right);
+    if (normalizedLeft.length === 0 || normalizedRight.length === 0) {
+        return false;
+    }
+    if (normalizedLeft === normalizedRight) {
+        return true;
+    }
+    const leftTokens = loreTokenSet(left);
+    const rightTokens = loreTokenSet(right);
+    if (leftTokens.size === 0 || rightTokens.size === 0) {
+        return false;
+    }
+    let intersection = 0;
+    for (const token of leftTokens) {
+        if (rightTokens.has(token)) {
+            intersection += 1;
+        }
+    }
+    const union = leftTokens.size + rightTokens.size - intersection;
+    return union > 0 && intersection / union >= 0.85;
+}
+
+/** Coerce an incoming item (ST entry or LoreEntryInput) into an ST entry. */
+function asLoreEntry(candidate, options) {
+    if (!isPlainObject(candidate)) {
+        return null;
+    }
+    const markerId = parseGeneratedLoreEntryId(candidate);
+    if (markerId) {
+        return { ...candidate };
+    }
+    if (candidate.id === undefined || typeof candidate.content !== 'string') {
+        return null;
+    }
+    return buildLoreWorldBookEntry({
+        id: candidate.id,
+        title: candidate.title ?? candidate.name ?? '',
+        keys: candidate.keys ?? candidate.key ?? [],
+        content: candidate.content,
+        tags: candidate.tags ?? [],
+        depth: candidate.depth,
+        order: candidate.order,
+        uid: candidate.uid,
+        gateLevel: options.gateLevel,
+        limits: options.limits,
+        maxTokens: options.maxTokens,
+    });
+}
+
+/**
+ * Merge two lore entries: union keys, keep the longer content, and keep the
+ * lexicographically lower id so a merge is stable across retries.
+ */
+function mergeLorePair(base, other) {
+    const baseId = parseGeneratedLoreEntryId(base);
+    const otherId = parseGeneratedLoreEntryId(other);
+    const keepOther = typeof otherId === 'string'
+        && (typeof baseId !== 'string' || otherId.localeCompare(baseId) < 0);
+    const chosen = keepOther ? other : base;
+    const baseContent = typeof base.content === 'string' ? base.content : '';
+    const otherContent = typeof other.content === 'string' ? other.content : '';
+    const content = otherContent.length > baseContent.length ? otherContent : baseContent;
+    return {
+        ...chosen,
+        key: loreKeys([...asKeyList(base.key), ...asKeyList(other.key)]),
+        content,
+    };
+}
+
+/**
+ * Merge proposed lore entries into an existing world book.
+ *
+ * User entries and generated character entries are preserved untouched. Lore
+ * entries are keyed by their stable id, and near-duplicates collapse into one
+ * entry so repeated passes cannot grow the book without bound.
+ */
+export function mergeLoreEntries(existingDocument, entries, { maxEntries = 200 } = {}) {
+    const document = isPlainObject(existingDocument) ? existingDocument : {};
+    const preserved = [];
+    const existingLore = [];
+
+    for (const entry of entryList(document.entries).filter(isPlainObject)) {
+        if (parseGeneratedLoreEntryId(entry) !== null) {
+            existingLore.push({ ...entry });
+        } else {
+            // User entries and generated character entries are never rewritten.
+            preserved.push({ ...entry });
+        }
+    }
+
+    const incomingSource = Array.isArray(entries)
+        ? entries
+        : isPlainObject(entries?.document)
+            ? entryList(entries.document.entries)
+            : entryList(entries?.entries);
+    const options = { gateLevel: 'full', limits: {}, maxTokens: DEFAULT_LORE_MAX_TOKENS };
+
+    const ordered = [];
+    function accept(entry) {
+        if (!entry) {
+            return;
+        }
+        const id = parseGeneratedLoreEntryId(entry);
+        if (!id) {
+            return;
+        }
+        // A stable id means a retry replaces its own entry.
+        for (let index = 0; index < ordered.length; index += 1) {
+            if (parseGeneratedLoreEntryId(ordered[index]) === id) {
+                ordered[index] = mergeLorePair(ordered[index], entry);
+                return;
+            }
+        }
+        // Collapse near-duplicates onto the earliest (stable) id.
+        for (let index = 0; index < ordered.length; index += 1) {
+            if (loreEntriesSimilar(ordered[index], entry)) {
+                ordered[index] = mergeLorePair(ordered[index], entry);
+                return;
+            }
+        }
+        ordered.push(entry);
+    }
+
+    for (const entry of existingLore.sort((a, b) => String(parseGeneratedLoreEntryId(a)).localeCompare(String(parseGeneratedLoreEntryId(b))))) {
+        accept(entry);
+    }
+    for (const candidate of Array.isArray(incomingSource) ? incomingSource : []) {
+        accept(asLoreEntry(candidate, options));
+    }
+
+    const loreEntries = ordered
+        .filter(isPlainObject)
+        .slice()
+        .sort((a, b) => String(parseGeneratedLoreEntryId(a)).localeCompare(String(parseGeneratedLoreEntryId(b))))
+        .slice(0, Number.isFinite(maxEntries) ? Math.max(0, Math.floor(maxEntries)) : 200);
+
+    const mergedEntries = {};
+    [...preserved, ...loreEntries].forEach((entry, index) => {
+        mergedEntries[String(index)] = { ...entry, uid: index };
+    });
+
+    return {
+        name: typeof document.name === 'string' && document.name.length > 0
+            ? document.name
+            : 'Neo Terra — World Book',
+        entries: mergedEntries,
+    };
+}
+
+/** Remove generated lore entries (reset/cleanup primitive). */
+export function removeGeneratedLoreEntries(document) {
+    const source = isPlainObject(document) ? document : {};
+    const kept = entryList(source.entries)
+        .filter(isPlainObject)
+        .filter((entry) => parseGeneratedLoreEntryId(entry) === null);
+    const entries = {};
+    kept.forEach((entry, index) => {
+        entries[String(index)] = { ...entry, uid: index };
+    });
+    return {
+        name: typeof source.name === 'string' && source.name.length > 0
+            ? source.name
+            : 'Neo Terra — World Book',
+        entries,
+    };
+}
+
+function loreSelectionTerms(state) {
+    const terms = new Set();
+    const addText = (value) => {
+        if (typeof value !== 'string') {
+            return;
+        }
+        for (const token of normalizeLoreText(value).split(' ')) {
+            if (token.length >= 3) {
+                terms.add(token);
+            }
+        }
+    };
+
+    const locationId = state?.scene?.locationId ?? null;
+    const location = locationId ? state?.locations?.[locationId] ?? null : null;
+    addText(location?.name);
+    addText(location?.district);
+    addText(location?.id ?? locationId);
+
+    for (const characterId of Array.isArray(state?.scene?.present) ? state.scene.present : []) {
+        const character = state?.characters?.[characterId] ?? null;
+        addText(characterId);
+        addText(character?.displayName);
+        addText(character?.charId);
+    }
+    addText(state?.scene?.framing);
+
+    const events = Array.isArray(state?.recentEvents) ? state.recentEvents.slice(-5) : [];
+    for (const event of events) {
+        addText(event?.summary);
+        addText(event?.headline);
+        addText(event?.locationId);
+    }
+    return terms;
+}
+
+function loreEntryText(entry) {
+    return `${titleOf(entry)}: ${String(entry.content ?? '').trim()}`;
+}
+
+/**
+ * Pick generated lore entries for the `[NEOTERRA_LORE]` block within budget.
+ *
+ * Relevant entries win ties; selection never exceeds `maxTokens`.
+ */
+export function selectLoreEntriesForInjection({
+    entries = null,
+    state = null,
+    maxTokens = DEFAULT_LORE_INJECTION_TOKENS,
+    gateLevel = 'full',
+    limits = {},
+    maxEntries = 8,
+} = {}) {
+    const source = Array.isArray(entries)
+        ? entries
+        : isPlainObject(entries?.document)
+            ? entryList(entries.document.entries)
+            : isPlainObject(entries) && entries.entries !== undefined
+                ? entryList(entries.entries)
+                : entryList(entries);
+
+    const candidates = source
+        .filter(isPlainObject)
+        .filter(isGeneratedLoreEntry)
+        .map((entry) => ({ ...entry }));
+
+    const terms = loreSelectionTerms(state);
+    const scored = candidates.map((entry) => {
+        const haystack = [
+            String(entry.comment ?? ''),
+            ...(Array.isArray(entry.key) ? entry.key : []),
+            String(entry.content ?? ''),
+        ].join(' ');
+        const tokens = new Set(normalizeLoreText(haystack).split(' ').filter(Boolean));
+        let score = 0;
+        for (const term of terms) {
+            if (tokens.has(term)) {
+                score += 1;
+            }
+        }
+        return {
+            entry,
+            id: parseGeneratedLoreEntryId(entry),
+            score,
+            order: Number.isFinite(entry.order) ? entry.order : 200,
+        };
+    });
+
+    scored.sort((a, b) => {
+        if (a.score !== b.score) {
+            return b.score - a.score;
+        }
+        if (a.order !== b.order) {
+            return a.order - b.order;
+        }
+        return String(a.id).localeCompare(String(b.id));
+    });
+
+    const limit = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : DEFAULT_LORE_INJECTION_TOKENS;
+    const entryLimit = Number.isFinite(maxEntries) ? Math.max(0, Math.floor(maxEntries)) : 8;
+    const selected = [];
+    const dropped = [];
+    let text = '';
+    let tokens = 0;
+
+    for (const item of scored) {
+        if (selected.length >= entryLimit) {
+            dropped.push({ id: item.id, title: titleOf(item.entry) });
+            continue;
+        }
+        const gated = applyContentGate(String(item.entry.content ?? ''), gateLevel, limits, {
+            characterId: null,
+            isPlayer: false,
+        });
+        const line = loreEntryText({ ...item.entry, content: gated });
+        const nextText = text.length > 0 ? `${text}\n${line}` : line;
+        const nextTokens = estimateTokens(nextText);
+        if (nextTokens > limit) {
+            dropped.push({ id: item.id, title: titleOf(item.entry) });
+            continue;
+        }
+        selected.push({
+            id: item.id,
+            title: titleOf(item.entry),
+            content: gated,
+            entry: item.entry,
+        });
+        text = nextText;
+        tokens = nextTokens;
+    }
+
+    return { selected, text, tokens, dropped };
+}
+
+function titleOf(entry) {
+    const comment = typeof entry?.comment === 'string' ? entry.comment : '';
+    const match = comment.match(/Lore:\s*(.*?)\s*\[/);
+    if (match) {
+        return match[1];
+    }
+    return parseGeneratedLoreEntryId(entry) ?? 'Lore';
+}
+
+/* ------------------------------------------------------------------ */
 /* SillyTavern adapter and chat linkage                                */
 /* ------------------------------------------------------------------ */
 
@@ -612,6 +1090,38 @@ export function createWorldBookAdapter({
         } catch (error) {
             logWarn('Could not read the world book', error);
             return null;
+        }
+    }
+
+    /**
+     * Strict read for writers. Unlike `read`, a failed load is reported instead
+     * of being collapsed into "no book", so a caller never overwrites a book it
+     * could not read. `available:false` means no host read implementation.
+     */
+    function readResult(name) {
+        const available = typeof loadWorldInfo === 'function'
+            || typeof ctx?.loadWorldInfo === 'function';
+        if (!available) {
+            return { ok: true, available: false, document: null, error: null };
+        }
+        try {
+            const document = typeof loadWorldInfo === 'function'
+                ? loadWorldInfo(name)
+                : ctx.loadWorldInfo(name);
+            return {
+                ok: true,
+                available: true,
+                document: isPlainObject(document) ? document : null,
+                error: null,
+            };
+        } catch (error) {
+            logWarn('Could not read the world book; refusing to overwrite it', error);
+            return {
+                ok: false,
+                available: true,
+                document: null,
+                error: error?.message ?? String(error),
+            };
         }
     }
 
@@ -786,5 +1296,5 @@ export function createWorldBookAdapter({
         }
     }
 
-    return { ensure, read, save, remove, link };
+    return { ensure, read, readResult, save, remove, link };
 }

@@ -97,3 +97,67 @@ export function selectBadEnds(state) {
         ...record,
     }));
 }
+
+function cloneRelationship(relationship) {
+    if (!relationship || typeof relationship !== 'object') {
+        return null;
+    }
+    return {
+        ...relationship,
+        ...(Array.isArray(relationship.notes) ? { notes: [...relationship.notes] } : {}),
+    };
+}
+
+/**
+ * Relationship records, shallow-cloned so callers cannot mutate state.
+ *
+ * `presentOnly` uses the same presence rule as `selectPresentCast` and keeps a
+ * record when either side is present.
+ */
+export function selectRelationships(state, {
+    characterId = null,
+    presentOnly = false,
+    type = null,
+    minAffinity = null,
+} = {}) {
+    const records = Array.isArray(state?.relationships) ? state.relationships : [];
+    const present = presentOnly ? new Set(presentIds(state)) : null;
+    return records
+        .filter((relationship) => relationship && typeof relationship === 'object')
+        .filter((relationship) => {
+            if (typeof characterId === 'string') {
+                return relationship.a === characterId || relationship.b === characterId;
+            }
+            return true;
+        })
+        .filter((relationship) => (present
+            ? present.has(relationship.a) || present.has(relationship.b)
+            : true))
+        .filter((relationship) => (type === null ? true : relationship.type === type))
+        .filter((relationship) => {
+            if (!Number.isFinite(minAffinity)) {
+                return true;
+            }
+            const affinity = Number(relationship.affinity);
+            return Number.isFinite(affinity) ? affinity >= minAffinity : true;
+        })
+        .map(cloneRelationship)
+        .filter(Boolean);
+}
+
+/** One relationship record regardless of stored `a`/`b` order, or null. */
+export function selectRelationshipBetween(state, a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') {
+        return null;
+    }
+    const records = Array.isArray(state?.relationships) ? state.relationships : [];
+    const found = records.find((relationship) => relationship
+        && ((relationship.a === a && relationship.b === b)
+            || (relationship.a === b && relationship.b === a)));
+    return cloneRelationship(found ?? null);
+}
+
+/** Relationships involving at least one present character. */
+export function selectPresentRelationships(state) {
+    return selectRelationships(state, { presentOnly: true });
+}
