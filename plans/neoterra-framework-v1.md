@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–15 complete / Step 16 next
+- **Status:** in progress — Steps 1–17 complete / Step 18 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -29,7 +29,7 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–12 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction), Step 8 (cast director/world book/form exclusivity), Step 9 (Architect, Storyline Tracker, Continuity Auditor, initiative hook, Canon Beat Ledger helpers), Step 10 (player state tracker + modular player sheet), Step 11 (opt-in bad-end detector, record/epilogue flow, continuation choices, settings, and panel view model), and Step 12 (Lore Agent, relationship selectors, lore-entry merge/cleanup, and budget-aware lore injection) are complete; Step 13 (SVG map pipeline and city map component) is next.
+- As of this update, Steps 1–17 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. The season/world construction, cast/world-book, storyline/beat ledger, player tracker, bad ends, lore agent, SVG map, travel, world overlay, villain-victory ending (epilogue agent, state-aware continuation, post-victory arcs, conquest occupation), and optional CYOA choices (exploration plus independent tactical combat) are complete; Step 18 (Character Codex, settings surface, and theme polish) is next.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -496,8 +496,8 @@ NeoTerra-Framework/
 - [x] Step 13 — SVG map pipeline and city map component — `a500967`
 - [x] Step 14 — Travel flow and location intro — `4b6e2f6`
 - [x] Step 15 — World overlay: factions, threats, headlines, district/bridge editor — `4b6e2f6`
-- [ ] Step 16 — Villain-victory epilogue and post-victory play
-- [ ] Step 17 — Optional CYOA choices mode (exploration + tactical combat)
+- [x] Step 16 — Villain-victory epilogue and post-victory play — `2b1806a`
+- [x] Step 17 — Optional CYOA choices mode (exploration + tactical combat) — `2b1806a`
 - [ ] Step 18 — Character Codex, settings surface, and theme polish
 - [ ] Step 19 — Dice-based conflict resolver and combat integration
 - [ ] Step 20 — Extensibility tooling, import/export, docs, and release QA
