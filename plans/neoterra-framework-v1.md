@@ -353,25 +353,25 @@ NeoTerra-Framework/
 > **Conventions:** every step is one reviewable PR. `Route` names the implementer tier and effort. `Depends on` lists step numbers. `Parallelizable` means it can run concurrently with the listed steps once dependencies are met. All paths are relative to the repo root.
 
 ### Progress
-- [x] Step 1 — Extension scaffold, settings, slash command, shell — `91db21b`
+- [x] Step 1 — Extension scaffold, settings, slash command, shell placeholder — `b6a45b0`
 - [ ] Step 2 — Data ingestion pipeline and character/form registry
 - [ ] Step 3 — Season, faction, and location definitions
 - [ ] Step 4 — `WorldState` schema, store, reducer, migrations
 - [ ] Step 5 — Shared agent client, runner, and JSON contracts
 - [ ] Step 6 — Context renderer, token budget, and interceptor
 - [ ] Step 7 — Season menu and deterministic world construction
-- [ ] Step 8 — Character codex and "Play as" identity switching
-- [ ] Step 9 — Map panel, overlay, and travel
-- [ ] Step 10 — Combat resolver, combat block, and roll command
-- [ ] Step 11 — Canon Beat Ledger, deadlines, and storyline tracker
-- [ ] Step 12 — Ending flow: epilogue, villain victory, post-victory arcs
-- [ ] Step 13 — Bad-end tracking and continuation
-- [ ] Step 14 — Optional CYOA choices mode
-- [ ] Step 15 — Content gate, budgets, and settings polish
-- [ ] Step 16 — Player panel and journal
-- [ ] Step 17 — Agent terminal and diagnostics
-- [ ] Step 18 — Import/export and world snapshots
-- [ ] Step 19 — Live ST integration pass and QA
+- [ ] Step 8 — Cast Director, world-book materialization, and form exclusivity
+- [ ] Step 9 — Storyline Tracker agent and Canon Beat Ledger
+- [ ] Step 10 — Player State Tracker and player panel
+- [ ] Step 11 — Bad-end states and continuation (opt-in)
+- [ ] Step 12 — Lore Agent, relationships, and lorebook writes
+- [ ] Step 13 — City map component and location submenu
+- [ ] Step 14 — Travel flow and location intro
+- [ ] Step 15 — World overlay: factions, threats, headlines, node editor
+- [ ] Step 16 — Villain-victory epilogue and post-victory play
+- [ ] Step 17 — Optional CYOA choices mode (exploration + tactical combat)
+- [ ] Step 18 — Character Codex, settings surface, and theme polish
+- [ ] Step 19 — Dice-based conflict resolver and combat integration
 - [ ] Step 20 — Extensibility tooling, import/export, docs, and release QA
 
 ### Step 1 — Extension scaffold, settings, slash command, shell placeholder
