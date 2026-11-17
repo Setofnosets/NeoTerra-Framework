@@ -7,7 +7,9 @@
  */
 
 import { nextBeatStatus } from '../data/beats.js';
+import { FACTION_STATUSES } from '../data/factions.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
+import { LOCATION_STATUSES } from '../data/locations.js';
 import {
     BAD_END_STATUS,
     BAD_END_TYPES,
@@ -15,6 +17,7 @@ import {
     cloneWorldState,
     clamp,
     createCustomPlayer,
+    THREAT_STATUSES,
     WORLD_ARCS,
     ENDING_PATHS,
 } from './world-state.js';
@@ -61,6 +64,20 @@ function requireBeat(state, beatId) {
         fail(`Unknown beat "${String(beatId)}"`);
     }
     return state.beats[beatId];
+}
+
+function requireFaction(state, factionId) {
+    if (typeof factionId !== 'string' || !state.factions?.[factionId]) {
+        fail(`Unknown faction "${String(factionId)}"`);
+    }
+    return state.factions[factionId];
+}
+
+function requireStringList(value, label) {
+    if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+        fail(`${label} must be an array of strings`);
+    }
+    return value.slice();
 }
 
 function syncPresence(state) {
@@ -586,6 +603,227 @@ const HANDLERS = Object.freeze({
     COMBAT_END(state) {
         state.scene.combat = null;
         state.meta.inCombat = false;
+    },
+
+    SET_FACTION_INFLUENCE(state, event) {
+        const faction = requireFaction(state, event.factionId);
+        if (event.influence !== undefined) {
+            if (!Number.isFinite(event.influence)) {
+                fail('SET_FACTION_INFLUENCE influence must be a number');
+            }
+            faction.influence = Math.round(clamp(event.influence, 0, 100));
+        }
+        if (event.status !== undefined) {
+            if (!FACTION_STATUSES.includes(event.status)) {
+                fail(`Unknown faction status "${String(event.status)}"`);
+            }
+            faction.status = event.status;
+        }
+        if (event.goals !== undefined) {
+            faction.goals = requireStringList(event.goals, 'SET_FACTION_INFLUENCE goals');
+        }
+    },
+
+    SET_LOCATION_STATUS(state, event) {
+        const location = requireLocation(state, event.locationId);
+        if (event.status !== undefined) {
+            if (!LOCATION_STATUSES.includes(event.status)) {
+                fail(`Unknown location status "${String(event.status)}"`);
+            }
+            location.status = event.status;
+        }
+        if (event.factionId !== undefined) {
+            if (event.factionId !== null) {
+                requireFaction(state, event.factionId);
+            }
+            location.factionId = event.factionId;
+        }
+        if (event.notes !== undefined) {
+            if (typeof event.notes !== 'string') {
+                fail('SET_LOCATION_STATUS notes must be a string');
+            }
+            location.notes = event.notes;
+        }
+    },
+
+    SET_CHARACTER_FIELDS(state, event) {
+        const character = requireCharacter(state, event.characterId);
+        if (event.status !== undefined) {
+            applyStatus(character, event.status);
+        }
+        if (event.agenda !== undefined) {
+            if (typeof event.agenda !== 'string') {
+                fail('SET_CHARACTER_FIELDS agenda must be a string');
+            }
+            character.agenda = event.agenda;
+        }
+        if (event.goals !== undefined) {
+            character.goals = requireStringList(event.goals, 'SET_CHARACTER_FIELDS goals');
+        }
+        if (event.allegiance !== undefined) {
+            if (typeof event.allegiance !== 'string') {
+                fail('SET_CHARACTER_FIELDS allegiance must be a string');
+            }
+            character.allegiance = event.allegiance;
+        }
+        if (event.mood !== undefined) {
+            if (typeof event.mood !== 'string') {
+                fail('SET_CHARACTER_FIELDS mood must be a string');
+            }
+            character.mood = event.mood;
+        }
+        if (event.skills !== undefined) {
+            character.skills = requireStringList(event.skills, 'SET_CHARACTER_FIELDS skills');
+        }
+        if (event.traits !== undefined) {
+            character.traits = requireStringList(event.traits, 'SET_CHARACTER_FIELDS traits');
+        }
+        if (event.outfit !== undefined) {
+            if (typeof event.outfit !== 'string') {
+                fail('SET_CHARACTER_FIELDS outfit must be a string');
+            }
+            character.outfit = event.outfit;
+        }
+        if (event.notes !== undefined) {
+            if (typeof event.notes !== 'string') {
+                fail('SET_CHARACTER_FIELDS notes must be a string');
+            }
+            character.notes = event.notes;
+        }
+        if (event.injuries !== undefined) {
+            character.injuries = requireStringList(event.injuries, 'SET_CHARACTER_FIELDS injuries');
+        }
+        character.lastUpdatedTurn = state.meta.turn;
+        syncPlayerMirror(state);
+    },
+
+    SET_SCENE_FRAMING(state, event) {
+        if (typeof event.framing !== 'string') {
+            fail('SET_SCENE_FRAMING framing must be a string');
+        }
+        state.scene.framing = event.framing;
+    },
+
+    SET_THREAT_STATUS(state, event) {
+        const threat = requireThreat(state, event.threatId);
+        if (!THREAT_STATUSES.includes(event.status)) {
+            fail(`Unknown threat status "${String(event.status)}"`);
+        }
+        threat.status = event.status;
+        if (event.locationId !== undefined) {
+            if (event.locationId !== null) {
+                requireLocation(state, event.locationId);
+            }
+            threat.locationId = event.locationId;
+        }
+    },
+
+    SHORT_CIRCUIT_BEAT(state, event) {
+        const beat = requireBeat(state, event.beatId);
+        if (typeof event.reason !== 'string' || event.reason.trim().length === 0) {
+            fail('SHORT_CIRCUIT_BEAT requires a reason');
+        }
+        beat.status = nextBeatStatus(beat.status, 'short-circuited');
+        beat.resolvedTurn = Number.isInteger(event.turn) ? event.turn : state.meta.turn;
+        beat.reason = event.reason;
+    },
+
+    SET_PLAYER_FIELDS(state, event) {
+        const player = state.player;
+        if (!isObject(player)) {
+            fail('SET_PLAYER_FIELDS requires a player state');
+        }
+        const character = player.identity === 'canon' && player.characterId
+            ? state.characters?.[player.characterId] ?? null
+            : null;
+
+        const applyTo = (target) => {
+            if (!target) {
+                return;
+            }
+            if (event.status !== undefined) {
+                applyStatus(target, event.status);
+            }
+            if (event.agenda !== undefined) {
+                target.agenda = String(event.agenda);
+            }
+            if (event.goals !== undefined) {
+                target.goals = requireStringList(event.goals, 'SET_PLAYER_FIELDS goals');
+            }
+            if (event.allegiance !== undefined) {
+                target.allegiance = String(event.allegiance);
+            }
+            if (event.mood !== undefined) {
+                target.mood = String(event.mood);
+            }
+            if (event.outfit !== undefined) {
+                target.outfit = String(event.outfit);
+            }
+            if (event.appearance !== undefined) {
+                target.appearance = String(event.appearance);
+            }
+            if (event.notes !== undefined) {
+                target.notes = String(event.notes);
+            }
+            if (event.skills !== undefined) {
+                target.skills = requireStringList(event.skills, 'SET_PLAYER_FIELDS skills');
+            }
+            if (event.traits !== undefined) {
+                target.traits = requireStringList(event.traits, 'SET_PLAYER_FIELDS traits');
+            }
+            if (event.injuries !== undefined) {
+                target.injuries = requireStringList(event.injuries, 'SET_PLAYER_FIELDS injuries');
+            }
+            target.lastUpdatedTurn = state.meta.turn;
+        };
+
+        applyTo(player);
+        if (character) {
+            applyTo(character);
+        }
+    },
+
+    PLAYER_RELATIONSHIP_DELTA(state, event) {
+        const player = state.player;
+        const target = requireCharacter(state, event.withCharacterId);
+        if (player.identity === 'canon' && player.characterId === target.charId) {
+            fail('PLAYER_RELATIONSHIP_DELTA cannot target the player character');
+        }
+        const affinityDelta = event.affinityDelta ?? 0;
+        const tensionDelta = event.tensionDelta ?? 0;
+        if (!Number.isFinite(affinityDelta) || !Number.isFinite(tensionDelta)) {
+            fail('PLAYER_RELATIONSHIP_DELTA deltas must be numbers');
+        }
+        const relationships = Array.isArray(player.relationships)
+            ? player.relationships.map((relationship) => ({ ...relationship }))
+            : [];
+        const existing = relationships.find(
+            (relationship) => relationship.withCharacterId === target.charId,
+        );
+        if (existing) {
+            existing.type = event.relationshipType ?? existing.type ?? 'neutral';
+            existing.affinity = clamp(existing.affinity + affinityDelta, -100, 100);
+            existing.tension = clamp(existing.tension + tensionDelta, -100, 100);
+            if (event.notes !== undefined) {
+                existing.notes = String(event.notes);
+            }
+        } else {
+            relationships.push({
+                withCharacterId: target.charId,
+                type: event.relationshipType ?? 'neutral',
+                affinity: clamp(affinityDelta, -100, 100),
+                tension: clamp(tensionDelta, -100, 100),
+                notes: event.notes !== undefined ? String(event.notes) : '',
+                sinceTurn: Number.isInteger(event.sinceTurn) ? event.sinceTurn : state.meta.turn,
+            });
+        }
+        player.relationships = relationships;
+        if (player.identity === 'canon' && player.characterId) {
+            const character = state.characters?.[player.characterId];
+            if (character) {
+                character.relationships = relationships.map((relationship) => ({ ...relationship }));
+            }
+        }
     },
 
     SET_PLAYER_STAT(state, event) {

@@ -448,7 +448,7 @@ export function validateBeats(beats, { seasonId, ...context } = {}) {
     const byAct = listBeatsByAct(beats);
     for (const act of BEAT_ACTS) {
         if (byAct[act].length === 0) {
-            add(errors, `canonBeats`, `season must declare at least one "${act}" beat`);
+            add(errors, 'canonBeats', `season must declare at least one "${act}" beat`);
         }
     }
 
@@ -465,3 +465,357 @@ export function validateBeats(beats, { seasonId, ...context } = {}) {
 
     return result(errors);
 }
+
+/* ------------------------------------------------------------------ */
+/* Ledger helpers used by the Storyline Tracker and the Auditor        */
+/* ------------------------------------------------------------------ */
+
+export const BEAT_ACTIONS = Object.freeze([
+    'resolve',
+    'adapt',
+    'defer',
+    'short-circuit',
+]);
+
+export const DEADLINE_PRESSURE_SETTINGS = Object.freeze(['off', 'generous', 'standard', 'harsh']);
+
+const PRESSURE_THREAT_GAIN = Object.freeze({
+    off: 0,
+    generous: 5,
+    standard: 10,
+    harsh: 20,
+});
+
+const TERMINAL_CHARACTER_STATUSES = Object.freeze([
+    'dead',
+    'captured',
+    'lost',
+    'imprisoned',
+    'retired',
+    'missing',
+]);
+
+function beatList(season) {
+    return Array.isArray(season?.canonBeats) ? season.canonBeats.filter(isObject) : [];
+}
+
+export function getBeatDefinition(season, beatId) {
+    return beatList(season).find((beat) => beat.id === beatId) ?? null;
+}
+
+export function getBeatStatus(state, beatId) {
+    const record = state?.beats?.[beatId];
+    if (record && typeof record === 'object') {
+        return record.status ?? 'open';
+    }
+    return typeof record === 'string' ? record : 'open';
+}
+
+export function isBeatTerminal(state, beatId) {
+    return isTerminalBeatStatus(getBeatStatus(state, beatId));
+}
+
+function deadlineTurnPassed(beat, state) {
+    return Number.isInteger(beat?.deadlineTurns)
+        && Number.isInteger(state?.meta?.turn)
+        && state.meta.turn > beat.deadlineTurns;
+}
+
+function deadlineDatePassed(beat, state) {
+    return typeof beat?.deadlineDate === 'string'
+        && typeof state?.meta?.inGameDate === 'string'
+        && state.meta.inGameDate > beat.deadlineDate;
+}
+
+/** True once a beat's soft deadline has passed. */
+export function isBeatOverdue(beat, state) {
+    return deadlineTurnPassed(beat, state) || deadlineDatePassed(beat, state);
+}
+
+/** True once the season's final deadline has passed. */
+export function isFinalDeadlinePassed(season, state) {
+    const deadline = season?.finalDeadline;
+    if (!isObject(deadline)) {
+        return false;
+    }
+    const turnPassed = Number.isInteger(deadline.turns)
+        && Number.isInteger(state?.meta?.turn)
+        && state.meta.turn > deadline.turns;
+    const datePassed = typeof deadline.date === 'string'
+        && typeof state?.meta?.inGameDate === 'string'
+        && state.meta.inGameDate > deadline.date;
+    return turnPassed || datePassed;
+}
+
+/**
+ * Current act from completed beats: the last act that still has an open beat,
+ * defaulting to `opening`. Deterministic and monotonic once a later act opens.
+ */
+export function getCurrentAct(state, season) {
+    const beats = beatList(season);
+    for (const act of BEAT_ACTS) {
+        const hasOpen = beats.some(
+            (beat) => beat.act === act && !isBeatTerminal(state, beat.id),
+        );
+        if (hasOpen) {
+            return act;
+        }
+    }
+    return 'resolution';
+}
+
+/** The next 1-2 beat titles, used by the map overlay as rumors/headlines. */
+export function getUpcomingBeats(state, season, limit = 2) {
+    const beats = beatList(season)
+        .filter((beat) => !isBeatTerminal(state, beat.id))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return beats.slice(0, Math.max(0, limit));
+}
+
+/** Completion predicates already satisfied by the current state. */
+export function listSatisfiedBeats(state, season) {
+    return beatList(season)
+        .filter((beat) => !isBeatTerminal(state, beat.id))
+        .filter((beat) => isBeatCompleted(beat, state))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+/**
+ * Beats whose canonical actors are all terminal in the state. These are
+ * candidates for adaptation or short-circuiting, never silent resolution.
+ */
+export function listImpossibleBeats(state, season) {
+    return beatList(season)
+        .filter((beat) => !isBeatTerminal(state, beat.id))
+        .filter((beat) => {
+            const actorIds = beat.conditions?.actorIds;
+            if (!Array.isArray(actorIds) || actorIds.length === 0) {
+                return false;
+            }
+            return actorIds.every((actorId) => {
+                const character = state?.characters?.[actorId];
+                return character && TERMINAL_CHARACTER_STATUSES.includes(character.status);
+            });
+        })
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+export function deadlineThreatGain(pressure = 'standard') {
+    return PRESSURE_THREAT_GAIN[pressure] ?? PRESSURE_THREAT_GAIN.standard;
+}
+
+/** First active threat, preferring the main threat. */
+export function selectPrimaryThreat(state) {
+    const threats = Array.isArray(state?.threats) ? state.threats.filter(isObject) : [];
+    return threats.find((threat) => threat.rank === 'main' && threat.status === 'active')
+        ?? threats.find((threat) => threat.status === 'active')
+        ?? threats.find((threat) => threat.rank === 'main')
+        ?? null;
+}
+
+/** Secondary threat used as a successor when the main threat falls. */
+export function selectSuccessorThreat(state) {
+    const threats = Array.isArray(state?.threats) ? state.threats.filter(isObject) : [];
+    return threats.find((threat) => threat.rank === 'secondary' && threat.status !== 'defeated')
+        ?? threats.find((threat) => threat.rank !== 'main' && threat.status !== 'defeated')
+        ?? null;
+}
+
+/**
+ * Deterministic beat/deadline events for one Storyline pass.
+ *
+ * The function is pure and returns only reducer-shaped events. It never
+ * reopens a terminal beat and never escalates the same beat twice: escalation
+ * marks the beat `deferred`, which removes it from the open set.
+ *
+ * @returns {{ events: object[], notes: string[], ending: boolean }}
+ */
+export function planBeatLifecycleEvents({
+    state,
+    season,
+    pressure = 'standard',
+    resolveSatisfied = true,
+} = {}) {
+    const events = [];
+    const notes = [];
+    if (!isObject(state) || !isObject(season)) {
+        return { events, notes, ending: false };
+    }
+
+    // 1. Resolve beats whose declared predicates are already satisfied.
+    if (resolveSatisfied) {
+        for (const beat of listSatisfiedBeats(state, season)) {
+            events.push({
+                type: 'RESOLVE_BEAT',
+                beatId: beat.id,
+                turn: state.meta?.turn ?? 0,
+                reason: 'completion predicates satisfied',
+            });
+            events.push({
+                type: 'ADD_EVENT',
+                summary: `Canon beat resolved: ${beat.title}`,
+                headline: beat.title,
+                actors: [],
+                locationId: state.scene?.locationId ?? null,
+                tags: ['beat', 'beat-resolved', beat.id],
+                beatId: beat.id,
+            });
+            notes.push(`resolved:${beat.id}`);
+        }
+    }
+
+    // 2. Short-circuit impossible strict beats. Loose beats may still be
+    //    adapted by the agent; only strict climax/resolution beats are terminal.
+    const handled = new Set(events.filter((event) => event.beatId).map((event) => event.beatId));
+    for (const beat of listImpossibleBeats(state, season)) {
+        if (handled.has(beat.id) || beat.act === 'opening' || beat.flexibility !== 'strict') {
+            continue;
+        }
+        events.push({
+            type: 'SHORT_CIRCUIT_BEAT',
+            beatId: beat.id,
+            reason: `Canonical actors are unavailable (${beat.conditions.actorIds.join(', ')})`,
+        });
+        events.push({
+            type: 'ADD_EVENT',
+            summary: `Canon beat short-circuited: ${beat.title}. ${beat.rewriteHints ?? ''}`.trim(),
+            headline: `Divergence: ${beat.title}`,
+            actors: [],
+            locationId: state.scene?.locationId ?? null,
+            tags: ['beat', 'beat-short-circuited', beat.id],
+            beatId: beat.id,
+        });
+        notes.push(`short-circuited:${beat.id}`);
+    }
+
+    // 3. A fallen main threat promotes a successor, once per timeline.
+    const mainThreats = (state.threats ?? []).filter(
+        (threat) => isObject(threat) && threat.rank === 'main',
+    );
+    const allMainDefeated = mainThreats.length > 0
+        && mainThreats.every((threat) => threat.status === 'defeated');
+    const successor = selectSuccessorThreat(state);
+    if (allMainDefeated && successor && successor.status !== 'defeated') {
+        const alreadyPromoted = (state.recentEvents ?? []).some(
+            (event) => Array.isArray(event?.tags)
+                && event.tags.includes(`successor:${successor.id}`),
+        );
+        if (!alreadyPromoted) {
+            if (successor.status !== 'active') {
+                events.push({
+                    type: 'SET_THREAT_STATUS',
+                    threatId: successor.id,
+                    status: 'active',
+                });
+            }
+            events.push({
+                type: 'ADD_EVENT',
+                summary: `With the main threat defeated, ${successor.name} rises to take its place.`,
+                headline: `${successor.name} moves into the vacuum`,
+                actors: [],
+                locationId: successor.locationId ?? state.scene?.locationId ?? null,
+                tags: ['threat', 'successor', `successor:${successor.id}`],
+            });
+            notes.push(`successor:${successor.id}`);
+        }
+    }
+
+    // 4. Overdue beats escalate once, then defer. `off` still records the miss
+    //    but never advances a threat.
+    {
+        const primary = selectPrimaryThreat(state);
+        const gain = pressure === 'off' ? 0 : deadlineThreatGain(pressure);
+        for (const beat of beatList(season)) {
+            if (isBeatTerminal(state, beat.id) || getBeatStatus(state, beat.id) === 'deferred') {
+                continue;
+            }
+            if (!isBeatOverdue(beat, state)) {
+                continue;
+            }
+            events.push({
+                type: 'DEFER_BEAT',
+                beatId: beat.id,
+                reason: beat.deadlineConsequence,
+                untilTurn: Number.isInteger(beat.deadlineTurns) ? beat.deadlineTurns + 1 : null,
+            });
+            if (primary && gain > 0) {
+                events.push({
+                    type: 'ADVANCE_THREAT',
+                    threatId: primary.id,
+                    amount: gain,
+                });
+            }
+            events.push({
+                type: 'ADD_EVENT',
+                summary: `Deadline missed for "${beat.title}": ${beat.deadlineConsequence}`,
+                headline: `Pressure rises: ${beat.title}`,
+                actors: [],
+                locationId: state.scene?.locationId ?? null,
+                tags: ['beat', 'beat-deadline', beat.id],
+                beatId: beat.id,
+            });
+            notes.push(`overdue:${beat.id}`);
+        }
+    }
+
+    // 5. Final deadline: the declared failure state wins once.
+    let ending = false;
+    if (state.ending?.status === 'none' && isFinalDeadlinePassed(season, state)) {
+        const mainThreatsNow = (state.threats ?? []).filter(
+            (threat) => isObject(threat) && threat.rank === 'main',
+        );
+        const survived = mainThreatsNow.length > 0
+            && mainThreatsNow.every((threat) => threat.status === 'defeated' || threat.status === 'contained');
+        if (survived) {
+            // Early defeat legally skips the threat's victory path.
+            notes.push('final-deadline-averted');
+        } else {
+            const primary = selectPrimaryThreat(state);
+            const victor = primary?.name ?? season?.title ?? 'The main threat';
+            const failureState = season?.failureState ?? 'villain-victory';
+            const tag = failureState === 'villain-victory' ? 'villain-victory' : 'season-failure';
+            if (state.meta?.inCombat === true) {
+                events.push({ type: 'COMBAT_END' });
+            }
+            events.push({
+                type: 'ADD_EVENT',
+                summary: `${victor} wins. The season's final deadline has passed.`,
+                headline: failureState === 'villain-victory'
+                    ? `VILLAIN VICTORY: ${victor} takes Neo Terra`
+                    : `The season ends in failure: ${victor}`,
+                actors: [],
+                locationId: state.scene?.locationId ?? null,
+                tags: ['ending', 'final-deadline', tag],
+            });
+            events.push({ type: 'TRIGGER_ENDING', firedTurn: state.meta?.turn ?? 0 });
+            ending = true;
+            notes.push('final-deadline');
+        }
+    }
+
+    return { events, notes, ending };
+}
+
+/** Compact ledger summary used by tests, the map overlay, and the journal. */
+export function summarizeBeatLedger(state, season) {
+    const beats = beatList(season);
+    const statuses = { open: 0, deferred: 0, resolved: 0, adapted: 0, 'short-circuited': 0, closed: 0 };
+    for (const beat of beats) {
+        const status = getBeatStatus(state, beat.id);
+        statuses[status] = (statuses[status] ?? 0) + 1;
+    }
+    return {
+        act: getCurrentAct(state, season),
+        total: beats.length,
+        statuses,
+        upcoming: getUpcomingBeats(state, season, 2).map((beat) => ({
+            id: beat.id,
+            title: beat.title,
+            act: beat.act,
+            status: getBeatStatus(state, beat.id),
+        })),
+        finalDeadlinePassed: isFinalDeadlinePassed(season, state),
+        endingStatus: state?.ending?.status ?? 'none',
+    };
+}
+

@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–8 complete / Step 9 next
+- **Status:** in progress — Steps 1–9 complete / Step 10 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -29,7 +29,7 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–8 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction) and Step 8 (cast director/world book/form exclusivity) are complete; Step 9 is next.
+- As of this update, Steps 1–9 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction), Step 8 (cast director/world book/form exclusivity), and Step 9 (Architect, Storyline Tracker, Continuity Auditor, initiative hook, Canon Beat Ledger helpers) are complete; Step 10 is next.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -489,7 +489,7 @@ NeoTerra-Framework/
 - [x] Step 6 — Context renderer, token budget, and interceptor — `be43032`
 - [x] Step 7 — Season menu and deterministic world construction — `55d4a36`
 - [x] Step 8 — Cast Director, world-book materialization, and form exclusivity — `2a5aaa8`
-- [ ] Step 9 — Storyline Tracker agent and Canon Beat Ledger
+- [x] Step 9 — Storyline Tracker agent and Canon Beat Ledger — `6b207c4`
 - [ ] Step 10 — Player State Tracker and player panel
 - [ ] Step 11 — Bad-end states and continuation (opt-in)
 - [ ] Step 12 — Lore Agent, relationships, and lorebook writes
