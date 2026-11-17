@@ -505,7 +505,7 @@ NeoTerra-Framework/
 - [x] Step 16 — Villain-victory epilogue and post-victory play — `2b1806a`
 - [x] Step 17 — Optional CYOA choices mode (exploration + tactical combat) — `2b1806a`
 - [x] Step 18 — Character Codex, settings surface, and theme polish — `a8b2e87`
-- [x] Step 19 — Dice-based conflict resolver and combat integration
+- [x] Step 19 — Dice-based conflict resolver and combat integration — `6c850f3`
 - [ ] Step 20 — Extensibility tooling, import/export, docs, and release QA
 
 ### Step 1 — Extension scaffold, settings, slash command, shell placeholder
