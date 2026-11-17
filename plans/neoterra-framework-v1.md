@@ -490,7 +490,7 @@ NeoTerra-Framework/
 - [x] Step 7 — Season menu and deterministic world construction — `55d4a36`
 - [x] Step 8 — Cast Director, world-book materialization, and form exclusivity — `2a5aaa8`
 - [x] Step 9 — Storyline Tracker agent and Canon Beat Ledger — `f28dea8`
-- [x] Step 10 — Player State Tracker and player panel — `0f035fe`
+- [x] Step 10 — Player State Tracker and player panel — `4c52f27`
 - [ ] Step 11 — Bad-end states and continuation (opt-in)
 - [ ] Step 12 — Lore Agent, relationships, and lorebook writes
 - [ ] Step 13 — SVG map pipeline and city map component
