@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–7 complete / Step 8 next
+- **Status:** in progress — Steps 1–8 complete / Step 9 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -488,7 +488,7 @@ NeoTerra-Framework/
 - [x] Step 5 — Shared agent client, runner, and JSON contracts — `337e668`
 - [x] Step 6 — Context renderer, token budget, and interceptor — `be43032`
 - [x] Step 7 — Season menu and deterministic world construction — `55d4a36`
-- [ ] Step 8 — Cast Director, world-book materialization, and form exclusivity
+- [x] Step 8 — Cast Director, world-book materialization, and form exclusivity — `2a5aaa8`
 - [ ] Step 9 — Storyline Tracker agent and Canon Beat Ledger
 - [ ] Step 10 — Player State Tracker and player panel
 - [ ] Step 11 — Bad-end states and continuation (opt-in)
