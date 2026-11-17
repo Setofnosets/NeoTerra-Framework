@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–12 complete / Step 13 next
+- **Status:** in progress — Steps 1–13 complete / Step 14 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -493,7 +493,7 @@ NeoTerra-Framework/
 - [x] Step 10 — Player State Tracker and player panel — `4c52f27`
 - [x] Step 11 — Bad-end states and continuation (opt-in) — `b9e83ba`
 - [x] Step 12 — Lore Agent, relationships, and lorebook writes — `5037a39`
-- [ ] Step 13 — SVG map pipeline and city map component
+- [x] Step 13 — SVG map pipeline and city map component — `a500967`
 - [ ] Step 14 — Travel flow and location intro
 - [ ] Step 15 — World overlay: factions, threats, headlines, district/bridge editor
 - [ ] Step 16 — Villain-victory epilogue and post-victory play
