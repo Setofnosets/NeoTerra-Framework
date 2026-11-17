@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–9 complete / Step 10 next
+- **Status:** in progress — Steps 1–10 complete / Step 11 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -29,7 +29,7 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–9 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction), Step 8 (cast director/world book/form exclusivity), and Step 9 (Architect, Storyline Tracker, Continuity Auditor, initiative hook, Canon Beat Ledger helpers) are complete; Step 10 is next.
+- As of this update, Steps 1–10 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction), Step 8 (cast director/world book/form exclusivity), Step 9 (Architect, Storyline Tracker, Continuity Auditor, initiative hook, Canon Beat Ledger helpers), and Step 10 (player state tracker + modular player sheet) are complete; Step 11 is next.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -489,8 +489,8 @@ NeoTerra-Framework/
 - [x] Step 6 — Context renderer, token budget, and interceptor — `be43032`
 - [x] Step 7 — Season menu and deterministic world construction — `55d4a36`
 - [x] Step 8 — Cast Director, world-book materialization, and form exclusivity — `2a5aaa8`
-- [x] Step 9 — Storyline Tracker agent and Canon Beat Ledger — `6b207c4`
-- [ ] Step 10 — Player State Tracker and player panel
+- [x] Step 9 — Storyline Tracker agent and Canon Beat Ledger — `f28dea8`
+- [x] Step 10 — Player State Tracker and player panel — `0f035fe`
 - [ ] Step 11 — Bad-end states and continuation (opt-in)
 - [ ] Step 12 — Lore Agent, relationships, and lorebook writes
 - [ ] Step 13 — SVG map pipeline and city map component
@@ -861,7 +861,7 @@ Still optional, in rough priority order:
 
 ## Open Questions & Implementation Details
 
-No open questions. Steps 1–8 are complete; the plan is ready to continue with Step 9.
+No open questions. Steps 1–10 are complete; the plan is ready to continue with Step 11.
 
 Remaining implementation details are fully specified by the decisions above:
 - Map geometry comes from the SVG layers via `build-map`; DeepSeek is only a fallback for unlabeled/new sites and is human-verified.
