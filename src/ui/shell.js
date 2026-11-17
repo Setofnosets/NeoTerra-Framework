@@ -15,6 +15,7 @@ import {
 import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings } from '../core/settings.js';
+import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
 import { disposeSettingsPanel, mountSettingsPanel, refreshSettingsPanel } from './settings.js';
 
 const logger = createLogger('shell');
@@ -176,6 +177,22 @@ function mountShell() {
     }, { signal: abort.signal });
 
     return root;
+}
+
+async function mountSeasonPanel(context) {
+    if (!hasDom()) {
+        return null;
+    }
+    const panel = document.querySelector('[data-neoterra-panel="season"]');
+    if (!panel) {
+        return null;
+    }
+    try {
+        return await mountSeasonMenu({ root: panel, ctx: context });
+    } catch (error) {
+        logger.warn('Could not mount the season menu', error);
+        return null;
+    }
 }
 
 function openSettingsPanel() {
@@ -368,6 +385,7 @@ export async function initialize(options = {}) {
 
         mountTopButton();
         mountShell();
+        void mountSeasonPanel(ctx);
         registerSlashCommand(ctx);
         exposeDebugApi(ctx);
         await mountSettingsPanel(ctx, { signal: abort.signal });
@@ -406,6 +424,7 @@ export function dispose() {
     mountGeneration += 1;
 
     unregisterSlashCommand(ctx);
+    disposeSeasonMenu();
     disposeSettingsPanel();
 
     if (hasDom()) {
