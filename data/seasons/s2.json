@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "id": "s2",
+  "title": "Season 2 — Leila Arc",
+  "era": "2042",
+  "anchorDate": "2042-05-04",
+  "premise": "With Clarity Incorporated toppled, the Renya Clan rises. Leila Renya brainwashes Gintvilas and seizes PetraByte, using the Living Curse to corrupt Vaiva's friends, family, and allies one by one. Vaiva must rebuild a fractured hero community and find a cure before everyone she loves belongs to Leila.",
+  "toneNotes": "Cultic, humid, and intimate. The horror is conversion of people you know, not anonymous destruction. The Renya Clan's grunts are mindless, but Leila's inner circle remember exactly who they are.",
+  "playerRole": "hero",
+  "defaultPlayerCharacterId": null,
+  "playable": true,
+  "alt": false,
+  "altOf": null,
+  "sandbox": false,
+  "allowAnyCharacter": false,
+  "roster": [
+    { "characterId": "s2.vaiva.petrauskait.colorgarde.season.2.ver", "formId": "s2.vaiva.petrauskait.colorgarde.season.2.ver", "locationId": "maple-heights" },
+    { "characterId": "s2.amy.matic.seasonal.siren", "formId": "s2.amy.matic.seasonal.siren", "locationId": "matic-estate" },
+    { "characterId": "s2.monika.matic.monochromatic", "formId": "s2.monika.matic.monochromatic", "locationId": "matic-estate" },
+    { "characterId": "s2.annabelle.verd.iron.maiden", "formId": "s2.annabelle.verd.iron.maiden", "locationId": "corvus-corp" },
+    { "characterId": "s2.laura.brimael.demon.laura", "formId": "s2.laura.brimael.demon.laura", "locationId": "old-subway" },
+    { "characterId": "s2.leila.renya", "formId": "s2.leila.renya", "locationId": "renya-shrine" },
+    { "characterId": "s2.gintvilas.petrauskas.darkgarde", "formId": "s2.gintvilas.petrauskas.darkgarde", "locationId": "petrabyte-tower" }
+  ],
+  "factions": [
+    { "id": "renya-clan", "influence": 30, "status": "active", "goals": ["Revert Neo Terra to a primal age", "Break Vaiva's allies one by one"] },
+    { "id": "petrabyte", "influence": 45, "status": "active", "goals": ["Regain control of PetraByte", "Restore the Superhero Social Network"] },
+    { "id": "corvus-corp", "influence": 50, "status": "active", "goals": ["Keep superhero suits functional", "Shelter displaced heroes"] },
+    { "id": "sensational-sirens", "influence": 35, "status": "active" },
+    { "id": "clarity", "influence": 10, "status": "disbanded" },
+    { "id": "neoterra-pd", "influence": 25, "status": "active" }
+  ],
+  "threats": [
+    {
+      "id": "s2.threat.renya-clan",
+      "name": "The Renya Clan",
+      "rank": "main",
+      "sourceFactionId": "renya-clan",
+      "agenda": "Corrupt Vaiva's entire support network, then remake the city as a primal domain under Leila Renya.",
+      "stages": [
+        "Seize PetraByte and blind the hero network",
+        "Renya-ize key allies",
+        "Hunt the remaining free heroes",
+        "Primal Neo Terra"
+      ],
+      "progress": 35,
+      "locationId": "renya-shrine"
+    },
+    {
+      "id": "s2.threat.living-curse",
+      "name": "The Living Curse",
+      "rank": "secondary",
+      "sourceFactionId": "renya-clan",
+      "agenda": "Spread Leila's stolen curse through every metahuman in the city, rewiring their morals while leaving their minds intact.",
+      "stages": [
+        "Curse the inner circle",
+        "Curse the hero community",
+        "Curse the city"
+      ],
+      "progress": 30,
+      "locationId": "petrabyte-tower"
+    }
+  ],
+  "startLocationId": "maple-heights",
+  "openingBeats": ["s2.opening.petrabyte-seized", "s2.opening.ssn-dark"],
+  "canonBeats": [
+    {
+      "id": "s2.opening.petrabyte-seized",
+      "order": 10,
+      "title": "PetraByte Falls",
+      "description": "Leila's plot completes: Gintvilas is brainwashed and PetraByte changes hands.",
+      "act": "opening",
+      "conditions": { "turnRange": [0, 15], "locationIds": ["petrabyte-tower"], "actorIds": ["s2.leila.renya", "s2.gintvilas.petrauskas.darkgarde"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "petrabyte-seized" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 15,
+      "deadlineDate": "2042-05-10",
+      "deadlineConsequence": "PetraByte's resources are lost and the Renya Clan gains a stage of control without a fight.",
+      "rewriteHints": "The function is losing the corporate base. A hostile board vote, a coup, or a hostage deal all count."
+    },
+    {
+      "id": "s2.opening.ssn-dark",
+      "order": 20,
+      "title": "The Social Network Goes Dark",
+      "description": "The Superhero Social Network is disabled, cutting heroes off from coordination and the police.",
+      "act": "opening",
+      "conditions": { "turnRange": [2, 20], "locationIds": ["petrabyte-tower", "neoterra-pd-hq"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "ssn-dark" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 20,
+      "deadlineDate": "2042-05-15",
+      "deadlineConsequence": "Heroes keep coordinated channels; the Renya Clan must work harder for later conversions.",
+      "rewriteHints": "Any loss of the hero communication network counts. A partial blackout is enough."
+    },
+    {
+      "id": "s2.escalation.siren-turned",
+      "order": 30,
+      "title": "The Seasonal Siren Falls",
+      "description": "One of Vaiva's closest allies is Renya-ized, turning a symbol of hope into a Clanswoman.",
+      "act": "escalation",
+      "conditions": { "turnRange": [10, 35], "requiresBeats": ["s2.opening.ssn-dark"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s2.amy.matic.seasonal.siren", "formId": "s2.tribal.temptress.corrupted.seasonal.siren" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 35,
+      "deadlineDate": "2042-05-25",
+      "deadlineConsequence": "Leila converts a different ally; Vaiva loses support and the main threat advances.",
+      "rewriteHints": "Any roster ally may be the one turned. Record the adaptedFrom/adaptedTo pair and keep the ally's personal relationships."
+    },
+    {
+      "id": "s2.escalation.antidote-raid",
+      "order": 40,
+      "title": "The Antidote Raid",
+      "description": "The free heroes secure a supply of the Renya curse antidote from a Clarity-era cache or a PetraByte lab.",
+      "act": "escalation",
+      "conditions": { "turnRange": [15, 45], "locationIds": ["rust-yard", "bcp-facility", "petrabyte-tower"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "antidote-raid" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 45,
+      "deadlineDate": "2042-05-31",
+      "deadlineConsequence": "Production stalls; one converted ally becomes permanently Renya-ized unless rescued later.",
+      "rewriteHints": "The antidote can be stolen, invented, or traded for. The function is regaining a path back for the converted."
+    },
+    {
+      "id": "s2.climax.leila-confrontation",
+      "order": 50,
+      "title": "Vaiva vs Leila",
+      "description": "Vaiva confronts Leila Renya with the weight of PetraByte and the city behind her.",
+      "act": "climax",
+      "conditions": { "turnRange": [25, 60], "actorIds": ["s2.vaiva.petrauskait.colorgarde.season.2.ver", "s2.leila.renya"], "requiresBeats": ["s2.escalation.siren-turned"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "leila-confrontation" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 60,
+      "deadlineDate": "2042-06-07",
+      "deadlineConsequence": "Leila completes the curse on the city's remaining heroes before Vaiva can stop her.",
+      "rewriteHints": "The confrontation can be a duel, a ritual interruption, or a public exposure. If Leila was defeated early, short-circuit this beat and re-plan the resolution."
+    },
+    {
+      "id": "s2.resolution.curse-broken",
+      "order": 60,
+      "title": "The Curse Breaks",
+      "description": "Leila is defeated or stripped of the Living Curse, and the converts can be brought back.",
+      "act": "resolution",
+      "conditions": { "turnRange": [30, 70], "requiresBeats": ["s2.climax.leila-confrontation"] },
+      "completion": {
+        "type": "state",
+        "predicates": [
+          { "kind": "character-status", "characterId": "s2.leila.renya", "statuses": ["captured", "dead", "retired", "lost", "corrupted"] }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 70,
+      "deadlineDate": "2042-06-10",
+      "deadlineConsequence": "The final deadline passes: Leila completes the primal city, and the season ends in a recorded villain victory.",
+      "rewriteHints": "Leila may die, be captured, be cleansed, or lose the curse to a rival. Any outcome that removes her control resolves the beat."
+    }
+  ],
+  "finalDeadline": { "turns": 70, "date": "2042-06-10" },
+  "failureState": "villain-victory",
+  "manualOnly": [],
+  "altFormsAllowed": [
+    "s2.tribal.temptress.corrupted.seasonal.siren",
+    "s2.wild.maiden.corrupted.iron.maiden",
+    "s2.blooming.crow.corrupted.monochromatic",
+    "s2.savage.succubus.corrupted.demon.laura",
+    "s2.leila.renya.femme.feral",
+    "s2.stygian.stalker.corrupted.colorgarde"
+  ]
+}

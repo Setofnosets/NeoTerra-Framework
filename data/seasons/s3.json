@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "id": "s3",
+  "title": "Season 3 — Vireze Arc (Midnight Treat)",
+  "era": "October 2042",
+  "anchorDate": "2042-10-01",
+  "premise": "An epidemic of troubled civilians receive hypnotic powers as \"treats\" from a mysterious villainess called Midnight Treat. The city cannot decide whether the victims are villains or casualties, and the heroes tear themselves apart over how to stop the chaos. Midnight Treat is Vireze Tylow, an ancient vampiress who gives power away for the pleasure of watching what follows.",
+  "toneNotes": "Halloween carnival noir. Mob panic, moral disagreement, and opportunistic costumes. The danger is distributed: a thousand ordinary people with one bad night and a new power.",
+  "playerRole": "hero",
+  "defaultPlayerCharacterId": null,
+  "playable": true,
+  "alt": false,
+  "altOf": null,
+  "sandbox": false,
+  "allowAnyCharacter": false,
+  "roster": [
+    { "characterId": "s3.vireze.tylow.midnight.treat", "formId": "s3.vireze.tylow.midnight.treat", "locationId": "midnight-lair" },
+    { "characterId": "s3.selina.cross.umbra", "formId": "s3.selina.cross.umbra", "locationId": "gold-paradise-casino" },
+    { "characterId": "s3.zara.embarr", "formId": "s3.zara.embarr", "locationId": "central-plaza" },
+    { "characterId": "s3.elizabeth.ellie.addison", "formId": "s3.elizabeth.ellie.addison", "locationId": "neon-docks" },
+    { "characterId": "s3.keira.cooper", "formId": "s3.keira.cooper", "locationId": "maple-heights" },
+    { "characterId": "s3.lucia.lulu.illusi.chamisulli", "formId": "s3.lucia.lulu.illusi.chamisulli", "locationId": "gold-paradise-casino" },
+    { "characterId": "s3.melissa.liz.ashton", "formId": "s3.melissa.liz.ashton", "locationId": "old-subway" },
+    { "characterId": "s3.miracle.mira.nillava.vanillamirror", "formId": "s3.miracle.mira.nillava.vanillamirror", "locationId": "sirens-styles" },
+    { "characterId": "s3.blood.bound.corrupted.emeral.allure", "formId": "s3.blood.bound.corrupted.emeral.allure", "locationId": "neon-docks" },
+    { "characterId": "s3.adrian.tylow.shacklaw", "formId": "s3.adrian.tylow.shacklaw", "locationId": "old-subway" }
+  ],
+  "factions": [
+    { "id": "midnight-treat", "influence": 20, "status": "underground", "goals": ["Distribute treats across every district", "Keep the heroes fighting each other"] },
+    { "id": "sensational-sirens", "influence": 50, "status": "active", "goals": ["Protect the city with style", "Keep the team's reputation intact"] },
+    { "id": "corvus-corp", "influence": 55, "status": "active" },
+    { "id": "neoterra-pd", "influence": 35, "status": "active", "goals": ["Contain the treat epidemic", "Stop lethal vigilantism"] },
+    { "id": "crisis-coalition", "influence": 25, "status": "active", "goals": ["Coordinate heroes and civilians against the treats"] }
+  ],
+  "threats": [
+    {
+      "id": "s3.threat.midnight-treat",
+      "name": "Midnight Treat",
+      "rank": "main",
+      "sourceFactionId": "midnight-treat",
+      "agenda": "Gift hypnotic power to troubled civilians and let the resulting chaos expose how fragile the city's order really is.",
+      "stages": [
+        "The first treats",
+        "An epidemic of gifted power",
+        "Heroes turn on each other",
+        "A city-wide carnival of chaos"
+      ],
+      "progress": 30,
+      "locationId": "midnight-lair"
+    },
+    {
+      "id": "s3.threat.vigilante-purge",
+      "name": "The Vigilante Purge",
+      "rank": "secondary",
+      "sourceFactionId": null,
+      "agenda": "Kill or imprison every treat-carrier before the law decides whether they are victims, and punish any hero who objects.",
+      "stages": [
+        "Vigilantes organize",
+        "Summary executions",
+        "Open war on the hero community"
+      ],
+      "progress": 25,
+      "locationId": "neoterra-pd-hq"
+    }
+  ],
+  "startLocationId": "central-plaza",
+  "openingBeats": ["s3.opening.first-treat", "s3.opening.vigilante-line"],
+  "canonBeats": [
+    {
+      "id": "s3.opening.first-treat",
+      "order": 10,
+      "title": "The First Treat",
+      "description": "A civilian is gifted hypnotic power and causes a public, very visible incident.",
+      "act": "opening",
+      "conditions": { "turnRange": [0, 12], "locationIds": ["central-plaza", "gold-paradise-casino", "maple-heights"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "first-treat" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 12,
+      "deadlineDate": "2042-10-08",
+      "deadlineConsequence": "The epidemic starts quietly; the first public incident happens later with a higher body count.",
+      "rewriteHints": "Any ordinary person receiving and misusing a treat counts. The victim must be recognizable as a civilian, not a costumed villain."
+    },
+    {
+      "id": "s3.opening.vigilante-line",
+      "order": 20,
+      "title": "The Vigilante Line",
+      "description": "A vigilante kills or maims a treat-carrier, forcing the heroes and the police to take a public position.",
+      "act": "opening",
+      "conditions": { "turnRange": [3, 20], "locationIds": ["neoterra-pd-hq", "neon-docks", "rust-yard"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "vigilante-line" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 20,
+      "deadlineDate": "2042-10-12",
+      "deadlineConsequence": "The purge gains recruits and the heroes lose public trust.",
+      "rewriteHints": "The act can happen to an NPC or be interrupted. What matters is that the city sees the choice between protection and punishment."
+    },
+    {
+      "id": "s3.escalation.hero-fracture",
+      "order": 30,
+      "title": "The Heroes Fracture",
+      "description": "A public disagreement between heroes over the treats becomes a lasting split, and Midnight Treat uses it.",
+      "act": "escalation",
+      "conditions": { "turnRange": [8, 30], "requiresBeats": ["s3.opening.vigilante-line"], "locationIds": ["sirens-styles", "corvus-corp", "central-plaza"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "hero-fracture" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 30,
+      "deadlineDate": "2042-10-18",
+      "deadlineConsequence": "The hero community coordinates too well; Midnight Treat escalates by targeting a beloved public figure instead.",
+      "rewriteHints": "Any durable split over method, not just an argument. It may involve the Sirens, the police, or the Coalition."
+    },
+    {
+      "id": "s3.escalation.siren-plague",
+      "order": 40,
+      "title": "The Siren's Plague",
+      "description": "A public hero is treated and becomes a treat-themed villain, making the epidemic personal.",
+      "act": "escalation",
+      "conditions": { "turnRange": [12, 38], "requiresBeats": ["s3.opening.first-treat"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s3.miracle.mira.nillava.vanillamirror", "formId": "s3.pink.mirage.treated.miracle.mira.nillava" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 38,
+      "deadlineDate": "2042-10-22",
+      "deadlineConsequence": "Another recognizable character becomes a treat instead; the epidemic advances a stage.",
+      "rewriteHints": "Any treated-form rule may be used, or a new victim may be authored. Record the transformation source and keep the victim's original personality as a memory."
+    },
+    {
+      "id": "s3.climax.unmask",
+      "order": 50,
+      "title": "Unmask Midnight Treat",
+      "description": "The heroes identify Vireze Tylow as Midnight Treat and corner her in her shuttered skyscraper.",
+      "act": "climax",
+      "conditions": { "turnRange": [20, 50], "actorIds": ["s3.vireze.tylow.midnight.treat"], "locationIds": ["midnight-lair"], "requiresBeats": ["s3.escalation.hero-fracture"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "midnight-treat-unmasked" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 50,
+      "deadlineDate": "2042-10-28",
+      "deadlineConsequence": "Vireze disappears and the epidemic becomes self-sustaining; the final deadline advances.",
+      "rewriteHints": "The unmasking can happen through investigation, a treat's confession, or a direct ambush. Vireze may escape; the identity reveal is the function."
+    },
+    {
+      "id": "s3.resolution.treat-ends",
+      "order": 60,
+      "title": "The Treat Ends",
+      "description": "Vireze is captured, killed, or cleansed, and the gifted powers can be contained or reversed.",
+      "act": "resolution",
+      "conditions": { "turnRange": [30, 60], "requiresBeats": ["s3.climax.unmask"] },
+      "completion": {
+        "type": "state",
+        "predicates": [
+          { "kind": "character-status", "characterId": "s3.vireze.tylow.midnight.treat", "statuses": ["captured", "dead", "retired", "lost", "corrupted"] }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 60,
+      "deadlineDate": "2042-10-31",
+      "deadlineConsequence": "The final deadline passes: Midnight Treat's carnival becomes permanent, and the season ends in a recorded villain victory.",
+      "rewriteHints": "A cure, a ritual, or a public renunciation all count. If Vireze is already gone, resolve through the fate of the epidemic instead and record the substitution."
+    }
+  ],
+  "finalDeadline": { "turns": 60, "date": "2042-10-31" },
+  "failureState": "villain-victory",
+  "manualOnly": ["s3.the.sensational.sirens"],
+  "altFormsAllowed": [
+    "s3.blood.bride.corrupted.umbra",
+    "s3.crazy.cupid.treated.zara.embarr",
+    "s3.darkit.treated.lucia.lulu.illusi",
+    "s3.executaur.treated.elizabeth.ellie.addison",
+    "s3.little.princess.treated.keira.cooper",
+    "s3.midnight.gift.cleansed.midnight.treat",
+    "s3.oversight.treated.melissa.liz.ashton",
+    "s3.pink.mirage.treated.miracle.mira.nillava"
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "id": "s1",
+  "title": "Season 1 — Omnilia (Clarity Arc)",
+  "era": "2037–2040",
+  "anchorDate": "2037-03-01",
+  "premise": "Clarity Incorporated controls Neo Terra from the shadows. Claire Atropos runs the Beast Conversion Program, abducting metahumans and turning them into animal-themed servants. Vaiva Petrauskaitė, the newly active Colorgarde, decides to bring the corporation down — while Claire treats the whole campaign as a delicious game.",
+  "toneNotes": "Cyberpunk comic-book melodrama. Villainesses are seductive, theatrical, and usually winning; heroes are earnest and outmatched. Violence and erotic villainy are genre-normal but never grimdark for its own sake.",
+  "playerRole": "hero",
+  "defaultPlayerCharacterId": null,
+  "playable": true,
+  "alt": false,
+  "altOf": null,
+  "sandbox": false,
+  "allowAnyCharacter": false,
+  "roster": [
+    { "characterId": "s1.vaiva.colorgarde", "formId": "s1.vaiva.colorgarde", "locationId": "petrabyte-tower" },
+    { "characterId": "s1.aurelia.longshot", "formId": "s1.aurelia.longshot", "locationId": "central-plaza" },
+    { "characterId": "s1.tindur.sharkbite", "formId": "s1.tindur.sharkbite", "locationId": "neon-docks" },
+    { "characterId": "s1.claire.atropos", "formId": "s1.claire.atropos", "locationId": "clarity-hq" },
+    { "characterId": "s1.twisting.fate.corrupted.carol.fate", "formId": "s1.twisting.fate.corrupted.carol.fate", "locationId": "old-subway" },
+    { "characterId": "s1.crystal.cat", "formId": "s1.crystal.cat", "locationId": "clarity-hq" }
+  ],
+  "factions": [
+    { "id": "clarity", "influence": 80, "status": "dominant", "goals": ["Own Neo Terra's institutions", "Convert every useful metahuman through the Beast Conversion Program"] },
+    { "id": "petrabyte", "influence": 65, "status": "active", "goals": ["Protect Neo Terra's people", "Give Colorgarde the resources to dismantle Clarity"] },
+    { "id": "neoterra-pd", "influence": 35, "status": "active" },
+    { "id": "crisis-coalition", "influence": 15, "status": "dormant" }
+  ],
+  "threats": [
+    {
+      "id": "s1.threat.clarity",
+      "name": "Clarity Incorporated",
+      "rank": "main",
+      "sourceFactionId": "clarity",
+      "agenda": "Complete the Beast Conversion Program, break the hero community, and rule Neo Terra as a corporate fiefdom.",
+      "stages": [
+        "Infiltration and blackmail of city institutions",
+        "BCP abductions and the first converted heroes",
+        "Open control of the police and the media",
+        "Total conversion of the hero community"
+      ],
+      "progress": 25,
+      "locationId": "clarity-hq"
+    },
+    {
+      "id": "s1.threat.bcp",
+      "name": "The Beast Conversion Program",
+      "rank": "secondary",
+      "sourceFactionId": "clarity",
+      "agenda": "Perfect the gene-splicing and conditioning process that turns captured metahumans into obedient animal-themed servants.",
+      "stages": [
+        "Prototype conditioning",
+        "Serial abductions",
+        "Mass conversion of captured heroes"
+      ],
+      "progress": 20,
+      "locationId": "bcp-facility"
+    }
+  ],
+  "startLocationId": "central-plaza",
+  "openingBeats": ["s1.opening.arms-deal", "s1.opening.beast-rumors"],
+  "canonBeats": [
+    {
+      "id": "s1.opening.arms-deal",
+      "order": 10,
+      "title": "The Illegal Arms Deal",
+      "description": "Colorgarde interrupts one of Clarity's illegal arms deals, announcing herself as a real threat to the corporation.",
+      "act": "opening",
+      "conditions": { "turnRange": [0, 12], "locationIds": ["neon-docks", "clarity-hq"], "actorIds": ["s1.vaiva.colorgarde"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "arms-deal" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 12,
+      "deadlineDate": "2037-04-15",
+      "deadlineConsequence": "Clarity ships the weapons unimpeded and gains a free escalation toward city control.",
+      "rewriteHints": "Any public Clarity operation interrupted by Colorgarde counts. If Vaiva is not present, another hero or a vigilante may crash the deal instead."
+    },
+    {
+      "id": "s1.opening.beast-rumors",
+      "order": 20,
+      "title": "Rumors of the Beast Conversion Program",
+      "description": "The first credible rumor surfaces that missing metahumans are being experimented on rather than killed.",
+      "act": "opening",
+      "conditions": { "turnRange": [3, 20], "locationIds": ["rust-yard", "bcp-facility", "neoterra-pd-hq"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "bcp-rumor" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 20,
+      "deadlineDate": "2037-06-01",
+      "deadlineConsequence": "The BCP stays entirely off the heroes' radar and converts a named hero off-screen as escalation.",
+      "rewriteHints": "The rumor may come from a victim, a defecting Clarity scientist, or a police file. The source does not matter; the reveal does."
+    },
+    {
+      "id": "s1.escalation.first-conversion",
+      "order": 30,
+      "title": "The First Conversion",
+      "description": "A known metahuman is broken by the BCP and reappears as an animal-themed villain serving Clarity.",
+      "act": "escalation",
+      "conditions": { "turnRange": [10, 35], "requiresBeats": ["s1.opening.beast-rumors"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s1.aurelia.longshot", "formId": "s1.redraw.corrupted.longshot" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 35,
+      "deadlineDate": "2037-10-01",
+      "deadlineConsequence": "Clarity converts a different hero instead; the hero community loses a named ally and the threat advances a stage.",
+      "rewriteHints": "Any roster hero may replace Aurelia as the first conversion. Record adaptedFrom/adaptedTo and keep the converted character's relationships."
+    },
+    {
+      "id": "s1.escalation.crystal-cat",
+      "order": 40,
+      "title": "Crystal Cat Hunts Colorgarde",
+      "description": "Mira Shard, Claire's crystal clone, is deployed specifically to neutralize Colorgarde's light powers and humiliate her in public.",
+      "act": "escalation",
+      "conditions": { "turnRange": [18, 45], "actorIds": ["s1.crystal.cat", "s1.vaiva.colorgarde"], "locationIds": ["central-plaza", "clarity-hq", "sirens-styles"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "crystal-cat-showdown" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 45,
+      "deadlineDate": "2037-12-15",
+      "deadlineConsequence": "Mira captures an ally instead, and Claire gains leverage over Colorgarde.",
+      "rewriteHints": "The function is a tailored counter to the protagonist. If Mira is gone, Claire builds or hires a different counter."
+    },
+    {
+      "id": "s1.climax.claire-confrontation",
+      "order": 50,
+      "title": "The Confrontation with Claire",
+      "description": "Colorgarde and Claire Atropos finally face each other with the fate of the city on the line.",
+      "act": "climax",
+      "conditions": { "turnRange": [30, 70], "actorIds": ["s1.vaiva.colorgarde", "s1.claire.atropos"], "requiresBeats": ["s1.escalation.first-conversion"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "claire-confrontation" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 70,
+      "deadlineDate": "2040-03-01",
+      "deadlineConsequence": "Claire completes her endgame uncontested; the season moves to villain victory unless a later beat intervenes.",
+      "rewriteHints": "The confrontation can happen anywhere Claire's plans converge. Substitutes may take Claire's place only if she is already defeated; then this beat short-circuits."
+    },
+    {
+      "id": "s1.resolution.clarity-falls",
+      "order": 60,
+      "title": "Clarity Incorporated Falls",
+      "description": "Claire is defeated and Clarity's control breaks — through capture, conversion, death, or a public collapse of the corporation.",
+      "act": "resolution",
+      "conditions": { "turnRange": [40, 90], "requiresBeats": ["s1.climax.claire-confrontation"] },
+      "completion": {
+        "type": "state",
+        "predicates": [
+          { "kind": "character-status", "characterId": "s1.claire.atropos", "statuses": ["captured", "corrupted", "dead", "retired", "lost"] }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 90,
+      "deadlineDate": "2040-06-01",
+      "deadlineConsequence": "The final deadline passes: Claire wins completely, and the season ends in a recorded villain victory.",
+      "rewriteHints": "Claire may be brainwashed into Claire Lachesis, imprisoned, killed, or forced into exile. Any terminal or converted state resolves the beat; record the divergence."
+    }
+  ],
+  "finalDeadline": { "turns": 90, "date": "2040-06-01" },
+  "failureState": "villain-victory",
+  "manualOnly": ["s1.atropos.couple"],
+  "altFormsAllowed": [
+    "s1.redraw.corrupted.longshot",
+    "s1.blood.frenzy.corrupted.sharkbite",
+    "s1.claire.lachesis.cleansed.claire.atropos",
+    "s1.light.shade.corrupted.colorgarde"
+  ]
+}

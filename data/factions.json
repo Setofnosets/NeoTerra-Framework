@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "factions": [
+    {
+      "id": "clarity",
+      "name": "Clarity Incorporated",
+      "aliases": ["Clairity Incorporated", "Clairity"],
+      "side": "villain",
+      "description": "Noah and Claire Atropos' megacorporation. Publicly a technology and logistics empire; privately it owns the city's illegal weapons trade, puppeteers most supervillains, and runs the Beast Conversion Program.",
+      "goals": [
+        "Control Neo Terra from the shadows",
+        "Convert captured metahumans into obedient beast-infused assets",
+        "Eliminate metahumans and alien influence",
+        "Replace national borders with a corporate world order"
+      ],
+      "influence": 80,
+      "headquartersLocationId": "clarity-hq",
+      "tags": ["megacorporation", "conspiracy", "beast-conversion"]
+    },
+    {
+      "id": "petrabyte",
+      "name": "PetraByte",
+      "aliases": ["PetraByte Corporation"],
+      "side": "hero",
+      "description": "Gintvilas Petrauskas' multi-trillion-dollar technology company, the public backbone of Neo Terra's superhero infrastructure. Its heir Vaiva operates as Colorgarde.",
+      "goals": [
+        "Protect Neo Terra's people",
+        "Keep superhero infrastructure and communications running",
+        "Counter Clarity Incorporated",
+        "Shield metahumans from government control"
+      ],
+      "influence": 70,
+      "headquartersLocationId": "petrabyte-tower",
+      "tags": ["megacorporation", "superhero-infrastructure", "petrauskas-family"]
+    },
+    {
+      "id": "renya-clan",
+      "name": "The Renya Clan",
+      "aliases": ["Renya Clan", "Renya Shroud"],
+      "side": "villain",
+      "description": "A tribalist cult and terrorist organisation that wants to revert the world to a primal age without technology. Leila Renya leads it after stealing the Living Curse from its deity.",
+      "goals": [
+        "Revert Neo Terra to a primal world",
+        "Corrupt Vaiva's allies into Renya-ized servants",
+        "Break the Superhero Social Network",
+        "Spread the Living Curse to every metahuman"
+      ],
+      "influence": 20,
+      "headquartersLocationId": "renya-shrine",
+      "tags": ["cult", "tribalist", "living-curse"]
+    },
+    {
+      "id": "midnight-treat",
+      "name": "Midnight Treat",
+      "aliases": ["The Treats"],
+      "side": "villain",
+      "description": "Not a conventional organisation. Vireze Tylow, an ancient vampiress, gifts troubled civilians hypnotic powers and lets the resulting chaos spread. Her 'followers' are unwitting, disposable treats.",
+      "goals": [
+        "Destabilise Neo Terra through distributed chaos",
+        "Hand power to ordinary, troubled people",
+        "Remain unseen and unaccountable",
+        "Make the heroes fight the city they protect"
+      ],
+      "influence": 15,
+      "headquartersLocationId": "midnight-lair",
+      "tags": ["anarchist", "hypnosis", "epidemic"]
+    },
+    {
+      "id": "corvus-corp",
+      "name": "Corvus Corp",
+      "aliases": ["Corvus Corporation"],
+      "side": "hero",
+      "description": "Monika Matic's fashion and materials empire, built on the supernatural mineral Monicium. It supplies superhero suits for free and funds city repairs and rehabilitation.",
+      "goals": [
+        "Keep every superhero suited and operational",
+        "Protect the Monicium supply",
+        "Fund reconstruction and villain rehabilitation"
+      ],
+      "influence": 55,
+      "headquartersLocationId": "corvus-corp",
+      "tags": ["fashion", "superhero-support", "matic-family"]
+    },
+    {
+      "id": "sensational-sirens",
+      "name": "The Sensational Sirens",
+      "aliases": ["Sirens"],
+      "side": "hero",
+      "description": "Amy Matic's fashionable superhero team. Powerful, image-conscious, and morally flexible; its members range from genuine heroines to reformed villainesses.",
+      "goals": [
+        "Dominate Neo Terra's superhero scene",
+        "Protect the city on their own terms",
+        "Advance Siren's Styles and the team's brand"
+      ],
+      "influence": 45,
+      "headquartersLocationId": "sirens-styles",
+      "tags": ["superhero-team", "fashion", "matic-family"]
+    },
+    {
+      "id": "neoterra-pd",
+      "name": "Neo Terra Police Department",
+      "aliases": ["NTPD", "Neo Terra PD"],
+      "side": "neutral",
+      "description": "The city's overstretched police force. It coordinates with registered superheroes through the Superhero Social Network but is outmatched by metahuman crime.",
+      "goals": [
+        "Keep public order",
+        "Contain metahuman incidents",
+        "Protect civilians from both villains and vigilantes"
+      ],
+      "influence": 40,
+      "headquartersLocationId": "neoterra-pd-hq",
+      "tags": ["law-enforcement", "civilian"]
+    },
+    {
+      "id": "crisis-coalition",
+      "name": "Neo Terra Crisis Coalition",
+      "aliases": ["The Coalition"],
+      "side": "neutral",
+      "description": "A recurring, decentralised alliance of heroes, villains, vigilantes, cops, and civilians that forms during existential threats to the city.",
+      "goals": [
+        "Stop existential threats to Neo Terra",
+        "Coordinate otherwise hostile factions",
+        "Protect civilians above old grudges"
+      ],
+      "influence": 30,
+      "headquartersLocationId": "central-plaza",
+      "tags": ["coalition", "emergency", "cross-faction"]
+    }
+  ]
+}

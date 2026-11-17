@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "id": "s1dark",
+  "title": "S1Dark — Bleeding Heart's Neo Terra",
+  "era": "2037–2040 (dark timeline)",
+  "anchorDate": "2037-03-01",
+  "premise": "In this timeline Claire Atropos never won the war — because Carol Fate, the villainess Bleeding Heart, took the city first. YOU are the season's main antagonist. The surviving heroes are hunted, the corporations bow or burn, and the only question is how long your reign can last.",
+  "toneNotes": "Villain-POV power fantasy with a real resistance underneath. The player's cruelty has consequences, but the narrator must never decide the player's actions, dialogue, or defeats. S1Dark is a dark mirror of Season 1, not a punishment fantasy.",
+  "playerRole": "villain",
+  "defaultPlayerCharacterId": "s1dark.carol.bleeding-heart",
+  "playable": true,
+  "alt": true,
+  "altOf": "s1",
+  "sandbox": false,
+  "allowAnyCharacter": false,
+  "roster": [
+    { "characterId": "s1dark.carol.bleeding-heart", "formId": "s1dark.carol.bleeding-heart", "locationId": "clarity-hq" },
+    { "characterId": "s1dark.akui.koden.cyber.sakura", "formId": "s1dark.akui.koden.cyber.sakura", "locationId": "clarity-hq" },
+    { "characterId": "s1dark.aurelia.season-dark-version", "formId": "s1dark.aurelia.season-dark-version", "locationId": "old-subway" },
+    { "characterId": "s1dark.jacqueline.webb.poisoness", "formId": "s1dark.jacqueline.webb.poisoness", "locationId": "gold-paradise-casino" }
+  ],
+  "factions": [
+    { "id": "clarity", "influence": 85, "status": "dominant", "goals": ["Keep the city under Bleeding Heart's protection racket", "Convert or destroy every surviving hero"] },
+    { "id": "petrabyte", "influence": 25, "status": "underground", "goals": ["Keep the resistance alive", "Restore a hero government"] },
+    { "id": "crisis-coalition", "influence": 20, "status": "underground", "goals": ["Unite the survivors without being detected"] },
+    { "id": "neoterra-pd", "influence": 30, "status": "active", "goals": ["Survive the new order", "Protect civilians where possible"] }
+  ],
+  "threats": [
+    {
+      "id": "s1dark.threat.resistance",
+      "name": "The Underground Resistance",
+      "rank": "main",
+      "sourceFactionId": "petrabyte",
+      "agenda": "Topple Bleeding Heart, restore the Petrauskas legacy, and bring the heroes back into the light.",
+      "stages": [
+        "Scattered survivors and safehouses",
+        "Organized sabotage and recruitment",
+        "A coordinated counter-offensive",
+        "Heroic restoration"
+      ],
+      "progress": 30,
+      "locationId": "old-subway"
+    },
+    {
+      "id": "s1dark.threat.heroes",
+      "name": "The Remaining Heroes",
+      "rank": "secondary",
+      "sourceFactionId": "crisis-coalition",
+      "agenda": "Find a champion strong enough to face the city's new queen and break her grip before she converts them all.",
+      "stages": [
+        "Hiding and watching",
+        "Testing the regime's weaknesses",
+        "Open defiance"
+      ],
+      "progress": 20,
+      "locationId": "central-plaza"
+    }
+  ],
+  "startLocationId": "clarity-hq",
+  "openingBeats": ["s1dark.opening.coronation", "s1dark.opening.first-knight"],
+  "canonBeats": [
+    {
+      "id": "s1dark.opening.coronation",
+      "order": 10,
+      "title": "The Coronation of Bleeding Heart",
+      "description": "The city acknowledges Carol Fate's rule, whether through fear, tribute, or a public spectacle.",
+      "act": "opening",
+      "conditions": { "turnRange": [0, 12], "locationIds": ["clarity-hq", "central-plaza"], "actorIds": ["s1dark.carol.bleeding-heart"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "villain-coronation" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 12,
+      "deadlineDate": "2037-04-15",
+      "deadlineConsequence": "A rival claims the spotlight; the resistance gains a public symbol and the threat advances.",
+      "rewriteHints": "The coronation can be a broadcast, a massacre, a gala, or a silent takeover. It must establish that the player's character rules."
+    },
+    {
+      "id": "s1dark.opening.first-knight",
+      "order": 20,
+      "title": "The First Knight",
+      "description": "One of the surviving villains or heroes is transformed into Bleeding Heart's loyal knight through a declared form rule.",
+      "act": "opening",
+      "conditions": { "turnRange": [3, 20], "actorIds": ["s1dark.akui.koden.cyber.sakura"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s1dark.akui.koden.cyber.sakura", "formId": "s1dark.heart.attack.knighted.cyber.sakura" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 20,
+      "deadlineDate": "2037-06-01",
+      "deadlineConsequence": "The player's court remains thin; the resistance tests an undefended asset.",
+      "rewriteHints": "Any eligible character may become the first knight. The transformation must follow a declared form rule, and the record must name the new form."
+    },
+    {
+      "id": "s1dark.escalation.hunt",
+      "order": 30,
+      "title": "Hunt the Resistance",
+      "description": "Bleeding Heart's forces locate and strike a resistance safehouse, forcing the survivors to relocate.",
+      "act": "escalation",
+      "conditions": { "turnRange": [10, 40], "locationIds": ["old-subway", "maple-heights", "petrabyte-tower"], "threatStage": 1 },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "resistance-hunted" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 40,
+      "deadlineDate": "2038-03-01",
+      "deadlineConsequence": "The resistance consolidates and converts a neutral party to its cause.",
+      "rewriteHints": "A trap, a raid, or a defector all count. If the resistance was already destroyed, mark this beat short-circuited."
+    },
+    {
+      "id": "s1dark.escalation.casino",
+      "order": 40,
+      "title": "Poison at Gold Paradise",
+      "description": "Jacqueline's casino becomes a stage for eliminating or flipping a key resistance backer.",
+      "act": "escalation",
+      "conditions": { "turnRange": [15, 45], "locationIds": ["gold-paradise-casino"], "actorIds": ["s1dark.jacqueline.webb.poisoness"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "casino-coup" }]
+      },
+      "flexibility": "optional",
+      "deadlineTurns": 45,
+      "deadlineDate": "2038-08-01",
+      "deadlineConsequence": "A resistance backer escapes with evidence of the regime's finances.",
+      "rewriteHints": "The function is a social/underworld victory. It may happen anywhere Jacqueline can work a crowd."
+    },
+    {
+      "id": "s1dark.climax.white-rabbit",
+      "order": 50,
+      "title": "Break the White Rabbit",
+      "description": "The resistance's best hope is converted into Bleeding Heart's White Rabbit, collapsing the counter-offensive.",
+      "act": "climax",
+      "conditions": { "turnRange": [30, 65], "actorIds": ["s1dark.aurelia.season-dark-version"], "requiresBeats": ["s1dark.escalation.hunt"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s1dark.aurelia.season-dark-version", "formId": "s1dark.white.rabbit.knighted.longshot" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 65,
+      "deadlineDate": "2039-06-01",
+      "deadlineConsequence": "Aurelia escapes and becomes the resistance's open symbol; the final deadline advances.",
+      "rewriteHints": "If Aurelia is dead or absent, another resistance champion may be broken instead. Record adaptedFrom/adaptedTo."
+    },
+    {
+      "id": "s1dark.resolution.dominion",
+      "order": 60,
+      "title": "Dominion Secured",
+      "description": "PetraByte Tower falls or is surrendered, and Bleeding Heart's order becomes the city's permanent status quo.",
+      "act": "resolution",
+      "conditions": { "turnRange": [40, 80], "requiresBeats": ["s1dark.climax.white-rabbit"] },
+      "completion": {
+        "type": "state",
+        "predicates": [
+          { "kind": "location-control", "locationId": "petrabyte-tower", "factionId": "clarity" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 80,
+      "deadlineDate": "2040-06-01",
+      "deadlineConsequence": "The final deadline passes: the resistance wins, and the season ends in a recorded villain-victory for the heroes.",
+      "rewriteHints": "The victory can be military, political, or psychological. If the player chooses an early ending, close the remaining beats as 'closed'."
+    }
+  ],
+  "finalDeadline": { "turns": 80, "date": "2040-06-01" },
+  "failureState": "villain-victory",
+  "manualOnly": [],
+  "altFormsAllowed": [
+    "s1dark.carol.cleansed.bleeding.heart",
+    "s1dark.carol.infected.bleeding.heart",
+    "s1dark.phantom.heart.poisoned.bleeding.heart",
+    "s1dark.heart.attack.knighted.cyber.sakura",
+    "s1dark.bittersweet.knighted.poisoness",
+    "s1dark.white.rabbit.knighted.longshot"
+  ]
+}

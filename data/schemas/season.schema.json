@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neoterra.local/schemas/season.schema.json",
+  "title": "Neo Terra Season Definition",
+  "description": "Authored season data consumed by the season loader, world construction, and WorldState seeding. Cross-file references (registry, factions, locations) are checked by src/data/seasons.js.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "era",
+    "anchorDate",
+    "premise",
+    "toneNotes",
+    "playerRole",
+    "defaultPlayerCharacterId",
+    "playable",
+    "alt",
+    "sandbox",
+    "allowAnyCharacter",
+    "roster",
+    "factions",
+    "threats",
+    "startLocationId",
+    "openingBeats",
+    "canonBeats",
+    "finalDeadline",
+    "failureState",
+    "manualOnly",
+    "altFormsAllowed"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "enum": ["s1", "s1dark", "s2", "s3", "s4", "sandbox", "s5"]
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "era": { "type": "string", "minLength": 1 },
+    "anchorDate": { "type": ["string", "null"] },
+    "premise": { "type": "string", "minLength": 1 },
+    "toneNotes": { "type": "string", "minLength": 1 },
+    "playerRole": {
+      "type": "string",
+      "enum": ["hero", "villain", "neutral"]
+    },
+    "defaultPlayerCharacterId": { "type": ["string", "null"] },
+    "playable": { "type": "boolean" },
+    "alt": { "type": "boolean" },
+    "altOf": { "type": ["string", "null"] },
+    "sandbox": { "type": "boolean" },
+    "allowAnyCharacter": { "type": "boolean" },
+    "roster": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["characterId", "formId", "locationId"],
+        "properties": {
+          "characterId": { "type": "string" },
+          "formId": { "type": "string" },
+          "locationId": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "factions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "influence", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "influence": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "status": {
+            "type": "string",
+            "enum": ["active", "dormant", "disbanded", "underground", "dominant"]
+          },
+          "goals": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "threats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/threat" }
+    },
+    "startLocationId": { "type": "string" },
+    "openingBeats": { "type": "array", "items": { "type": "string" } },
+    "canonBeats": {
+      "type": "array",
+      "items": { "$ref": "beat.schema.json" }
+    },
+    "finalDeadline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["turns", "date"],
+      "properties": {
+        "turns": { "type": ["integer", "null"], "minimum": 0 },
+        "date": { "type": ["string", "null"] }
+      }
+    },
+    "failureState": {
+      "type": "string",
+      "enum": ["villain-victory", "neutral-bad-ending", "none"]
+    },
+    "manualOnly": { "type": "array", "items": { "type": "string" } },
+    "altFormsAllowed": { "type": "array", "items": { "type": "string" } },
+    "auxiliaryBook": { "type": "string" },
+    "notPlayableReason": { "type": "string" }
+  },
+  "$defs": {
+    "threat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "rank", "sourceFactionId", "agenda", "stages", "progress", "locationId"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$",
+          "description": "Season-scoped threat id, e.g. s4.threat.noah-atopos."
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "rank": { "type": "string", "enum": ["main", "secondary"] },
+        "sourceFactionId": { "type": ["string", "null"] },
+        "agenda": { "type": "string", "minLength": 1 },
+        "stages": { "type": "array", "minItems": 2, "items": { "type": "string", "minLength": 1 } },
+        "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "locationId": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

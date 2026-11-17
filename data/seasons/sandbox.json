@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "sandbox",
+  "title": "Sandbox — Neo Terra Free Play",
+  "era": "Any",
+  "anchorDate": null,
+  "premise": "The base Neo Terra world without a season script. No canon beats, no final deadline, no predetermined main threat. Pick any character, choose a starting point, and let the city react.",
+  "toneNotes": "Flexible. The Director keeps the setting's tone — cyberpunk superhero melodrama — but does not push a season arc. Threats may be introduced by the player or improvised by the narrator as ordinary city trouble.",
+  "playerRole": "neutral",
+  "defaultPlayerCharacterId": null,
+  "playable": true,
+  "alt": false,
+  "altOf": null,
+  "sandbox": true,
+  "allowAnyCharacter": true,
+  "roster": [],
+  "factions": [
+    { "id": "petrabyte", "influence": 60, "status": "active" },
+    { "id": "corvus-corp", "influence": 50, "status": "active" },
+    { "id": "neoterra-pd", "influence": 40, "status": "active" },
+    { "id": "crisis-coalition", "influence": 25, "status": "dormant" },
+    { "id": "clarity", "influence": 35, "status": "underground" }
+  ],
+  "threats": [],
+  "startLocationId": "central-plaza",
+  "openingBeats": [],
+  "canonBeats": [],
+  "finalDeadline": { "turns": null, "date": null },
+  "failureState": "none",
+  "manualOnly": [],
+  "altFormsAllowed": []
+}

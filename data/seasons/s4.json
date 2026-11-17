@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "id": "s4",
+  "title": "Season 4 — The Cold Front",
+  "era": "2043",
+  "anchorDate": "2043-06-01",
+  "premise": "Claire Atropos is back and worse: recorrupted, colder, and allied with Noah Atropos' Phage Clotho. A cold front of conversions and corporate reprisals rolls over Neo Terra while Ginny Aylesworth's Avalanche grinds through the industrial belt. The heroes who beat Clarity and the Renya Clan must survive a winter that wants them domesticated.",
+  "toneNotes": "Cold, opulent, and exhausted. Old enemies return with new rules. The season supports multiple competing main threats, so the tracker should let the city's crisis shift focus rather than force one villain's script.",
+  "playerRole": "hero",
+  "defaultPlayerCharacterId": null,
+  "playable": true,
+  "alt": false,
+  "altOf": null,
+  "sandbox": false,
+  "allowAnyCharacter": false,
+  "roster": [
+    { "characterId": "s4.vaiva.petrauskaite.colorgarde.season.4.ver", "formId": "s4.vaiva.petrauskaite.colorgarde.season.4.ver", "locationId": "petrabyte-tower" },
+    { "characterId": "s4.anastasia.carnaz.gravitasha", "formId": "s4.anastasia.carnaz.gravitasha", "locationId": "maple-heights" },
+    { "characterId": "s4.brie.anderson.hula.hawk", "formId": "s4.brie.anderson.hula.hawk", "locationId": "neon-docks" },
+    { "characterId": "s4.christina.chris.goldclaw.crimson.crush", "formId": "s4.christina.chris.goldclaw.crimson.crush", "locationId": "sirens-styles" },
+    { "characterId": "s4.claire.atropos.recorrupted", "formId": "s4.claire.atropos.recorrupted", "locationId": "clarity-hq" },
+    { "characterId": "s4.damage.control", "formId": "s4.damage.control", "locationId": "neoterra-pd-hq" },
+    { "characterId": "s4.ginny.aylesworth.avalanche", "formId": "s4.ginny.aylesworth.avalanche", "locationId": "rust-yard" },
+    { "characterId": "s4.jack.dune.gold.slasher", "formId": "s4.jack.dune.gold.slasher", "locationId": "gold-paradise-casino" },
+    { "characterId": "s4.lilliana.shroud.cyber.courtesan", "formId": "s4.lilliana.shroud.cyber.courtesan", "locationId": "gold-paradise-casino" },
+    { "characterId": "s4.noah.atropos.phage.clotho", "formId": "s4.noah.atropos.phage.clotho", "locationId": "clarity-hq" },
+    { "characterId": "s4.roseline.rosy.bellington.pink.power", "formId": "s4.roseline.rosy.bellington.pink.power", "locationId": "sirens-styles" },
+    { "characterId": "s4.selina.cross.umbra.vampire", "formId": "s4.selina.cross.umbra.vampire", "locationId": "gold-paradise-casino" }
+  ],
+  "factions": [
+    { "id": "clarity", "influence": 70, "status": "dominant", "goals": ["Return Claire and Noah to absolute control", "Freeze the hero community into compliance"] },
+    { "id": "petrabyte", "influence": 45, "status": "active", "goals": ["Hold the line through the winter", "Keep the Sirens and the Coalition supplied"] },
+    { "id": "sensational-sirens", "influence": 45, "status": "active" },
+    { "id": "corvus-corp", "influence": 40, "status": "active" },
+    { "id": "neoterra-pd", "influence": 30, "status": "active" },
+    { "id": "crisis-coalition", "influence": 20, "status": "active" }
+  ],
+  "threats": [
+    {
+      "id": "s4.threat.noah-atopos",
+      "name": "Noah Atropos / Phage Clotho",
+      "rank": "main",
+      "sourceFactionId": "clarity",
+      "agenda": "Use Phage Clotho and Clarity's remaining infrastructure to rewrite the city's metahumans into a managed, obedient population.",
+      "stages": [
+        "Clarity reconsolidates",
+        "Phage Clotho activates",
+        "The conversion grid spreads",
+        "A managed metropolis"
+      ],
+      "progress": 40,
+      "locationId": "clarity-hq"
+    },
+    {
+      "id": "s4.threat.ginny-avalanche",
+      "name": "Ginny Aylesworth / Avalanche",
+      "rank": "main",
+      "sourceFactionId": null,
+      "agenda": "Grind the industrial belt into a personal fiefdom, then bury the city's heroes under the weight of their own failures.",
+      "stages": [
+        "Rust Yard falls",
+        "The docks freeze",
+        "The city halves",
+        "Avalanche's winter"
+      ],
+      "progress": 25,
+      "locationId": "rust-yard"
+    },
+    {
+      "id": "s4.threat.cold-front",
+      "name": "The Cold Front",
+      "rank": "secondary",
+      "sourceFactionId": "clarity",
+      "agenda": "Convert key heroines into coldhearted loyalists through staged betrayals and emotional freeze-outs.",
+      "stages": [
+        "Isolate a target",
+        "Break the emotional anchor",
+        "Complete the coldhearted transformation"
+      ],
+      "progress": 20,
+      "locationId": "clarity-hq"
+    }
+  ],
+  "startLocationId": "central-plaza",
+  "openingBeats": ["s4.opening.claire-returns", "s4.opening.cold-snap"],
+  "canonBeats": [
+    {
+      "id": "s4.opening.claire-returns",
+      "order": 10,
+      "title": "Claire Returns",
+      "description": "Claire Atropos reappears in public, recorrupted and backed by Noah, and makes the first move of the season.",
+      "act": "opening",
+      "conditions": { "turnRange": [0, 12], "locationIds": ["clarity-hq", "central-plaza"], "actorIds": ["s4.claire.atropos.recorrupted", "s4.noah.atropos.phage.clotho"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "claire-returns" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 12,
+      "deadlineDate": "2043-06-15",
+      "deadlineConsequence": "Clarity moves in silence; the first hero conversion happens before anyone knows the season started.",
+      "rewriteHints": "A broadcast, a public execution, or a corporate coup all count. Claire does not need to win the encounter, only to announce herself."
+    },
+    {
+      "id": "s4.opening.cold-snap",
+      "order": 20,
+      "title": "The Cold Snap",
+      "description": "A localized freeze or a coordinated betrayal signals that the Cold Front is already in motion.",
+      "act": "opening",
+      "conditions": { "turnRange": [3, 20], "locationIds": ["rust-yard", "neon-docks", "maple-heights"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "cold-snap" }]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 20,
+      "deadlineDate": "2043-07-01",
+      "deadlineConsequence": "The Cold Front establishes an unseen foothold; a later transformation is harder to reverse.",
+      "rewriteHints": "Weather, sabotage, or emotional isolation may all be the sign. The function is making the cold personal before it is political."
+    },
+    {
+      "id": "s4.escalation.phage-clotho",
+      "order": 30,
+      "title": "Phage Clotho Activates",
+      "description": "Noah's conversion system goes live, and a named metahuman is rewritten into a Clarity asset.",
+      "act": "escalation",
+      "conditions": { "turnRange": [10, 35], "requiresBeats": ["s4.opening.claire-returns"], "locationIds": ["clarity-hq", "bcp-facility", "petrabyte-tower"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s4.christina.chris.goldclaw.crimson.crush", "formId": "s4.cyber.dragon.infected.crimson.crush" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 35,
+      "deadlineDate": "2043-08-15",
+      "deadlineConsequence": "Phage Clotho spreads to the general population; the main threat advances and panic grows.",
+      "rewriteHints": "Any declared transformation may substitute. If a different threat owns the escalation, record the substitution and keep the same function."
+    },
+    {
+      "id": "s4.escalation.ice-queen",
+      "order": 40,
+      "title": "The Ice Queen",
+      "description": "Claire coldheartedly rewrites a hero she once cared for — or is rewritten herself — making the Cold Front visible and devastating.",
+      "act": "escalation",
+      "conditions": { "turnRange": [15, 45], "requiresBeats": ["s4.opening.cold-snap"] },
+      "completion": {
+        "type": "transformation",
+        "predicates": [
+          { "kind": "form-active", "characterId": "s4.claire.atropos.recorrupted", "formId": "s4.ice.queen.coldhearted.claire.atropos" }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 45,
+      "deadlineDate": "2043-09-15",
+      "deadlineConsequence": "The coldhearted conversion lands on a different heroine; the city loses a public symbol of warmth.",
+      "rewriteHints": "Any coldhearted rule may be used, including reversing an existing one. The function is a transformation that makes the winter feel personal."
+    },
+    {
+      "id": "s4.climax.assault-clarity",
+      "order": 50,
+      "title": "Assault on Clarity",
+      "description": "A coalition of heroes, Sirens, and whoever is still standing strikes Clarity HQ to end the Cold Front at its source.",
+      "act": "climax",
+      "conditions": { "turnRange": [30, 70], "requiresBeats": ["s4.escalation.phage-clotho"], "locationIds": ["clarity-hq"] },
+      "completion": {
+        "type": "event",
+        "predicates": [{ "kind": "event-tag", "tag": "assault-clarity" }]
+      },
+      "flexibility": "strict",
+      "deadlineTurns": 70,
+      "deadlineDate": "2043-11-15",
+      "deadlineConsequence": "Clarity completes the managed city; the final deadline moves up and the ending path narrows.",
+      "rewriteHints": "The assault can fail, partially succeed, or be a raid for a cure. If Claire and Noah already fell, short-circuit this beat and let the other main threat climax instead."
+    },
+    {
+      "id": "s4.resolution.city-thaws",
+      "order": 60,
+      "title": "The City Thaws",
+      "description": "The Cold Front breaks: Noah and Claire are removed, the conversion grid is shut down, or Avalanche's winter is stopped.",
+      "act": "resolution",
+      "conditions": { "turnRange": [40, 90], "requiresBeats": ["s4.climax.assault-clarity"] },
+      "completion": {
+        "type": "state",
+        "predicates": [
+          { "kind": "character-status", "characterId": "s4.noah.atropos.phage.clotho", "statuses": ["captured", "dead", "retired", "lost", "corrupted"] }
+        ]
+      },
+      "flexibility": "adaptable",
+      "deadlineTurns": 90,
+      "deadlineDate": "2043-12-31",
+      "deadlineConsequence": "The final deadline passes: the Cold Front settles in permanently, and the season ends in a recorded villain victory.",
+      "rewriteHints": "Either main threat may be the one resolved first. If Noah falls early, resolve through Claire or Avalanche and record the divergence."
+    }
+  ],
+  "finalDeadline": { "turns": 90, "date": "2043-12-31" },
+  "failureState": "villain-victory",
+  "manualOnly": [],
+  "altFormsAllowed": [
+    "s4.event.horizon.corrupted.gravitasha",
+    "s4.o.v.e.n.snowfall.coldhearted.gravitasha",
+    "s4.bird.cage.corrupted.hula.hawk",
+    "s4.frost.flight.coldhearted.hula.hawk",
+    "s4.dark.dragon.corrupted.crimson.crush",
+    "s4.cyber.dragon.infected.crimson.crush",
+    "s4.ice.queen.coldhearted.claire.atropos",
+    "s4.shattered.shard.corrupted.pink.power",
+    "s4.pink.icicle.coldhearted-pink-power"
+  ]
+}
