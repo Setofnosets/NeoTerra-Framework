@@ -483,7 +483,7 @@ NeoTerra-Framework/
 ### Progress
 - [x] Step 1 — Extension scaffold, settings, slash command, shell placeholder — `b6a45b0`
 - [x] Step 2 — Data ingestion pipeline and character/form registry — `0a2ed16`
-- [x] Step 3 — Season, faction, and location definitions — `4410d5c`
+- [x] Step 3 — Season, faction, and location definitions — `4410d5c`; map amendment — `b2e3aaa`
 - [x] Step 4 — `WorldState` schema, store, reducer, migrations — `ea24a59`
 - [x] Step 5 — Shared agent client, runner, and JSON contracts — `337e668`
 - [x] Step 6 — Context renderer, token budget, and interceptor — `be43032`
