@@ -29,7 +29,7 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–5 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. **Step 6 (context renderer/budget/interceptor) is in progress.**
+- As of this update, Steps 1–8 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction) and Step 8 (cast director/world book/form exclusivity) are complete; Step 9 is next.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -861,7 +861,7 @@ Still optional, in rough priority order:
 
 ## Open Questions & Implementation Details
 
-No open questions. Steps 1–6 are implemented or in progress; the plan is ready to continue with Step 7.
+No open questions. Steps 1–8 are complete; the plan is ready to continue with Step 9.
 
 Remaining implementation details are fully specified by the decisions above:
 - Map geometry comes from the SVG layers via `build-map`; DeepSeek is only a fallback for unlabeled/new sites and is human-verified.
