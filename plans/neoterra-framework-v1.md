@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–19 complete / Step 20 next
+- **Status:** complete — Steps 1–20 complete
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -506,7 +506,7 @@ NeoTerra-Framework/
 - [x] Step 17 — Optional CYOA choices mode (exploration + tactical combat) — `2b1806a`
 - [x] Step 18 — Character Codex, settings surface, and theme polish — `a8b2e87`
 - [x] Step 19 — Dice-based conflict resolver and combat integration — `6c850f3`
-- [ ] Step 20 — Extensibility tooling, import/export, docs, and release QA
+- [x] Step 20 — Extensibility tooling, import/export, docs, and release QA — `e985981`
 
 ### Step 1 — Extension scaffold, settings, slash command, shell placeholder
 - **Files:** `manifest.json`, `index.js`, `package.json`, `style.css`, `src/core/{constants,settings,defaults,migrations,logger,events}.js`, `src/ui/{shell.js,settings.html,settings.js,theme.css}`, `tests/settings.test.js`
