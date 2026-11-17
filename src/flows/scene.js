@@ -8,6 +8,14 @@
  * Everything here is pure and browser-safe: no DOM, no SillyTavern globals.
  */
 
+import { buildDeterministicCast } from '../agents/cast-director.js';
+import {
+    assertStateFormExclusivity,
+    buildFormIndex,
+    selectExclusiveCast,
+} from '../data/forms.js';
+import { validateWorldState } from '../state/world-state.js';
+
 export const POV_LABELS = Object.freeze({
     hero: 'Hero POV',
     villain: 'Villain POV',
@@ -133,5 +141,496 @@ export function describeScene(state) {
         present: Array.isArray(state.scene?.present) ? state.scene.present.slice() : [],
         castNames: getSceneCastNames(state),
         framing: state.scene?.framing ?? '',
+    };
+}
+
+/* ------------------------------------------------------------------ */
+/* Scene transitions and cast direction                                */
+/* ------------------------------------------------------------------ */
+
+function defaultWorldBookName(season, chatId) {
+    const title = season?.title ?? season?.id ?? 'Neo Terra';
+    const chat = typeof chatId === 'string' && chatId.length > 0 ? chatId : 'unlinked-chat';
+    return `Neo Terra — ${title} — ${chat}`;
+}
+
+function isAbortError(error) {
+    return error?.name === 'AgentAbortedError' || error?.code === 'AGENT_ABORTED';
+}
+
+function logWarning(log, message, error) {
+    try {
+        if (typeof log === 'function') {
+            log(message, error);
+        } else if (log && typeof log.warn === 'function') {
+            log.warn(message, error);
+        }
+    } catch {
+        // Logging must never block a scene transition.
+    }
+}
+
+function flagsFor(state) {
+    return isObject(state?.flags?.castDirector) ? state.flags.castDirector : {};
+}
+
+/**
+ * Scene transition flow.
+ *
+ * Applies cast events through the store, then persists the cast-director flags
+ * back into `WorldState.flags` so pins and removals survive reloads. The world
+ * book is best-effort: a failure never blocks a scene.
+ */
+export function createSceneFlow({
+    store,
+    season = null,
+    registry = null,
+    formIndex = null,
+    formGroups = null,
+    formRules = null,
+    director = null,
+    worldBook = null,
+    getSettings = null,
+    now = Date.now,
+    log = null,
+} = {}) {
+    if (!store || typeof store.get !== 'function' || typeof store.dispatch !== 'function') {
+        throw new TypeError('createSceneFlow requires a WorldState store');
+    }
+
+    const worldBookAdapter = worldBook;
+    const clock = typeof now === 'function' ? now : Date.now;
+    const resolvedFormIndex = formIndex
+        ?? (registry && formGroups ? buildFormIndex(registry, formGroups) : null);
+
+    function readState() {
+        const state = store.get();
+        if (!isObject(state)) {
+            throw new Error('Scene flow requires a seeded WorldState');
+        }
+        return state;
+    }
+
+    function checkExclusivity(state) {
+        try {
+            assertStateFormExclusivity(state, resolvedFormIndex);
+        } catch (error) {
+            logWarning(log, 'Form exclusivity conflict; selecting one form deterministically', error);
+        }
+    }
+
+    function deterministicCast(state, locationId, flags = flagsFor(state)) {
+        return buildDeterministicCast({
+            state,
+            season,
+            formIndex: resolvedFormIndex,
+            locationId,
+            manualPins: flags.manualPins ?? [],
+            manualRemovals: flags.manualRemovals ?? [],
+        });
+    }
+
+    function persistFlags(state, patch) {
+        const current = flagsFor(state);
+        const next = {
+            ...state,
+            flags: {
+                ...(state.flags ?? {}),
+                castDirector: {
+                    ...current,
+                    ...patch,
+                },
+            },
+        };
+        const validation = validateWorldState(next);
+        if (!validation.ok) {
+            const details = validation.errors
+                .map((error) => `${error.path}: ${error.message}`)
+                .join('; ');
+            throw new Error(`Scene flow produced an invalid WorldState (${details})`);
+        }
+        return store.replace(next);
+    }
+
+    function castStateFrom(state) {
+        const flags = flagsFor(state);
+        const locationId = state.scene?.locationId ?? null;
+        const cast = deterministicCast(state, locationId, flags);
+        const poolIds = new Set(cast.availablePool.map((character) => character.charId));
+        return {
+            locationId,
+            present: (Array.isArray(state.scene?.present) ? state.scene.present : [])
+                .filter((characterId) => (
+                    characterId !== state.player?.characterId
+                    && poolIds.has(characterId)
+                )),
+            manualPins: Array.isArray(flags.manualPins) ? flags.manualPins.slice() : [],
+            manualRemovals: Array.isArray(flags.manualRemovals) ? flags.manualRemovals.slice() : [],
+            source: flags.source ?? 'deterministic',
+        };
+    }
+
+    async function directorPass({
+        state,
+        locationId,
+        runDirector = true,
+        signal = null,
+    }) {
+        checkExclusivity(state);
+        const flags = flagsFor(state);
+        const manualPins = Array.isArray(flags.manualPins) ? flags.manualPins : [];
+        const manualRemovals = Array.isArray(flags.manualRemovals) ? flags.manualRemovals : [];
+        const fallback = deterministicCast(state, locationId, { manualPins, manualRemovals });
+
+        if (runDirector === true && director && typeof director.run === 'function') {
+            try {
+                const result = await director.run({
+                    state,
+                    season,
+                    formIndex: resolvedFormIndex,
+                    registry,
+                    formGroups,
+                    formRules,
+                    locationId,
+                    manualPins,
+                    manualRemovals,
+                    signal,
+                });
+                if (isObject(result)) {
+                    return {
+                        events: Array.isArray(result.events) ? result.events : [],
+                        rejected: Array.isArray(result.rejected) ? result.rejected : [],
+                        source: typeof result.source === 'string' ? result.source : 'agent',
+                        deterministic: result.deterministic ?? fallback,
+                    };
+                }
+            } catch (error) {
+                if (isAbortError(error)) {
+                    throw error;
+                }
+                logWarning(log, 'Cast Director failed; using the deterministic cast', error);
+            }
+        }
+
+        return {
+            events: [],
+            rejected: [],
+            source: 'deterministic',
+            deterministic: fallback,
+        };
+    }
+
+    function applyEvents(state, events) {
+        let next = state;
+        const applied = [];
+        const failed = [];
+        for (const event of Array.isArray(events) ? events : []) {
+            if (!isObject(event) || event.type !== 'MOVE_CHARACTER') {
+                continue;
+            }
+            try {
+                next = store.dispatch(event);
+                applied.push(event);
+            } catch (error) {
+                failed.push({ event, error: error?.message ?? String(error) });
+                logWarning(log, `Could not apply cast event for "${event.characterId}"`, error);
+            }
+        }
+        return { state: next, applied, failed };
+    }
+
+    function finalize({
+        state,
+        locationId,
+        source,
+        rejected = [],
+        applied = [],
+    }) {
+        checkExclusivity(state);
+        const flags = flagsFor(state);
+        const manualPins = Array.isArray(flags.manualPins) ? flags.manualPins : [];
+        const manualRemovals = Array.isArray(flags.manualRemovals) ? flags.manualRemovals : [];
+        const cast = deterministicCast(state, locationId, { manualPins, manualRemovals });
+        const poolIds = new Set(cast.availablePool.map((character) => character.charId));
+
+        // `scene.present` is location-derived. Pins must physically be in the
+        // scene and removals must physically leave it, or they would leak into
+        // the rendered cast block on the next turn.
+        let working = state;
+        const appliedEvents = Array.isArray(applied) ? applied.slice() : [];
+        const fallbackDestination = Object.keys(working.locations ?? {})
+            .filter((id) => id !== locationId)
+            .sort()[0] ?? null;
+
+        for (const characterId of manualPins) {
+            const character = working.characters?.[characterId];
+            if (!character || character.locationId === locationId) {
+                continue;
+            }
+            try {
+                const event = { type: 'MOVE_CHARACTER', characterId, locationId };
+                working = store.dispatch(event);
+                appliedEvents.push(event);
+            } catch (error) {
+                logWarning(log, `Could not move pinned character "${characterId}"`, error);
+            }
+        }
+
+        if (fallbackDestination) {
+            for (const characterId of manualRemovals) {
+                const character = working.characters?.[characterId];
+                if (!character || character.locationId !== locationId) {
+                    continue;
+                }
+                try {
+                    const event = {
+                        type: 'MOVE_CHARACTER',
+                        characterId,
+                        locationId: fallbackDestination,
+                    };
+                    working = store.dispatch(event);
+                    appliedEvents.push(event);
+                } catch (error) {
+                    logWarning(log, `Could not move removed character "${characterId}"`, error);
+                }
+            }
+        }
+
+        const rawPresent = (Array.isArray(working.scene?.present) ? working.scene.present : [])
+            .filter((characterId) => (
+                characterId !== working.player?.characterId
+                && poolIds.has(characterId)
+                && !manualRemovals.includes(characterId)
+            ))
+            .map((characterId) => working.characters?.[characterId] ?? null)
+            .filter(Boolean);
+        const present = selectExclusiveCast(rawPresent, resolvedFormIndex, {
+            prefer: manualPins,
+        }).map((character) => character.charId);
+
+        const persisted = persistFlags(working, {
+            sceneId: working.meta?.sceneId ?? 'opening',
+            locationId,
+            turn: working.meta?.turn ?? 0,
+            manualPins,
+            manualRemovals,
+            lastRunAt: clock(),
+            source,
+        });
+        return {
+            state: persisted,
+            cast: {
+                present,
+                pinned: cast.pinned,
+                removed: cast.removed,
+                threatsHere: cast.threatsHere,
+            },
+            events: appliedEvents,
+            rejected,
+            source,
+        };
+    }
+
+    async function initialize({ materialize = true } = {}) {
+        const state = readState();
+        const locationId = state.scene?.locationId ?? null;
+        const flags = flagsFor(state);
+
+        let worldBookResult = null;
+        if (materialize && worldBookAdapter && typeof worldBookAdapter.ensure === 'function') {
+            try {
+                const settings = typeof getSettings === 'function' ? getSettings() : null;
+                worldBookResult = await worldBookAdapter.ensure({
+                    name: defaultWorldBookName(season, state.chatId),
+                    season,
+                    registry,
+                    state,
+                    settings,
+                });
+            } catch (error) {
+                logWarning(log, 'World-book materialization failed during initialize', error);
+            }
+        }
+
+        const result = finalize({
+            state,
+            locationId,
+            source: flags.source ?? 'deterministic',
+        });
+        return { ...result, worldBook: worldBookResult };
+    }
+
+    async function enterScene({
+        locationId,
+        characterId = null,
+        runDirector = true,
+        signal = null,
+    } = {}) {
+        const initial = readState();
+        if (!isObject(initial.locations?.[locationId])) {
+            throw new Error(`Unknown scene location "${String(locationId)}"`);
+        }
+
+        const flags = flagsFor(initial);
+        if (initial.scene?.locationId === locationId && runDirector !== true) {
+            return {
+                state: initial,
+                cast: castStateFrom(initial),
+                events: [],
+                rejected: [],
+                source: flags.source ?? 'deterministic',
+            };
+        }
+
+        const canonPlayerId = initial.player?.identity === 'canon'
+            ? initial.player.characterId
+            : null;
+        const moveCharacterId = characterId && canonPlayerId && characterId === canonPlayerId
+            ? characterId
+            : canonPlayerId;
+        store.dispatch({
+            type: 'SET_LOCATION',
+            locationId,
+            ...(moveCharacterId ? { characterId: moveCharacterId } : {}),
+        });
+
+        const state = store.get();
+        const result = await directorPass({
+            state,
+            locationId,
+            runDirector: runDirector === true,
+            signal,
+        });
+        const applied = applyEvents(state, result.events);
+        return finalize({
+            state: applied.state,
+            locationId,
+            source: result.source,
+            rejected: result.rejected,
+            applied: applied.applied,
+        });
+    }
+
+    async function refreshCast({ runDirector = false, signal = null } = {}) {
+        const state = readState();
+        const locationId = state.scene?.locationId ?? null;
+        const result = await directorPass({
+            state,
+            locationId,
+            runDirector: runDirector === true,
+            signal,
+        });
+        const applied = applyEvents(state, result.events);
+        return finalize({
+            state: applied.state,
+            locationId,
+            source: result.source,
+            rejected: result.rejected,
+            applied: applied.applied,
+        });
+    }
+
+    function validatePoolIds(state, ids, locationId) {
+        const flags = flagsFor(state);
+        const cast = deterministicCast(state, locationId, flags);
+        const poolIds = new Set(cast.availablePool.map((character) => character.charId));
+        const requested = Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : [];
+        const valid = [...new Set(requested)].filter((id) => poolIds.has(id));
+        const invalid = requested.filter((id) => !poolIds.has(id));
+        if (invalid.length > 0) {
+            logWarning(log, `Ignoring ids outside the cast pool: ${invalid.join(', ')}`);
+        }
+        return valid;
+    }
+
+    function setManualPins(ids) {
+        const state = readState();
+        const locationId = state.scene?.locationId ?? null;
+        const flags = flagsFor(state);
+        const pins = validatePoolIds(state, ids, locationId);
+        const manualRemovals = (Array.isArray(flags.manualRemovals) ? flags.manualRemovals : [])
+            .filter((id) => !pins.includes(id));
+        let next = persistFlags(state, { manualPins: pins, manualRemovals });
+
+        for (const characterId of pins) {
+            if (next.characters?.[characterId]?.locationId === locationId) {
+                continue;
+            }
+            try {
+                next = store.dispatch({
+                    type: 'MOVE_CHARACTER',
+                    characterId,
+                    locationId,
+                });
+            } catch (error) {
+                logWarning(log, `Could not move pinned character "${characterId}"`, error);
+            }
+        }
+
+        return finalize({
+            state: next,
+            locationId,
+            source: flags.source ?? 'deterministic',
+        });
+    }
+
+    function setManualRemovals(ids) {
+        const state = readState();
+        const locationId = state.scene?.locationId ?? null;
+        const flags = flagsFor(state);
+        const removals = validatePoolIds(state, ids, locationId);
+        const manualPins = (Array.isArray(flags.manualPins) ? flags.manualPins : [])
+            .filter((id) => !removals.includes(id));
+        let next = persistFlags(state, { manualPins, manualRemovals: removals });
+
+        const destinations = Object.keys(state.locations ?? {})
+            .filter((id) => id !== locationId)
+            .sort();
+        const destinationId = destinations[0] ?? null;
+        if (destinationId) {
+            for (const characterId of removals) {
+                if (next.characters?.[characterId]?.locationId !== locationId) {
+                    continue;
+                }
+                try {
+                    next = store.dispatch({
+                        type: 'MOVE_CHARACTER',
+                        characterId,
+                        locationId: destinationId,
+                    });
+                } catch (error) {
+                    logWarning(log, `Could not move removed character "${characterId}"`, error);
+                }
+            }
+        }
+
+        return finalize({
+            state: next,
+            locationId,
+            source: flags.source ?? 'deterministic',
+        });
+    }
+
+    function getCastState() {
+        const state = store.get();
+        if (!isObject(state)) {
+            return {
+                locationId: null,
+                present: [],
+                manualPins: [],
+                manualRemovals: [],
+                source: 'deterministic',
+            };
+        }
+        return castStateFrom(state);
+    }
+
+    return {
+        enterScene,
+        refreshCast,
+        initialize,
+        setManualPins,
+        setManualRemovals,
+        getCastState,
     };
 }
