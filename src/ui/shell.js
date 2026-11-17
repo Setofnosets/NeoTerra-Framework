@@ -18,7 +18,11 @@ import { getSettings, resetSettings } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
 import { disposeSettingsPanel, mountSettingsPanel, refreshSettingsPanel } from './settings.js';
 import { disposeMapPanel, mountMapPanel } from './map-panel.js';
-import { createWorldStateStore } from '../state/store.js';
+import { disposeCodex, mountCodex } from './codex.js';
+import { loadRegistry } from '../data/registry.js';
+import { loadFormGroups, loadFormRules } from '../data/forms.js';
+import { createWorldBookAdapter } from '../context/worldbook.js';
+import { createWorldStateStore, WAL_PREFIX } from '../state/store.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
@@ -57,7 +61,7 @@ const TAB_PLACEHOLDERS = Object.freeze({
 });
 
 /** Tabs whose panel is a live mountable component instead of a placeholder. */
-const LIVE_PANELS = new Set(['season', 'map']);
+const LIVE_PANELS = new Set(['season', 'map', 'characters']);
 
 let ctx = null;
 let abort = null;
@@ -108,6 +112,7 @@ function shellMarkup() {
             <p class="neoterra-placeholder" ${live ? 'hidden' : ''}>${placeholder.body}</p>
             ${tab.id === 'map' ? '<div class="neoterra-map-host" data-neoterra-map-host></div>' : ''}
             ${tab.id === 'season' ? '<div class="neoterra-season-host" data-neoterra-season-host></div>' : ''}
+            ${tab.id === 'characters' ? '<div class="neoterra-codex-host" data-neoterra-codex-host></div>' : ''}
             ${tab.id === 'settings' ? '<button type="button" class="menu_button" data-neoterra-open-settings>Open settings panel</button>' : ''}
         </section>`;
     }).join('');
@@ -427,6 +432,109 @@ async function mountMapPanelComponent(context) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Character Codex                                                     */
+/* ------------------------------------------------------------------ */
+
+let mountedCodexChatId = null;
+
+async function mountCodexPanelComponent(context) {
+    if (!hasDom()) {
+        return null;
+    }
+    const host = document.querySelector('[data-neoterra-codex-host]');
+    if (!host) {
+        return null;
+    }
+    const chatId = currentChatId(context);
+    const metadata = context?.chatMetadata;
+    if (!chatId || !metadata) {
+        disposeCodex();
+        host.innerHTML = '<p class="neoterra-empty">Open a chat to see its character codex.</p>';
+        return null;
+    }
+    if (mountedCodexChatId && mountedCodexChatId !== chatId) {
+        disposeCodex();
+    }
+    mountedCodexChatId = chatId;
+    try {
+        const season = metadata?.neoterra?.seasonDefinition ?? null;
+        const metadataRegistry = metadata?.neoterra?.registry ?? null;
+        const hasEntries = Array.isArray(metadataRegistry?.entries)
+            && metadataRegistry.entries.length > 0;
+        // Season-start stores a roster slice. Sandbox has an empty roster, so its
+        // slice is truthy but empty; load the full registry in that case.
+        const registry = hasEntries && season?.allowAnyCharacter !== true
+            ? metadataRegistry
+            : await loadRegistry();
+        const [formGroups, formRules] = await Promise.all([
+            loadFormGroups(),
+            loadFormRules({ registry }),
+        ]);
+        const store = createWorldStateStore({
+            metadata,
+            saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
+            storage: readLocalStorage(),
+            chatId,
+            context: { registry, formGroups, formRules },
+        });
+        return mountCodex({
+            root: host,
+            store,
+            season,
+            registry,
+            formGroups,
+            formRules,
+            getSettings: () => getSettings(context),
+            onIdentityChange: ({ identity }) => {
+                const root = metadata.neoterra ?? (metadata.neoterra = {});
+                root.playerIdentity = identity;
+                try {
+                    context?.saveMetadataDebounced?.();
+                } catch (error) {
+                    logger.debug('Could not persist the player identity', error);
+                }
+                invalidateChatRuntimes(context, { keepCodex: true });
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'identity', identity });
+            },
+            onWorldChange: () => {
+                invalidateChatRuntimes(context, { keepCodex: true });
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'codex' });
+            },
+        });
+    } catch (error) {
+        logger.warn('Could not mount the character codex', error);
+        host.innerHTML = '<p class="neoterra-error" role="alert">The character codex could not be mounted.</p>';
+        return null;
+    }
+}
+
+async function mountCodexPanelForActiveChat() {
+    return mountCodexPanelComponent(refreshContext());
+}
+
+/**
+ * Drop sibling runtimes that cache their own WorldState copy after the codex
+ * mutates the shared document. The next activation rebuilds them from metadata.
+ */
+function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
+    mapRuntime?.store?.dispose?.();
+    interactionRuntime?.store?.dispose?.();
+    mapRuntime = null;
+    mountedMapChatId = null;
+    interactionRuntime = null;
+    choicesBar = null;
+    disposeMapPanel();
+    disposeChoicesBar();
+    if (!keepCodex) {
+        disposeCodex();
+    }
+    if (isShellOpen() && getActiveTab() === 'map') {
+        void mountMapPanelForActiveChat();
+    }
+    void refreshInteractionUi(context ?? refreshContext());
+}
+
+/* ------------------------------------------------------------------ */
 /* Ending and CYOA wiring                                               */
 /* ------------------------------------------------------------------ */
 
@@ -617,6 +725,7 @@ function unsubscribeInteractionEvents() {
 }
 
 function openSettingsPanel() {
+    refreshSettingsPanel();
     const panel = document.getElementById(UI_IDS.SETTINGS_PANEL);
     const host = document.getElementById('extensions_settings2') ?? document.getElementById('extensions_settings');
     host?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
@@ -662,6 +771,9 @@ export function setActiveTab(tabId) {
     if (tabId === 'map') {
         mapMounted = true;
         void mountMapPanelForActiveChat();
+    }
+    if (tabId === 'characters') {
+        void mountCodexPanelForActiveChat();
     }
     bus.emit(EVENTS.TAB_CHANGED, { tab: tabId });
     return true;
@@ -763,6 +875,78 @@ function unregisterSlashCommand(context) {
     registeredCommand = null;
 }
 
+async function resetChatWorld(context = null) {
+    // Always re-read the live context: the settings panel may hold a context
+    // object captured before a chat switch.
+    const live = refreshContext() ?? context;
+    const metadata = live?.chatMetadata;
+    if (!metadata?.neoterra) {
+        return false;
+    }
+    const chatId = metadata.neoterra.worldState?.chatId
+        ?? live?.chatId
+        ?? null;
+    const bookName = metadata.neoterra.worldBook?.name ?? null;
+    if (bookName) {
+        try {
+            const adapter = createWorldBookAdapter({
+                ctx: live,
+                getSettings: () => getSettings(live),
+                logger,
+            });
+            adapter.remove(bookName);
+        } catch (error) {
+            logger.warn('Could not remove the generated world book', error);
+        }
+    }
+    // Cancel pending debounced saves from every live store before clearing the
+    // document; otherwise a stale timer can write the old world back.
+    mapRuntime?.store?.dispose?.();
+    interactionRuntime?.store?.dispose?.();
+    disposeCodex();
+    if (chatId) {
+        try {
+            readLocalStorage()?.removeItem?.(`${WAL_PREFIX}${chatId}`);
+        } catch (error) {
+            logger.debug('Could not clear the world-state WAL', error);
+        }
+    }
+    // Drop per-swipe snapshots so restoring a swipe cannot splice the old world
+    // back into the reset timeline.
+    if (Array.isArray(live?.chat)) {
+        for (const message of live.chat) {
+            if (message?.extra && typeof message.extra === 'object' && message.extra.neoterra) {
+                delete message.extra.neoterra;
+            }
+        }
+    }
+    metadata.neoterra = { schemaVersion: 1 };
+    try {
+        live?.saveMetadataDebounced?.();
+        live?.saveChat?.();
+    } catch (error) {
+        logger.debug('Could not persist the world reset', error);
+    }
+    mapRuntime = null;
+    mountedMapChatId = null;
+    mountedCodexChatId = null;
+    interactionRuntime = null;
+    choicesBar = null;
+    disposeMapPanel();
+    disposeCodex();
+    disposeChoicesBar();
+    disposeEndingPanel();
+    if (isShellOpen() && getActiveTab() === 'map') {
+        void mountMapPanelForActiveChat();
+    }
+    if (isShellOpen() && getActiveTab() === 'characters') {
+        void mountCodexPanelForActiveChat();
+    }
+    void refreshInteractionUi(live);
+    bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-reset' });
+    return true;
+}
+
 function exposeDebugApi(context) {
     const api = {
         version: EXTENSION_VERSION,
@@ -777,6 +961,7 @@ function exposeDebugApi(context) {
             refreshSettingsPanel();
             return settings;
         },
+        resetWorld: () => resetChatWorld(context),
         mount: initialize,
         dispose,
     };
@@ -817,7 +1002,10 @@ export async function initialize(options = {}) {
         subscribeChatChanges(ctx);
         subscribeInteractionEvents(ctx);
         exposeDebugApi(ctx);
-        await mountSettingsPanel(ctx, { signal: abort.signal });
+        await mountSettingsPanel(ctx, {
+            signal: abort.signal,
+            onResetWorld: () => resetChatWorld(ctx),
+        });
 
         // A disable/delete hook may have run while the settings template was
         // loading. In that case dispose() owns the teardown; never mark the
@@ -862,14 +1050,20 @@ function subscribeChatChanges(context) {
     const handler = () => {
         mapRuntime = null;
         mountedMapChatId = null;
+        mountedCodexChatId = null;
         interactionRuntime = null;
         choicesBar = null;
         disposeMapPanel();
+        disposeCodex();
         disposeChoicesBar();
         disposeEndingPanel();
         if (isShellOpen() && getActiveTab() === 'map') {
             void mountMapPanelForActiveChat();
         }
+        if (isShellOpen() && getActiveTab() === 'characters') {
+            void mountCodexPanelForActiveChat();
+        }
+        refreshSettingsPanel();
         void refreshInteractionUi(refreshContext());
     };
     try {
@@ -906,10 +1100,12 @@ export function dispose() {
     unsubscribeInteractionEvents();
     mapRuntime = null;
     mountedMapChatId = null;
+    mountedCodexChatId = null;
     interactionRuntime = null;
     choicesBar = null;
     disposeSeasonMenu();
     disposeMapPanel();
+    disposeCodex();
     disposeSettingsPanel();
     disposeChoicesBar();
     disposeEndingPanel();

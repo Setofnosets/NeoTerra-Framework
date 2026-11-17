@@ -38,6 +38,25 @@
                         <option value="harsh">Harsh</option>
                     </select>
                 </label>
+
+                <label class="neoterra-field">
+                    <span>Player hard limit</span>
+                    <select data-neoterra-path="contentLimits.player">
+                        <option value="">Inherit global gate</option>
+                        <option value="full">Full (no reduction)</option>
+                        <option value="reduced">Reduced</option>
+                        <option value="mature-only">Mature only</option>
+                        <option value="strict">Strict</option>
+                    </select>
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                The content gate defaults to Full (off). Hard limits can only make the effective
+                level stricter; the global gate cannot disable them.
+            </p>
+            <h4 class="neoterra-section-title">Per-character hard limits</h4>
+            <div class="neoterra-settings-grid" data-neoterra-character-limits>
+                <p class="neoterra-hint">Start or load a chat world to list its cast.</p>
             </div>
 
             <h4 class="neoterra-section-title">CYOA choices</h4>
@@ -208,40 +227,13 @@
                 Bad-end detection is opt-in. While disabled, no bad-end agent calls or state writes occur.
             </p>
 
-            <h4 class="neoterra-section-title">Agents and cadence</h4>
-            <div class="neoterra-settings-grid">
-                <label class="neoterra-check">
-                    <input type="checkbox" data-neoterra-path="agents.storyline.enabled">
-                    <span>Storyline tracker</span>
-                </label>
-                <label class="neoterra-field">
-                    <span>Storyline every N turns</span>
-                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.storyline.everyNTurns">
-                </label>
-                <label class="neoterra-check">
-                    <input type="checkbox" data-neoterra-path="agents.stateTracker.enabled">
-                    <span>Player state tracker</span>
-                </label>
-                <label class="neoterra-check">
-                    <input type="checkbox" data-neoterra-path="agents.castDirector.enabled">
-                    <span>Cast director</span>
-                </label>
-                <label class="neoterra-check">
-                    <input type="checkbox" data-neoterra-path="agents.lore.enabled">
-                    <span>Lore agent</span>
-                </label>
-                <label class="neoterra-field">
-                    <span>Lore every N turns</span>
-                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.lore.everyNTurns">
-                </label>
-                <label class="neoterra-check">
-                    <input type="checkbox" data-neoterra-path="agents.auditor.enabled">
-                    <span>Continuity auditor</span>
-                </label>
-                <label class="neoterra-field">
-                    <span>Auditor every N turns</span>
-                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.auditor.everyNTurns">
-                </label>
+            <h4 class="neoterra-section-title">Agents: routing, prompts, and cadence</h4>
+            <p class="neoterra-hint">
+                A blank prompt uses the built-in role prompt. A blank connection profile uses the
+                main SillyTavern connection.
+            </p>
+            <div class="neoterra-agent-config" data-neoterra-agent-config>
+                <p class="neoterra-hint">Loading agent configuration…</p>
             </div>
 
             <h4 class="neoterra-section-title">Token budgets</h4>
@@ -304,6 +296,21 @@
                 <code>data/map/overrides.json</code>; per-chat edits (destroyed bridges, captured
                 districts, virtual nodes) stay inside this chat's world state.
             </p>
+
+            <h4 class="neoterra-section-title">Data and this chat</h4>
+            <p class="neoterra-hint">
+                Settings are global. The world, season, cast, and map overrides in the current
+                chat are per-timeline. Resetting the world removes only this chat's world and its
+                generated world book.
+            </p>
+            <div class="neoterra-settings-actions">
+                <button type="button" class="menu_button" data-neoterra-export-settings>Export settings JSON</button>
+                <button type="button" class="menu_button" data-neoterra-import-settings>Import settings JSON</button>
+                <input type="file" accept="application/json,.json" hidden data-neoterra-import-file>
+                <button type="button" class="menu_button neoterra-danger" data-neoterra-reset-world>
+                    Reset this chat's world
+                </button>
+            </div>
 
             <div class="neoterra-settings-actions">
                 <button type="button" class="menu_button" data-neoterra-reset>Reset Neo Terra settings</button>

@@ -11,8 +11,11 @@
 
     --nt-bg: #0a0f1c;
     --nt-bg-elevated: #111a2e;
+    --nt-bg-deep: #050b17;
     --nt-bg-panel: rgba(13, 21, 38, 0.96);
+    --nt-bg-translucent: rgba(13, 21, 38, 0.78);
     --nt-bg-hover: rgba(94, 234, 212, 0.1);
+    --nt-backdrop: rgba(3, 7, 18, 0.72);
     --nt-border: rgba(125, 211, 252, 0.25);
     --nt-border-strong: rgba(125, 211, 252, 0.55);
 
@@ -22,11 +25,20 @@
 
     --nt-accent: #5eead4;
     --nt-accent-strong: #2dd4bf;
+    --nt-accent-soft: rgba(94, 234, 212, 0.12);
+    --nt-accent-glow: rgba(45, 212, 191, 0.12);
     --nt-accent-contrast: #042f2e;
     --nt-danger: #fb7185;
+    --nt-danger-soft: rgba(251, 113, 133, 0.14);
     --nt-warning: #fbbf24;
+    --nt-warning-soft: rgba(251, 191, 36, 0.14);
+    --nt-success: #34d399;
+    --nt-success-soft: rgba(52, 211, 153, 0.14);
 
     --nt-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    --nt-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
     --nt-glow: 0 0 0 1px rgba(94, 234, 212, 0.18), 0 0 28px rgba(45, 212, 191, 0.12);
+    --nt-focus-ring: 0 0 0 3px rgba(94, 234, 212, 0.35);
     --nt-transition: 160ms ease;
+    --nt-transition-slow: 240ms ease;
 }

@@ -395,6 +395,15 @@ const HANDLERS = Object.freeze({
         if (identity !== 'custom' && identity !== 'canon') {
             fail(`Unknown player identity "${String(identity)}"`);
         }
+        const applyNonCanon = () => {
+            if (typeof event.nonCanon !== 'boolean') {
+                return;
+            }
+            state.flags = {
+                ...(isObject(state.flags) ? state.flags : {}),
+                nonCanon: event.nonCanon,
+            };
+        };
 
         const previousCharacter = state.player.identity === 'canon'
             ? state.characters[state.player.characterId] ?? null
@@ -412,10 +421,20 @@ const HANDLERS = Object.freeze({
                 personaNotes,
                 locationId: state.scene?.locationId ?? null,
             });
+            applyNonCanon();
             return;
         }
 
         const characterId = event.characterId;
+        // Sandbox / any-character timelines may start playing as a registry
+        // character that was not part of the seeded roster. The codex supplies
+        // the fully-formed CharacterState; insert it exactly once.
+        if (!state.characters[characterId] && isObject(event.character)) {
+            state.characters[characterId] = {
+                ...cloneWorldState(event.character),
+                charId: characterId,
+            };
+        }
         const character = requireCharacter(state, characterId);
         if (character.status === 'missing') {
             fail(`Cannot play as "${characterId}": the character is missing`);
@@ -440,6 +459,7 @@ const HANDLERS = Object.freeze({
             characterId: character.charId,
             personaNotes,
         };
+        applyNonCanon();
     },
 
     CONTINUE_BAD_END(state, event) {
