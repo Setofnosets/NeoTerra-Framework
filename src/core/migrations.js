@@ -1,0 +1,285 @@
+/**
+ * Versioned settings migrations and normalization.
+ *
+ * Migrations run on read, before defaults are merged, so a settings object
+ * written by an older build is upgraded in place (and persisted once) rather
+ * than silently discarded. Unknown keys are never removed.
+ */
+
+import {
+    AGENT_IDS,
+    BEAT_DEADLINE_PRESSURE,
+    CAST_MODES,
+    CONTENT_GATE_LEVELS,
+    CYOA_THEMES,
+    SCHEMA_VERSION,
+} from './constants.js';
+import {
+    DEFAULT_BAD_END_EPILOGUE_PROMPT,
+    DEFAULT_BAD_END_PROMPT,
+    DEFAULT_SETTINGS,
+    cloneDefaults,
+} from './defaults.js';
+
+export function isPlainObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function deepClone(value) {
+    if (value === undefined) {
+        return undefined;
+    }
+    return structuredClone(value);
+}
+
+/**
+ * Fill in missing defaults without overwriting values the user already has.
+ * Unknown keys in `value` are preserved verbatim.
+ */
+export function mergeSettings(defaults, value) {
+    if (Array.isArray(defaults)) {
+        return Array.isArray(value) ? deepClone(value) : deepClone(defaults);
+    }
+    if (!isPlainObject(defaults)) {
+        return value === undefined ? defaults : value;
+    }
+
+    const source = isPlainObject(value) ? value : {};
+    const out = {};
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+        out[key] = mergeSettings(defaultValue, source[key]);
+    }
+    for (const [key, unknownValue] of Object.entries(source)) {
+        if (!Object.hasOwn(out, key)) {
+            out[key] = deepClone(unknownValue);
+        }
+    }
+    return out;
+}
+
+function asBoolean(value, fallback) {
+    return typeof value === 'boolean' ? value : fallback;
+}
+
+function asNumber(value, fallback, { min = -Infinity, max = Infinity, integer = false } = {}) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return fallback;
+    }
+    const rounded = integer ? Math.round(number) : number;
+    return Math.min(max, Math.max(min, rounded));
+}
+
+function asEnum(value, allowed, fallback) {
+    return allowed.includes(value) ? value : fallback;
+}
+
+function asString(value, fallback) {
+    return typeof value === 'string' ? value : fallback;
+}
+
+function normalizeContentMix(mix, fallback) {
+    const source = isPlainObject(mix) ? mix : {};
+    const out = {};
+    for (const [key, defaultValue] of Object.entries(fallback)) {
+        out[key] = asNumber(source[key], defaultValue, { min: 0, max: 10 });
+    }
+    for (const [key, value] of Object.entries(source)) {
+        if (!Object.hasOwn(out, key)) {
+            out[key] = value;
+        }
+    }
+    return out;
+}
+
+function normalizeCyoa(cyoa, defaults) {
+    const combatDefaults = defaults.combatChoices;
+    const combat = isPlainObject(cyoa.combatChoices) ? cyoa.combatChoices : {};
+    return {
+        ...cyoa,
+        enabled: asBoolean(cyoa.enabled, defaults.enabled),
+        count: asNumber(cyoa.count, defaults.count, { min: 2, max: 6, integer: true }),
+        theme: asEnum(cyoa.theme, CYOA_THEMES, defaults.theme),
+        maxLabelLength: asNumber(cyoa.maxLabelLength, defaults.maxLabelLength, {
+            min: 1,
+            max: 100,
+            integer: true,
+        }),
+        contentMix: normalizeContentMix(cyoa.contentMix, defaults.contentMix),
+        promptOverride: asString(cyoa.promptOverride, defaults.promptOverride),
+        combatChoices: {
+            ...combat,
+            enabled: asBoolean(combat.enabled, combatDefaults.enabled),
+            count: asNumber(combat.count, combatDefaults.count, { min: 2, max: 6, integer: true }),
+            theme: asEnum(combat.theme, CYOA_THEMES, combatDefaults.theme),
+            maxLabelLength: asNumber(combat.maxLabelLength, combatDefaults.maxLabelLength, {
+                min: 1,
+                max: 100,
+                integer: true,
+            }),
+            contentMix: normalizeContentMix(combat.contentMix, combatDefaults.contentMix),
+            promptOverride: asString(combat.promptOverride, combatDefaults.promptOverride),
+        },
+    };
+}
+
+function normalizeBadEnds(badEnds, defaults) {
+    return {
+        ...badEnds,
+        enabled: asBoolean(badEnds.enabled, defaults.enabled),
+        allowDeadContinuation: asBoolean(badEnds.allowDeadContinuation, defaults.allowDeadContinuation),
+        prompt: asString(badEnds.prompt, defaults.prompt),
+        epiloguePrompt: asString(badEnds.epiloguePrompt, defaults.epiloguePrompt),
+    };
+}
+
+function normalizeAgent(agent, defaults) {
+    const out = {
+        ...agent,
+        enabled: asBoolean(agent.enabled, defaults.enabled),
+        connectionProfileId: asString(agent.connectionProfileId, defaults.connectionProfileId),
+        model: asString(agent.model, defaults.model),
+        temperature: asNumber(agent.temperature, defaults.temperature, { min: 0, max: 2 }),
+        maxTokens: asNumber(agent.maxTokens, defaults.maxTokens, {
+            min: 64,
+            max: 65536,
+            integer: true,
+        }),
+        cadence: asString(agent.cadence, defaults.cadence),
+    };
+    if (Object.hasOwn(defaults, 'everyNTurns')) {
+        out.everyNTurns = asNumber(agent.everyNTurns, defaults.everyNTurns, {
+            min: 1,
+            max: 100,
+            integer: true,
+        });
+    }
+    if (Object.hasOwn(defaults, 'onLocationChange')) {
+        out.onLocationChange = asBoolean(agent.onLocationChange, defaults.onLocationChange);
+    }
+    return out;
+}
+
+function normalizeAgents(agents, defaults) {
+    const out = { ...agents };
+    for (const id of AGENT_IDS) {
+        out[id] = normalizeAgent(isPlainObject(agents[id]) ? agents[id] : {}, defaults[id]);
+    }
+    return out;
+}
+
+function normalizeTokenBudget(budget, defaults) {
+    const out = { ...budget };
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+        out[key] = asNumber(budget[key], defaultValue, { min: 0, max: 1000000, integer: true });
+    }
+    return out;
+}
+
+/** Normalize known settings fields after defaults and migrations are applied. */
+export function normalizeSettings(settings) {
+    const defaults = DEFAULT_SETTINGS;
+    return {
+        ...settings,
+        contentGate: asEnum(settings.contentGate, CONTENT_GATE_LEVELS, defaults.contentGate),
+        castMode: asEnum(settings.castMode, CAST_MODES, defaults.castMode),
+        beatDeadlinePressure: asEnum(
+            settings.beatDeadlinePressure,
+            BEAT_DEADLINE_PRESSURE,
+            defaults.beatDeadlinePressure,
+        ),
+        cyoa: normalizeCyoa(isPlainObject(settings.cyoa) ? settings.cyoa : {}, defaults.cyoa),
+        badEnds: normalizeBadEnds(isPlainObject(settings.badEnds) ? settings.badEnds : {}, defaults.badEnds),
+        agents: normalizeAgents(isPlainObject(settings.agents) ? settings.agents : {}, defaults.agents),
+        tokenBudget: normalizeTokenBudget(
+            isPlainObject(settings.tokenBudget) ? settings.tokenBudget : {},
+            defaults.tokenBudget,
+        ),
+        contentLimits: {
+            ...(isPlainObject(settings.contentLimits) ? settings.contentLimits : {}),
+            player: asString(settings.contentLimits?.player, defaults.contentLimits.player),
+            characters: isPlainObject(settings.contentLimits?.characters)
+                ? settings.contentLimits.characters
+                : {},
+        },
+        map: {
+            ...(isPlainObject(settings.map) ? settings.map : {}),
+            showFogOfWar: asBoolean(settings.map?.showFogOfWar, defaults.map.showFogOfWar),
+        },
+        debug: asBoolean(settings.debug, defaults.debug),
+    };
+}
+
+/**
+ * Migrations keyed by the version they upgrade *from*.
+ * Each function receives a mutable clone and must return it.
+ */
+const MIGRATIONS = {
+    // 0 = pre-versioned install (schemaVersion absent or 0).
+    0: (settings) => {
+        // Pre-versioned builds had no nested combat-choice settings and did not
+        // carry the bad-end epilogue prompt. Fill them so normalization has a
+        // stable shape; user values are left untouched.
+        if (!isPlainObject(settings.cyoa)) {
+            settings.cyoa = {};
+        }
+        if (!isPlainObject(settings.cyoa.combatChoices)) {
+            settings.cyoa.combatChoices = {};
+        }
+        if (!isPlainObject(settings.badEnds)) {
+            settings.badEnds = {};
+        }
+        if (typeof settings.badEnds.epiloguePrompt !== 'string') {
+            settings.badEnds.epiloguePrompt = DEFAULT_BAD_END_EPILOGUE_PROMPT;
+        }
+        if (typeof settings.badEnds.prompt !== 'string') {
+            settings.badEnds.prompt = DEFAULT_BAD_END_PROMPT;
+        }
+        settings.schemaVersion = 1;
+        return settings;
+    },
+};
+
+export function needsMigration(raw) {
+    if (!isPlainObject(raw)) {
+        return false;
+    }
+    const version = Number(raw.schemaVersion) || 0;
+    return version < SCHEMA_VERSION;
+}
+
+/**
+ * Upgrade a raw settings object to the current schema, then merge defaults and
+ * normalize known fields. The input is not mutated.
+ */
+export function migrateSettings(raw) {
+    if (!isPlainObject(raw)) {
+        return cloneDefaults();
+    }
+
+    let settings = deepClone(raw);
+    let version = Number(settings.schemaVersion) || 0;
+
+    // A settings object from a newer build is merged as-is; do not downgrade it.
+    if (version > SCHEMA_VERSION) {
+        return mergeSettings(DEFAULT_SETTINGS, settings);
+    }
+
+    while (version < SCHEMA_VERSION) {
+        const migration = MIGRATIONS[version];
+        if (!migration) {
+            // No migration registered for this version: jump to the current
+            // schema and let normalization fill the gaps.
+            settings.schemaVersion = SCHEMA_VERSION;
+            break;
+        }
+        settings = migration(settings) ?? settings;
+        const nextVersion = Number(settings.schemaVersion) || version + 1;
+        version = nextVersion > version ? nextVersion : version + 1;
+        settings.schemaVersion = version;
+    }
+
+    const merged = mergeSettings(DEFAULT_SETTINGS, settings);
+    merged.schemaVersion = SCHEMA_VERSION;
+    return normalizeSettings(merged);
+}

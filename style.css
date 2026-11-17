@@ -1,0 +1,257 @@
+@import url('./src/ui/theme.css');
+
+/* ---------- Top-right entry button ---------- */
+
+.neoterra-top-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--topBarBlockSize, 2.5rem);
+}
+
+.neoterra-top-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    margin: 0 0.25rem;
+    padding: 0;
+    color: var(--nt-accent);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+    transition: color var(--nt-transition), background var(--nt-transition), border-color var(--nt-transition);
+}
+
+.neoterra-top-button:hover,
+.neoterra-top-button:focus-visible {
+    color: var(--nt-accent-strong);
+    background: var(--nt-bg-hover);
+    border-color: var(--nt-border);
+    outline: none;
+}
+
+.neoterra-top-button i {
+    font-size: 1.15rem;
+}
+
+/* ---------- Shell overlay ---------- */
+
+.neoterra-root {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    font-family: var(--nt-font);
+    color: var(--nt-text);
+}
+
+.neoterra-root[hidden] {
+    display: none;
+}
+
+.neoterra-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.72);
+    backdrop-filter: blur(4px);
+}
+
+.neoterra-shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(960px, 92vw);
+    min-height: min(560px, 80vh);
+    max-height: 86vh;
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-lg);
+    box-shadow: var(--nt-shadow), var(--nt-glow);
+    overflow: hidden;
+}
+
+.neoterra-shell-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--nt-border);
+    background: linear-gradient(120deg, rgba(45, 212, 191, 0.12), transparent 60%);
+}
+
+.neoterra-shell-title {
+    margin: 0;
+    font-size: 1.15rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.neoterra-version {
+    color: var(--nt-text-muted);
+    font-size: 0.75rem;
+}
+
+.neoterra-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    color: var(--nt-text);
+    background: transparent;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+}
+
+.neoterra-close:hover,
+.neoterra-close:focus-visible {
+    color: var(--nt-accent);
+    border-color: var(--nt-border-strong);
+    outline: none;
+}
+
+.neoterra-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem 0;
+    border-bottom: 1px solid var(--nt-border);
+    overflow-x: auto;
+}
+
+.neoterra-tab {
+    padding: 0.6rem 1rem;
+    color: var(--nt-text-muted);
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font: inherit;
+    white-space: nowrap;
+}
+
+.neoterra-tab:hover,
+.neoterra-tab:focus-visible {
+    color: var(--nt-text);
+    background: var(--nt-bg-hover);
+    outline: none;
+}
+
+.neoterra-tab[aria-selected='true'] {
+    color: var(--nt-accent);
+    border-bottom-color: var(--nt-accent);
+}
+
+.neoterra-tabpanels {
+    flex: 1;
+    padding: 1.5rem;
+    overflow: auto;
+}
+
+.neoterra-panel-title {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    letter-spacing: 0.03em;
+}
+
+.neoterra-placeholder {
+    margin: 0 0 1rem;
+    max-width: 60ch;
+    color: var(--nt-text-muted);
+    line-height: 1.6;
+}
+
+/* ---------- Settings panel ---------- */
+
+.neoterra-settings {
+    margin-top: 0.5rem;
+    color: var(--nt-text);
+}
+
+.neoterra-hint {
+    margin: 0 0 0.75rem;
+    color: var(--nt-text-muted);
+    font-size: 0.85rem;
+}
+
+.neoterra-section-title {
+    margin: 1rem 0 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--nt-border);
+    color: var(--nt-accent);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.neoterra-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.neoterra-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+}
+
+.neoterra-field > span {
+    color: var(--nt-text-muted);
+}
+
+.neoterra-field input,
+.neoterra-field select,
+.neoterra-field textarea {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    color: var(--nt-text);
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    font: inherit;
+}
+
+.neoterra-field input:focus,
+.neoterra-field select:focus,
+.neoterra-field textarea:focus {
+    border-color: var(--nt-border-strong);
+    outline: none;
+}
+
+.neoterra-field-wide {
+    margin-top: 0.75rem;
+}
+
+.neoterra-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.neoterra-settings-actions {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--nt-border);
+}
+
+.neoterra-disabled {
+    opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .neoterra-top-button,
+    .neoterra-tab {
+        transition: none;
+    }
+}

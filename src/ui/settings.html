@@ -1,0 +1,178 @@
+<div id="neoterra-settings" class="neoterra-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Neo Terra Framework</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <p class="neoterra-hint">
+                World state is stored per chat. These settings are global defaults for new and existing chats.
+            </p>
+
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-field">
+                    <span>Content gate</span>
+                    <select data-neoterra-path="contentGate">
+                        <option value="full">Full (off)</option>
+                        <option value="reduced">Reduced</option>
+                        <option value="mature-only">Mature only</option>
+                        <option value="strict">Strict</option>
+                    </select>
+                </label>
+
+                <label class="neoterra-field">
+                    <span>Cast mode</span>
+                    <select data-neoterra-path="castMode">
+                        <option value="director">Director / narrator</option>
+                        <option value="group">Group chat</option>
+                        <option value="solo">Solo hot-swap</option>
+                    </select>
+                </label>
+
+                <label class="neoterra-field">
+                    <span>Beat deadline pressure</span>
+                    <select data-neoterra-path="beatDeadlinePressure">
+                        <option value="off">Off</option>
+                        <option value="generous">Generous</option>
+                        <option value="standard">Standard</option>
+                        <option value="harsh">Harsh</option>
+                    </select>
+                </label>
+            </div>
+
+            <h4 class="neoterra-section-title">CYOA choices</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="cyoa.enabled">
+                    <span>Enable choice buttons (off by default)</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Choices per turn</span>
+                    <input type="number" min="2" max="6" step="1" data-neoterra-path="cyoa.count">
+                </label>
+                <label class="neoterra-field">
+                    <span>Theme</span>
+                    <select data-neoterra-path="cyoa.theme">
+                        <option value="auto">Auto</option>
+                        <option value="heroic">Heroic</option>
+                        <option value="villainous">Villainous</option>
+                        <option value="romantic">Romantic</option>
+                        <option value="noir">Noir</option>
+                        <option value="comedic">Comedic</option>
+                        <option value="tactical">Tactical</option>
+                        <option value="lewd">Lewd</option>
+                    </select>
+                </label>
+                <label class="neoterra-field">
+                    <span>Label length limit</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="cyoa.maxLabelLength">
+                </label>
+            </div>
+
+            <h4 class="neoterra-section-title">Combat choices (independent)</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="cyoa.combatChoices.enabled">
+                    <span>Enable tactical choice buttons during combat</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Choices per round</span>
+                    <input type="number" min="2" max="6" step="1" data-neoterra-path="cyoa.combatChoices.count">
+                </label>
+                <label class="neoterra-field">
+                    <span>Theme</span>
+                    <select data-neoterra-path="cyoa.combatChoices.theme">
+                        <option value="auto">Auto</option>
+                        <option value="heroic">Heroic</option>
+                        <option value="villainous">Villainous</option>
+                        <option value="romantic">Romantic</option>
+                        <option value="noir">Noir</option>
+                        <option value="comedic">Comedic</option>
+                        <option value="tactical">Tactical</option>
+                        <option value="lewd">Lewd</option>
+                    </select>
+                </label>
+            </div>
+
+            <h4 class="neoterra-section-title">Bad ends (opt-in)</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="badEnds.enabled">
+                    <span>Track bad-end states</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="badEnds.allowDeadContinuation">
+                    <span>Allow continuing as a dead character</span>
+                </label>
+            </div>
+            <label class="neoterra-field neoterra-field-wide">
+                <span>Bad-end detection prompt</span>
+                <textarea rows="5" data-neoterra-path="badEnds.prompt"></textarea>
+            </label>
+            <label class="neoterra-field neoterra-field-wide">
+                <span>Bad-end epilogue prompt</span>
+                <textarea rows="4" data-neoterra-path="badEnds.epiloguePrompt"></textarea>
+            </label>
+
+            <h4 class="neoterra-section-title">Agents and cadence</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="agents.storyline.enabled">
+                    <span>Storyline tracker</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Storyline every N turns</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.storyline.everyNTurns">
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="agents.stateTracker.enabled">
+                    <span>Player state tracker</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="agents.castDirector.enabled">
+                    <span>Cast director</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="agents.lore.enabled">
+                    <span>Lore agent</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Lore every N turns</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.lore.everyNTurns">
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="agents.auditor.enabled">
+                    <span>Continuity auditor</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Auditor every N turns</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.auditor.everyNTurns">
+                </label>
+            </div>
+
+            <h4 class="neoterra-section-title">Token budgets</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-field">
+                    <span>Total context budget</span>
+                    <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.total">
+                </label>
+                <label class="neoterra-field">
+                    <span>Cast block</span>
+                    <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.cast">
+                </label>
+                <label class="neoterra-field">
+                    <span>Character profile</span>
+                    <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.characterProfile">
+                </label>
+                <label class="neoterra-field">
+                    <span>Lore block</span>
+                    <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.lore">
+                </label>
+            </div>
+
+            <div class="neoterra-settings-actions">
+                <button type="button" class="menu_button" data-neoterra-reset>Reset Neo Terra settings</button>
+            </div>
+        </div>
+    </div>
+</div>

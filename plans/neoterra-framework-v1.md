@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** draft — decisions locked; ready for approval to start Step 1
+- **Status:** in progress — Step 1 complete
 - **Date:** 2026-11-16
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -351,6 +351,28 @@ NeoTerra-Framework/
 ## Steps
 
 > **Conventions:** every step is one reviewable PR. `Route` names the implementer tier and effort. `Depends on` lists step numbers. `Parallelizable` means it can run concurrently with the listed steps once dependencies are met. All paths are relative to the repo root.
+
+### Progress
+- [x] Step 1 — Extension scaffold, settings, slash command, shell — `91db21b`
+- [ ] Step 2 — Data ingestion pipeline and character/form registry
+- [ ] Step 3 — Season, faction, and location definitions
+- [ ] Step 4 — `WorldState` schema, store, reducer, migrations
+- [ ] Step 5 — Shared agent client, runner, and JSON contracts
+- [ ] Step 6 — Context renderer, token budget, and interceptor
+- [ ] Step 7 — Season menu and deterministic world construction
+- [ ] Step 8 — Character codex and "Play as" identity switching
+- [ ] Step 9 — Map panel, overlay, and travel
+- [ ] Step 10 — Combat resolver, combat block, and roll command
+- [ ] Step 11 — Canon Beat Ledger, deadlines, and storyline tracker
+- [ ] Step 12 — Ending flow: epilogue, villain victory, post-victory arcs
+- [ ] Step 13 — Bad-end tracking and continuation
+- [ ] Step 14 — Optional CYOA choices mode
+- [ ] Step 15 — Content gate, budgets, and settings polish
+- [ ] Step 16 — Player panel and journal
+- [ ] Step 17 — Agent terminal and diagnostics
+- [ ] Step 18 — Import/export and world snapshots
+- [ ] Step 19 — Live ST integration pass and QA
+- [ ] Step 20 — Extensibility tooling, import/export, docs, and release QA
 
 ### Step 1 — Extension scaffold, settings, slash command, shell placeholder
 - **Files:** `manifest.json`, `index.js`, `package.json`, `style.css`, `src/core/{constants,settings,defaults,migrations,logger,events}.js`, `src/ui/{shell.js,settings.html,settings.js,theme.css}`, `tests/settings.test.js`

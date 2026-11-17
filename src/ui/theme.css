@@ -1,0 +1,32 @@
+/*
+ * Neo Terra theme tokens.
+ * UI modules reference these variables; Step 18 polishes the visual pass.
+ */
+
+:root {
+    --nt-font: "Inter", "Segoe UI", system-ui, sans-serif;
+    --nt-radius-sm: 6px;
+    --nt-radius-md: 12px;
+    --nt-radius-lg: 18px;
+
+    --nt-bg: #0a0f1c;
+    --nt-bg-elevated: #111a2e;
+    --nt-bg-panel: rgba(13, 21, 38, 0.96);
+    --nt-bg-hover: rgba(94, 234, 212, 0.1);
+    --nt-border: rgba(125, 211, 252, 0.25);
+    --nt-border-strong: rgba(125, 211, 252, 0.55);
+
+    --nt-text: #e6f1ff;
+    --nt-text-muted: #9fb3c8;
+    --nt-text-faint: #6b7f99;
+
+    --nt-accent: #5eead4;
+    --nt-accent-strong: #2dd4bf;
+    --nt-accent-contrast: #042f2e;
+    --nt-danger: #fb7185;
+    --nt-warning: #fbbf24;
+
+    --nt-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    --nt-glow: 0 0 0 1px rgba(94, 234, 212, 0.18), 0 0 28px rgba(45, 212, 191, 0.12);
+    --nt-transition: 160ms ease;
+}

@@ -1,0 +1,204 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { SCHEMA_VERSION, SETTINGS_KEY } from '../src/core/constants.js';
+import { DEFAULT_SETTINGS, cloneDefaults } from '../src/core/defaults.js';
+import { migrateSettings, needsMigration } from '../src/core/migrations.js';
+import {
+    getByPath,
+    getSettings,
+    isFreshInstall,
+    resetSettings,
+    saveSettings,
+    setByPath,
+    setSetting,
+} from '../src/core/settings.js';
+
+function mockContext(initial = undefined) {
+    const calls = { saves: 0 };
+    const ctx = {
+        extensionSettings: {},
+        saveSettingsDebounced: () => {
+            calls.saves += 1;
+        },
+    };
+    if (initial !== undefined) {
+        ctx.extensionSettings[SETTINGS_KEY] = initial;
+    }
+    return { ctx, calls };
+}
+
+test('defaults match the plan and are frozen', () => {
+    assert.equal(DEFAULT_SETTINGS.schemaVersion, SCHEMA_VERSION);
+    assert.equal(DEFAULT_SETTINGS.contentGate, 'full');
+    assert.equal(DEFAULT_SETTINGS.castMode, 'director');
+    assert.equal(DEFAULT_SETTINGS.beatDeadlinePressure, 'standard');
+
+    assert.equal(DEFAULT_SETTINGS.cyoa.enabled, false);
+    assert.equal(DEFAULT_SETTINGS.cyoa.count, 4);
+    assert.equal(DEFAULT_SETTINGS.cyoa.theme, 'auto');
+    assert.equal(DEFAULT_SETTINGS.cyoa.maxLabelLength, 100);
+    assert.equal(DEFAULT_SETTINGS.cyoa.combatChoices.enabled, false);
+    assert.equal(DEFAULT_SETTINGS.cyoa.combatChoices.theme, 'tactical');
+
+    assert.equal(DEFAULT_SETTINGS.badEnds.enabled, false);
+    assert.equal(DEFAULT_SETTINGS.badEnds.allowDeadContinuation, false);
+    assert.match(DEFAULT_SETTINGS.badEnds.prompt, /never infer a bad end from prose alone/i);
+
+    assert.equal(DEFAULT_SETTINGS.agents.storyline.everyNTurns, 6);
+    assert.equal(DEFAULT_SETTINGS.agents.lore.everyNTurns, 10);
+    assert.ok(DEFAULT_SETTINGS.tokenBudget.total > 0);
+
+    assert.ok(Object.isFrozen(DEFAULT_SETTINGS));
+    assert.ok(Object.isFrozen(DEFAULT_SETTINGS.cyoa));
+
+    const copy = cloneDefaults();
+    copy.cyoa.count = 2;
+    assert.equal(DEFAULT_SETTINGS.cyoa.count, 4, 'cloneDefaults must not expose the shared default');
+});
+
+test('fresh install writes defaults exactly once', () => {
+    const { ctx, calls } = mockContext();
+    assert.equal(isFreshInstall(ctx), true);
+
+    const first = getSettings(ctx);
+    assert.equal(first.contentGate, 'full');
+    assert.equal(calls.saves, 1);
+    assert.equal(isFreshInstall(ctx), false);
+
+    const second = getSettings(ctx);
+    assert.equal(second.contentGate, 'full');
+    assert.equal(calls.saves, 1, 'a second read must not re-save untouched defaults');
+});
+
+test('existing user values and unknown keys are preserved', () => {
+    const stored = {
+        ...cloneDefaults(),
+        contentGate: 'strict',
+        cyoa: { ...cloneDefaults().cyoa, enabled: true, count: 5 },
+        customFeature: { keep: 'me' },
+    };
+    const { ctx, calls } = mockContext(stored);
+
+    const settings = getSettings(ctx);
+    assert.equal(settings.contentGate, 'strict');
+    assert.equal(settings.cyoa.enabled, true);
+    assert.equal(settings.cyoa.count, 5);
+    assert.deepEqual(settings.customFeature, { keep: 'me' });
+    assert.equal(calls.saves, 0, 'a fully-populated current document must not be rewritten');
+});
+
+test('pre-versioned settings are migrated on read once', () => {
+    const legacy = {
+        schemaVersion: 0,
+        contentGate: 'reduced',
+        castMode: 'solo',
+        cyoa: { enabled: true, count: 99, theme: 'not-a-theme' },
+        badEnds: { enabled: true },
+        keepThis: 42,
+    };
+    const { ctx, calls } = mockContext(legacy);
+
+    const settings = getSettings(ctx);
+    assert.equal(settings.schemaVersion, SCHEMA_VERSION);
+    assert.equal(settings.contentGate, 'reduced');
+    assert.equal(settings.castMode, 'solo');
+    assert.equal(settings.cyoa.enabled, true);
+    assert.equal(settings.cyoa.count, 6, 'count is clamped to the supported range');
+    assert.equal(settings.cyoa.theme, 'auto', 'unknown themes fall back to auto');
+    assert.equal(settings.cyoa.combatChoices.enabled, false, 'new nested defaults are filled');
+    assert.equal(settings.badEnds.allowDeadContinuation, false);
+    assert.equal(settings.keepThis, 42, 'unknown keys survive migration');
+    assert.equal(calls.saves, 1);
+
+    getSettings(ctx);
+    assert.equal(calls.saves, 1, 'migration is persisted only once');
+});
+
+test('future settings versions are not downgraded', () => {
+    const future = {
+        schemaVersion: SCHEMA_VERSION + 5,
+        futureOnly: { nested: true },
+        contentGate: 'reduced',
+    };
+    const { ctx } = mockContext(future);
+    const settings = getSettings(ctx);
+    assert.deepEqual(settings.futureOnly, { nested: true });
+    assert.equal(settings.contentGate, 'reduced');
+});
+
+test('settings with no registered migration still land on the current schema', () => {
+    assert.equal(needsMigration({ schemaVersion: 0 }), true);
+    assert.equal(needsMigration({ schemaVersion: SCHEMA_VERSION }), false);
+
+    const migrated = migrateSettings({ schemaVersion: -1, keepMe: { a: 1 } });
+    assert.equal(migrated.schemaVersion, SCHEMA_VERSION);
+    assert.deepEqual(migrated.keepMe, { a: 1 });
+    assert.equal(migrated.contentGate, 'full');
+});
+
+test('saveSettings persists a normalized document and preserves unknown keys', () => {
+    const { ctx, calls } = mockContext();
+    const result = saveSettings(ctx, {
+        contentGate: 'mature-only',
+        cyoa: { count: 2 },
+        extra: 'kept',
+    });
+
+    assert.equal(result.contentGate, 'mature-only');
+    assert.equal(result.cyoa.count, 2);
+    assert.equal(result.extra, 'kept');
+    assert.equal(result.schemaVersion, SCHEMA_VERSION);
+    assert.equal(calls.saves, 1);
+    assert.equal(ctx.extensionSettings[SETTINGS_KEY].extra, 'kept');
+});
+
+test('setSetting updates one dotted path and saves', () => {
+    const { ctx, calls } = mockContext();
+    getSettings(ctx);
+    assert.equal(calls.saves, 1);
+
+    setSetting(ctx, 'cyoa.enabled', true);
+    assert.equal(ctx.extensionSettings[SETTINGS_KEY].cyoa.enabled, true);
+    assert.equal(ctx.extensionSettings[SETTINGS_KEY].cyoa.count, 4);
+    assert.equal(calls.saves, 2);
+
+    setSetting(ctx, 'agents.lore.everyNTurns', 12);
+    assert.equal(ctx.extensionSettings[SETTINGS_KEY].agents.lore.everyNTurns, 12);
+});
+
+test('resetSettings restores factory defaults', () => {
+    const { ctx } = mockContext();
+    setSetting(ctx, 'contentGate', 'strict');
+    const reset = resetSettings(ctx);
+    assert.equal(reset.contentGate, 'full');
+    assert.equal(reset.cyoa.count, 4);
+});
+
+test('getByPath and setByPath create missing objects', () => {
+    const target = {};
+    setByPath(target, 'a.b.c', 7);
+    assert.equal(getByPath(target, 'a.b.c'), 7);
+    assert.deepEqual(target, { a: { b: { c: 7 } } });
+});
+
+test('invalid values are normalized without throwing', () => {
+    const migrated = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        contentGate: 'nonsense',
+        castMode: 'nope',
+        beatDeadlinePressure: 'extreme',
+        cyoa: { count: 'x', maxLabelLength: 500, theme: 'invalid' },
+        agents: { storyline: { everyNTurns: -3 } },
+        tokenBudget: { total: -100 },
+    });
+
+    assert.equal(migrated.contentGate, 'full');
+    assert.equal(migrated.castMode, 'director');
+    assert.equal(migrated.beatDeadlinePressure, 'standard');
+    assert.equal(migrated.cyoa.count, 4);
+    assert.equal(migrated.cyoa.maxLabelLength, 100);
+    assert.equal(migrated.cyoa.theme, 'auto');
+    assert.equal(migrated.agents.storyline.everyNTurns, 1);
+    assert.equal(migrated.tokenBudget.total, 0);
+});

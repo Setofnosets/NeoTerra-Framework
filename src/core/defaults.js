@@ -1,0 +1,192 @@
+/**
+ * Default settings for the Neo Terra Framework.
+ *
+ * The defaults are deep-frozen so feature modules cannot accidentally mutate
+ * shared state. `cloneDefaults()` returns a fresh, mutable copy.
+ */
+
+import { SCHEMA_VERSION } from './constants.js';
+
+export const DEFAULT_BAD_END_PROMPT = `You are the Neo Terra Bad End Detector. Decide only whether a character has reached a terminal state.
+
+Evaluate deterministic evidence first: stamina at 0 with lethal intent, willpower at 0 with captivity, maximum corruption, a completed brainwashing or possession, a declared permanent transformation, or indefinite imprisonment with no escape path.
+
+Never infer a bad end from prose alone. When ambiguous, return confidence below the threshold and let the deterministic evidence win. Never delete, resurrect, or duplicate a character. Return JSON only.`;
+
+export const DEFAULT_BAD_END_EPILOGUE_PROMPT = `Write a 1-3 paragraph epilogue for the recorded bad end. State what happened, what it means for the character and the people around them, and what (if anything) remains possible. Keep it consistent with the recorded cause, location, and continuity key. Do not resolve the wider season.`;
+
+export const BAD_END_PROMPT_PLACEHOLDERS = Object.freeze([
+    '{{character}}',
+    '{{state}}',
+    '{{recentEvents}}',
+    '{{limits}}',
+]);
+
+function freezeDeep(value) {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+        Object.freeze(value);
+        for (const child of Object.values(value)) {
+            freezeDeep(child);
+        }
+    }
+    return value;
+}
+
+export const DEFAULT_SETTINGS = freezeDeep({
+    schemaVersion: SCHEMA_VERSION,
+
+    // Content gate is opt-in; `full` is a strict no-op.
+    contentGate: 'full',
+
+    // Director/Narrator is the default cast strategy.
+    castMode: 'director',
+
+    // Soft canon-beat deadlines; `off` disables escalation.
+    beatDeadlinePressure: 'standard',
+
+    cyoa: {
+        enabled: false,
+        count: 4,
+        theme: 'auto',
+        maxLabelLength: 100,
+        contentMix: {
+            action: 3,
+            dialogue: 3,
+            romance: 1,
+            investigation: 1,
+            travel: 1,
+            lewd: 0,
+        },
+        promptOverride: '',
+        // Combat choices are a second, independent setting.
+        combatChoices: {
+            enabled: false,
+            count: 4,
+            theme: 'tactical',
+            maxLabelLength: 100,
+            contentMix: {
+                action: 4,
+                dialogue: 1,
+                romance: 0,
+                investigation: 0,
+                travel: 0,
+                lewd: 0,
+            },
+            promptOverride: '',
+        },
+    },
+
+    badEnds: {
+        enabled: false,
+        allowDeadContinuation: false,
+        prompt: DEFAULT_BAD_END_PROMPT,
+        epiloguePrompt: DEFAULT_BAD_END_EPILOGUE_PROMPT,
+    },
+
+    agents: {
+        architect: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.4,
+            maxTokens: 1600,
+            cadence: 'once',
+        },
+        storyline: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.5,
+            maxTokens: 1600,
+            cadence: 'everyNTurns',
+            everyNTurns: 6,
+            onLocationChange: true,
+        },
+        stateTracker: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.2,
+            maxTokens: 900,
+            cadence: 'everyTurn',
+        },
+        castDirector: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.3,
+            maxTokens: 1000,
+            cadence: 'sceneChange',
+        },
+        lore: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.4,
+            maxTokens: 900,
+            cadence: 'everyNTurns',
+            everyNTurns: 10,
+        },
+        auditor: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.1,
+            maxTokens: 700,
+            cadence: 'everyNTurns',
+            everyNTurns: 8,
+        },
+        epilogue: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.8,
+            maxTokens: 2400,
+            cadence: 'once',
+        },
+        choices: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.8,
+            maxTokens: 500,
+            cadence: 'afterAssistantTurn',
+        },
+        badEnd: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.2,
+            maxTokens: 700,
+            cadence: 'afterTracker',
+        },
+    },
+
+    tokenBudget: {
+        total: 6000,
+        scene: 700,
+        cast: 2200,
+        player: 800,
+        world: 900,
+        continuity: 500,
+        lore: 900,
+        characterProfile: 1200,
+    },
+
+    contentLimits: {
+        // Inherit the global gate unless explicitly overridden per character.
+        player: '',
+        characters: {},
+    },
+
+    map: {
+        showFogOfWar: false,
+    },
+
+    debug: false,
+});
+
+/** Return a fresh, mutable copy of the default settings. */
+export function cloneDefaults() {
+    return structuredClone(DEFAULT_SETTINGS);
+}
