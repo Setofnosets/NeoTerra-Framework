@@ -175,10 +175,16 @@ export const DEFAULT_SETTINGS = freezeDeep({
         scene: 700,
         cast: 2200,
         player: 800,
+        combat: 500,
         world: 900,
         continuity: 500,
         lore: 900,
         characterProfile: 1200,
+    },
+
+    combat: {
+        // Dice conflict cap; the flow clamps the effective value to 3-20.
+        maxRounds: 8,
     },
 
     // Prompt blocks are injected by the manifest generate_interceptor.
@@ -190,6 +196,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
             scene: true,
             cast: true,
             player: true,
+            combat: true,
             world: true,
             continuity: true,
             lore: true,

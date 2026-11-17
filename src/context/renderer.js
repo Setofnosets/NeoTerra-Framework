@@ -26,6 +26,7 @@ export const BLOCK_HEADINGS = Object.freeze({
     scene: '[NEOTERRA_SCENE]',
     cast: '[NEOTERRA_CAST]',
     player: '[NEOTERRA_PLAYER]',
+    combat: '[NEOTERRA_COMBAT]',
     world: '[NEOTERRA_WORLD]',
     continuity: '[NEOTERRA_CONTINUITY]',
     lore: '[NEOTERRA_LORE]',
@@ -38,6 +39,9 @@ function isObject(value) {
 }
 
 function characterName(state, characterId) {
+    if (characterId === 'player' && state?.player?.identity !== 'canon') {
+        return state?.player?.displayName ?? 'The Player';
+    }
     const character = state?.characters?.[characterId];
     return character?.displayName ?? character?.charId ?? characterId;
 }
@@ -115,14 +119,6 @@ function renderScene(state, settings) {
     const present = Array.isArray(scene.present) ? scene.present : [];
     if (present.length > 0) {
         lines.push(`Present: ${present.map((id) => characterName(state, id)).join(', ')}`);
-    }
-
-    const combat = scene.combat ?? (state?.meta?.inCombat ? {} : null);
-    if (combat) {
-        const participants = Array.isArray(combat.participants)
-            ? combat.participants.map((id) => characterName(state, id)).join(', ')
-            : '';
-        lines.push(`Combat: active${participants ? ` (${participants})` : ''}`);
     }
 
     if (typeof scene.framing === 'string' && scene.framing.trim().length > 0) {
@@ -222,6 +218,72 @@ function renderPlayer(state, settings) {
             characterId: player.identity === 'canon' ? player.characterId : null,
         },
     });
+}
+
+function combatParticipantEntry(state, characterId) {
+    if (characterId === 'player' && state?.player?.identity !== 'canon') {
+        return isObject(state?.player) ? state.player : null;
+    }
+    return state?.characters?.[characterId] ?? null;
+}
+
+function formatMargin(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return '—';
+    }
+    return number >= 0 ? `+${number}` : String(number);
+}
+
+function renderCombat(state, settings) {
+    const combat = isObject(state?.scene?.combat) ? state.scene.combat : null;
+    if (!combat && state?.meta?.inCombat !== true) {
+        return null;
+    }
+    const active = combat ?? {};
+    const participants = Array.isArray(active.participants) ? active.participants : [];
+    const sides = isObject(active.sides) ? active.sides : {};
+    const round = Number.isInteger(active.round) ? active.round : 0;
+    const maxRounds = Number.isInteger(active.maxRounds) ? active.maxRounds : 8;
+    const lines = [];
+
+    const kind = active.kind ?? 'skirmish';
+    const stakes = typeof active.stakes === 'string' && active.stakes.length > 0
+        ? ` — stakes: ${active.stakes}`
+        : '';
+    lines.push(`Conflict: ${kind}${stakes}`);
+    if (typeof active.intent === 'string' && active.intent.length > 0) {
+        lines.push(`Intent: ${active.intent}`);
+    }
+    lines.push(`Round: ${round}/${maxRounds}`);
+
+    if (participants.length > 0) {
+        lines.push('Participants:');
+        for (const participantId of participants) {
+            const entry = combatParticipantEntry(state, participantId);
+            const side = sides[participantId] ? `side ${sides[participantId]}` : 'side unknown';
+            const name = characterName(state, participantId);
+            const status = entry?.status ?? 'active';
+            const stamina = formatResource(entry?.stamina) ?? '—';
+            const willpower = formatResource(entry?.willpower) ?? '—';
+            lines.push(`- ${side}: ${name} — ${status}, stamina ${stamina}, willpower ${willpower}`);
+        }
+    }
+
+    const actions = Array.isArray(active.actions) ? active.actions : [];
+    const last = actions.length > 0 ? actions[actions.length - 1] : null;
+    if (isObject(last)) {
+        const actor = characterName(state, last.actorId);
+        const target = last.targetId ? ` → ${characterName(state, last.targetId)}` : '';
+        lines.push(
+            `Last action: ${actor} — ${last.action ?? 'unknown'}${target}, risk ${last.risk ?? 'unknown'}, tier ${last.tier ?? 'unknown'}, margin ${formatMargin(last.margin)}`,
+        );
+        if (typeof last.contract === 'string' && last.contract.length > 0) {
+            lines.push(`Outcome contract: ${last.contract}`);
+        }
+    }
+    lines.push('Describe only the resolved result. Do not decide outcomes, invent numbers, or add HP/damage.');
+    return makeBlock('combat', lines, settings);
 }
 
 function renderWorld(state, settings) {
@@ -433,6 +495,7 @@ export function renderContext(state, options = {}) {
         renderScene(state, renderSettings),
         renderCast(state, options, renderSettings, tokenBudget),
         renderPlayer(state, renderSettings),
+        renderCombat(state, renderSettings),
         renderWorld(state, renderSettings),
         renderContinuity(state, renderSettings),
         renderLore(state, options, renderSettings),

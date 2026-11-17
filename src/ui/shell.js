@@ -34,6 +34,11 @@ import { createAgentRunner } from '../agents/runner.js';
 import { createEndingFlow, isEndingScreenActive } from '../flows/ending.js';
 import { mountEndingPanel, disposeEndingPanel } from './ending.js';
 import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
+import {
+    createCombatFlow,
+    registerCombatIntegrations,
+    unregisterCombatIntegrations,
+} from '../combat/combat-state.js';
 
 const logger = createLogger('shell');
 
@@ -620,7 +625,20 @@ function buildInteractionRuntime(context) {
         getSeason: () => season,
         onSend: (text) => sendChoiceText(text),
     });
-    interactionRuntime = { chatId, store, season, initiative, ending, controller };
+    interactionRuntime = {
+        chatId,
+        store,
+        season,
+        initiative,
+        ending,
+        controller,
+        combat: createCombatFlow({
+            store,
+            getSettings: () => getSettings(context),
+            now: Date.now,
+            log: (message, error) => logger.warn(message, error),
+        }),
+    };
     return interactionRuntime;
 }
 
@@ -999,6 +1017,12 @@ export async function initialize(options = {}) {
         mountShell();
         void mountSeasonPanel(ctx);
         registerSlashCommand(ctx);
+        registerCombatIntegrations({
+            ctx,
+            getCombat: () => buildInteractionRuntime(refreshContext() ?? ctx)?.combat ?? null,
+            getSettings: () => getSettings(ctx),
+            log: (message, error) => logger.warn(message, error),
+        });
         subscribeChatChanges(ctx);
         subscribeInteractionEvents(ctx);
         exposeDebugApi(ctx);
@@ -1096,6 +1120,7 @@ export function dispose() {
     mapMounted = false;
 
     unregisterSlashCommand(ctx);
+    unregisterCombatIntegrations({ ctx });
     unsubscribeChatChanges();
     unsubscribeInteractionEvents();
     mapRuntime = null;

@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–18 complete / Step 19 next
+- **Status:** in progress — Steps 1–19 complete / Step 20 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -29,10 +29,13 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–18 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. The season/world construction, cast/world-book, storyline/beat ledger, player tracker, bad ends, lore agent, SVG map, travel, world overlay, villain-victory ending (epilogue agent, state-aware continuation, post-victory arcs,
+- As of this update, Steps 1–19 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. The season/world construction, cast/world-book, storyline/beat ledger, player tracker, bad ends, lore agent, SVG map, travel, world overlay, villain-victory ending (epilogue agent, state-aware continuation, post-victory arcs,
   conquest occupation), optional CYOA choices (exploration plus independent
-  tactical combat), and the Character Codex/settings surface/theme polish are
-  complete; Step 19 (Dice-based conflict resolver and combat integration) is next.
+  tactical combat), the Character Codex/settings surface/theme polish, and the
+  dice-based conflict resolver/combat integration (seeded resolver, bounded
+  outcome tiers, `[NEOTERRA_COMBAT]` block, combat-owned resource suppression,
+  `/neoterra-roll` and dice function tool) are complete; Step 20 (Extensibility
+  tooling, import/export, docs, and release QA) is next.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -502,7 +505,7 @@ NeoTerra-Framework/
 - [x] Step 16 — Villain-victory epilogue and post-victory play — `2b1806a`
 - [x] Step 17 — Optional CYOA choices mode (exploration + tactical combat) — `2b1806a`
 - [x] Step 18 — Character Codex, settings surface, and theme polish — `a8b2e87`
-- [ ] Step 19 — Dice-based conflict resolver and combat integration
+- [x] Step 19 — Dice-based conflict resolver and combat integration
 - [ ] Step 20 — Extensibility tooling, import/export, docs, and release QA
 
 ### Step 1 — Extension scaffold, settings, slash command, shell placeholder
@@ -864,7 +867,7 @@ Still optional, in rough priority order:
 
 ## Open Questions & Implementation Details
 
-No open questions. Steps 1–10 are complete; the plan is ready to continue with Step 11.
+No open questions. Steps 1–19 are complete; the plan is ready to continue with Step 20.
 
 Remaining implementation details are fully specified by the decisions above:
 - Map geometry comes from the SVG layers via `build-map`; DeepSeek is only a fallback for unlabeled/new sites and is human-verified.

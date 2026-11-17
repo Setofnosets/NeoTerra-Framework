@@ -14,6 +14,7 @@ import { AgentAbortedError } from './client.js';
 import { applyContentGate, applyContentGateToPrompt, resolveContentLevel } from '../core/content-gate.js';
 import { renderPromptTemplate } from './prompts.js';
 import { isEndingScreenActive } from '../flows/ending.js';
+import { COMBAT_ACTIONS, COMBAT_RISK_TIERS } from '../combat/resolver.js';
 
 export const CHOICES_SCHEMA_VERSION = 1;
 export const DEFAULT_CHOICE_COUNT = 4;
@@ -21,25 +22,8 @@ export const MAX_CHOICE_COUNT = 6;
 export const MIN_CHOICE_COUNT = 2;
 export const DEFAULT_MAX_LABEL_LENGTH = 100;
 
-/** Actions the dice conflict resolver can parse (Step 19 contract). */
-export const COMBAT_ACTIONS = Object.freeze([
-    'strike',
-    'defend',
-    'grapple',
-    'feint',
-    'skill',
-    'retreat',
-    'surrender',
-    'talk-down',
-]);
-
-/** Risk tiers shared with the resolver and rendered on tactical chips. */
-export const COMBAT_RISK_TIERS = Object.freeze([
-    'low',
-    'moderate',
-    'high',
-    'extreme',
-]);
+/** The resolver owns the combat vocabulary; choices re-export it. */
+export { COMBAT_ACTIONS, COMBAT_RISK_TIERS } from '../combat/resolver.js';
 
 export const CHOICE_THEMES = Object.freeze([
     'auto',

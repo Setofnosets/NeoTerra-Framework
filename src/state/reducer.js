@@ -724,14 +724,49 @@ const HANDLERS = Object.freeze({
             ? event.participants.slice()
             : state.scene.present.slice();
         for (const characterId of participants) {
+            // A custom persona has no character record; the combat flow
+            // represents it as "player" and adopts the reducer contract.
+            if (characterId === 'player' && state.player?.identity === 'custom') {
+                continue;
+            }
             requireCharacter(state, characterId);
         }
-        state.scene.combat = {
+        const combat = {
             locationId: locationId ?? null,
             participants,
             kind: typeof event.kind === 'string' ? event.kind : 'skirmish',
             startedTurn: state.meta.turn,
         };
+        // Additive combat metadata. Absent fields stay absent so the minimal
+        // shape emitted by older callers is unchanged.
+        if (typeof event.id === 'string' && event.id.length > 0) {
+            combat.id = event.id;
+        }
+        if (typeof event.stakes === 'string') {
+            combat.stakes = event.stakes;
+        }
+        if (typeof event.intent === 'string') {
+            combat.intent = event.intent;
+        }
+        if (event.seed !== undefined && event.seed !== null) {
+            combat.seed = event.seed;
+        }
+        if (isObject(event.sides)) {
+            combat.sides = { ...event.sides };
+        }
+        if (Number.isInteger(event.round) && event.round >= 0) {
+            combat.round = event.round;
+        }
+        if (Number.isInteger(event.maxRounds) && event.maxRounds > 0) {
+            combat.maxRounds = event.maxRounds;
+        }
+        if (typeof event.status === 'string' && event.status.length > 0) {
+            combat.status = event.status;
+        }
+        if (Array.isArray(event.actions)) {
+            combat.actions = event.actions.map((entry) => (isObject(entry) ? { ...entry } : entry));
+        }
+        state.scene.combat = combat;
         state.meta.inCombat = true;
     },
 
@@ -1032,6 +1067,55 @@ const HANDLERS = Object.freeze({
                 }
                 character.lastUpdatedTurn = state.meta.turn;
             }
+        }
+    },
+    SET_CHARACTER_STAT(state, event) {
+        const character = requireCharacter(state, event.characterId);
+        const path = event.path;
+        const value = event.value;
+
+        const numeric = () => {
+            if (!Number.isFinite(value)) {
+                fail(`SET_CHARACTER_STAT ${String(path)} requires a number`);
+            }
+            return value;
+        };
+
+        switch (path) {
+            case 'stamina.current':
+                character.stamina.current = clamp(numeric(), 0, character.stamina.max);
+                break;
+            case 'stamina.max': {
+                const max = Math.max(0, numeric());
+                character.stamina.max = max;
+                character.stamina.current = Math.min(character.stamina.current, max);
+                break;
+            }
+            case 'willpower.current':
+                character.willpower.current = clamp(numeric(), 0, character.willpower.max);
+                break;
+            case 'willpower.max': {
+                const max = Math.max(0, numeric());
+                character.willpower.max = max;
+                character.willpower.current = Math.min(character.willpower.current, max);
+                break;
+            }
+            case 'corruption.stage':
+                if (!Number.isInteger(value) || value < 0) {
+                    fail('SET_CHARACTER_STAT corruption.stage requires a non-negative integer');
+                }
+                character.corruption.stage = value;
+                break;
+            case 'corruption.progress':
+                character.corruption.progress = clamp(numeric(), 0, 100);
+                break;
+            default:
+                fail(`Unknown SET_CHARACTER_STAT path "${String(path)}"`);
+        }
+
+        character.lastUpdatedTurn = state.meta.turn;
+        if (state.player?.identity === 'canon' && state.player.characterId === character.charId) {
+            syncPlayerMirror(state);
         }
     },
 });

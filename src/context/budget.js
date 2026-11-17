@@ -11,6 +11,7 @@ export const CONTEXT_BLOCK_IDS = Object.freeze([
     'scene',
     'cast',
     'player',
+    'combat',
     'world',
     'continuity',
     'lore',
@@ -23,9 +24,10 @@ export const BLOCK_PRIORITY = Object.freeze({
     scene: 0,
     cast: 1,
     player: 2,
-    world: 3,
-    continuity: 4,
-    lore: 5,
+    combat: 3,
+    world: 4,
+    continuity: 5,
+    lore: 6,
 });
 
 export const DEFAULT_TOKEN_BUDGET = Object.freeze({
@@ -33,6 +35,7 @@ export const DEFAULT_TOKEN_BUDGET = Object.freeze({
     scene: 700,
     cast: 2200,
     player: 800,
+    combat: 500,
     world: 900,
     continuity: 500,
     lore: 900,

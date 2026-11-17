@@ -42,6 +42,20 @@ const NUMERIC_PATHS = Object.freeze([
 
 const ARRAY_PATHS = Object.freeze(['skills', 'traits', 'injuries', 'goals']);
 
+/** Resources the combat engine owns while a conflict is active. */
+export const COMBAT_ENGINE_OWNED_PATHS = Object.freeze([
+    'stamina.current',
+    'stamina.max',
+    'willpower.current',
+    'willpower.max',
+    'corruption.stage',
+    'corruption.progress',
+]);
+
+function isCombatActive(state) {
+    return state?.meta?.inCombat === true || isObject(state?.scene?.combat);
+}
+
 const STRING_PATHS = Object.freeze([
     'status',
     'outfit',
@@ -198,6 +212,21 @@ export function buildStateTrackerPrompt({ state, message = '', recentMessages = 
     lines.push('## Scene cast (NPCs)');
     lines.push(others.length > 0 ? others.join(', ') : '(nobody)');
     lines.push('');
+    if (isCombatActive(state)) {
+        const combat = isObject(state?.scene?.combat) ? state.scene.combat : {};
+        const actions = Array.isArray(combat.actions) ? combat.actions : [];
+        const last = actions.length > 0 ? actions[actions.length - 1] : null;
+        lines.push('## Combat');
+        lines.push(`Round: ${Number.isInteger(combat.round) ? combat.round : 0}/${Number.isInteger(combat.maxRounds) ? combat.maxRounds : 8}`);
+        if (typeof combat.stakes === 'string' && combat.stakes.length > 0) {
+            lines.push(`Stakes: ${combat.stakes}`);
+        }
+        if (last) {
+            lines.push(`Last outcome: ${last.tier ?? 'unknown'}${last.contract ? ` — ${last.contract}` : ''}`);
+        }
+        lines.push('The combat resolver owns stamina, willpower, and corruption during a conflict. Do not report those resources.');
+        lines.push('');
+    }
     lines.push('## Manual paths protected this pass');
     lines.push(getManualEditPaths(state).join(', ') || '(none)');
     lines.push('');
@@ -301,6 +330,12 @@ export function normalizeStateTrackerResult({ result, state } = {}) {
         const { path } = change;
         if (!PLAYER_TRACKER_PATHS.includes(path)) {
             rejected.push({ path, reason: 'unknown-path' });
+            continue;
+        }
+        if (isCombatActive(state) && COMBAT_ENGINE_OWNED_PATHS.includes(path)) {
+            // The resolver already applied the combat delta; a tracker pass
+            // would double-apply it.
+            suppressed.push({ path, reason: 'combat-engine-owned' });
             continue;
         }
         if (protectedPaths.has(path)) {

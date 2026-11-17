@@ -1117,6 +1117,9 @@ function validateInner(state, errors) {
                         state.scene.combat.participants,
                     );
                     for (const characterId of state.scene.combat.participants ?? []) {
+                        if (characterId === 'player' && state.player?.identity === 'custom') {
+                            continue;
+                        }
                         if (!state.characters?.[characterId]) {
                             add(
                                 errors,
