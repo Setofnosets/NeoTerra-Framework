@@ -1,0 +1,1209 @@
+{
+  "type": "FeatureCollection",
+  "schemaVersion": 1,
+  "canvas": {
+    "width": 2048,
+    "height": 1536
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-a",
+      "label": "BridgeA",
+      "layer": "bridge",
+      "name": "Center Bridge A",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              990.39,
+              472.11
+            ],
+            [
+              1004.53,
+              472.11
+            ],
+            [
+              1004.53,
+              523.94
+            ],
+            [
+              990.39,
+              523.94
+            ],
+            [
+              990.39,
+              472.11
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 990.39,
+          "y": 472.11
+        },
+        {
+          "x": 1004.53,
+          "y": 523.94
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 990.39,
+          "y": 472.11
+        },
+        {
+          "x": 1004.53,
+          "y": 523.94
+        }
+      ],
+      "connects": [
+        "region:upper-middle-residential-a",
+        "region:highrise-district-c"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:upper-middle-residential-a",
+          "label": "UpperMiddleResidentialA",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:highrise-district-c",
+          "label": "HighriseDistrictC",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeA",
+          "endpoint": {
+            "x": 990.39,
+            "y": 472.11
+          },
+          "regionId": "region:upper-middle-residential-a",
+          "distance": 6.51
+        },
+        {
+          "label": "BridgeA",
+          "endpoint": {
+            "x": 1004.53,
+            "y": 523.94
+          },
+          "regionId": "region:highrise-district-c",
+          "distance": 3.39
+        }
+      ],
+      "length": 53.72,
+      "bbox": [
+        990.39,
+        472.11,
+        1004.53,
+        523.94
+      ],
+      "centroid": {
+        "x": 997.46,
+        "y": 498.02
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-b",
+      "label": "BridgeB",
+      "layer": "bridge",
+      "name": "Center Bridge B",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              939.5,
+              473.99
+            ],
+            [
+              951.75,
+              473.99
+            ],
+            [
+              951.75,
+              539.96
+            ],
+            [
+              939.5,
+              539.96
+            ],
+            [
+              939.5,
+              473.99
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 939.5,
+          "y": 473.99
+        },
+        {
+          "x": 951.75,
+          "y": 539.96
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 939.5,
+          "y": 473.99
+        },
+        {
+          "x": 951.75,
+          "y": 539.96
+        }
+      ],
+      "connects": [
+        "region:upper-middle-residential-a",
+        "region:highrise-district-c"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:upper-middle-residential-a",
+          "label": "UpperMiddleResidentialA",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:highrise-district-c",
+          "label": "HighriseDistrictC",
+          "strategy": "contains"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeB",
+          "endpoint": {
+            "x": 939.5,
+            "y": 473.99
+          },
+          "regionId": "region:upper-middle-residential-a",
+          "distance": 6.21
+        }
+      ],
+      "length": 67.1,
+      "bbox": [
+        939.5,
+        473.99,
+        951.75,
+        539.96
+      ],
+      "centroid": {
+        "x": 945.63,
+        "y": 506.97
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-c",
+      "label": "BridgeC",
+      "layer": "bridge",
+      "name": "West Approach",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              681.31,
+              322.28
+            ],
+            [
+              687.9,
+              322.28
+            ],
+            [
+              687.9,
+              405.2
+            ],
+            [
+              681.31,
+              405.2
+            ],
+            [
+              681.31,
+              322.28
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 681.31,
+          "y": 322.28
+        },
+        {
+          "x": 687.9,
+          "y": 405.2
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 681.31,
+          "y": 322.28
+        },
+        {
+          "x": 687.9,
+          "y": 405.2
+        }
+      ],
+      "connects": [
+        "region:upper-middle-residential-a",
+        "region:residential-district-d"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:upper-middle-residential-a",
+          "label": "UpperMiddleResidentialA",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:residential-district-d",
+          "label": "ResidentialDistrictD",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeC",
+          "endpoint": {
+            "x": 681.31,
+            "y": 322.28
+          },
+          "regionId": "region:upper-middle-residential-a",
+          "distance": 11.46
+        },
+        {
+          "label": "BridgeC",
+          "endpoint": {
+            "x": 687.9,
+            "y": 405.2
+          },
+          "regionId": "region:residential-district-d",
+          "distance": 29.25
+        }
+      ],
+      "length": 83.18,
+      "bbox": [
+        681.31,
+        322.28,
+        687.9,
+        405.2
+      ],
+      "centroid": {
+        "x": 684.6,
+        "y": 363.74
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-d",
+      "label": "BridgeD",
+      "layer": "bridge",
+      "name": "Fashion Row Crossing",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1165.66,
+              637.96
+            ],
+            [
+              1208.07,
+              611.57
+            ],
+            [
+              1201.47,
+              604.03
+            ],
+            [
+              1160.01,
+              631.36
+            ],
+            [
+              1165.66,
+              637.96
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1208.07,
+          "y": 611.57
+        },
+        {
+          "x": 1160.01,
+          "y": 631.36
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1208.07,
+          "y": 611.57
+        },
+        {
+          "x": 1160.01,
+          "y": 631.36
+        }
+      ],
+      "connects": [
+        "region:park-c",
+        "region:highrise-district-c"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:park-c",
+          "label": "ParkC",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:highrise-district-c",
+          "label": "HighriseDistrictC",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeD",
+          "endpoint": {
+            "x": 1208.07,
+            "y": 611.57
+          },
+          "regionId": "region:park-c",
+          "distance": 8.4
+        },
+        {
+          "label": "BridgeD",
+          "endpoint": {
+            "x": 1160.01,
+            "y": 631.36
+          },
+          "regionId": "region:highrise-district-c",
+          "distance": 1.21
+        }
+      ],
+      "length": 51.98,
+      "bbox": [
+        1160.01,
+        604.03,
+        1208.07,
+        637.96
+      ],
+      "centroid": {
+        "x": 1184.3,
+        "y": 620.92
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-e",
+      "label": "BridgeE",
+      "layer": "bridge",
+      "name": "South Bay Span",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1497.36,
+              1257.07
+            ],
+            [
+              1594.42,
+              1187.34
+            ],
+            [
+              1587.83,
+              1178.86
+            ],
+            [
+              1493.6,
+              1249.53
+            ],
+            [
+              1497.36,
+              1257.07
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1497.36,
+          "y": 1257.07
+        },
+        {
+          "x": 1587.83,
+          "y": 1178.86
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1497.36,
+          "y": 1257.07
+        },
+        {
+          "x": 1587.83,
+          "y": 1178.86
+        }
+      ],
+      "connects": [
+        "region:major-dock-b",
+        "region:airport"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:major-dock-b",
+          "label": "MajorDockB",
+          "strategy": "contains"
+        },
+        {
+          "id": "region:airport",
+          "label": "Airport",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeE",
+          "endpoint": {
+            "x": 1587.83,
+            "y": 1178.86
+          },
+          "regionId": "region:airport",
+          "distance": 38.15
+        }
+      ],
+      "length": 119.59,
+      "bbox": [
+        1493.6,
+        1178.86,
+        1594.42,
+        1257.07
+      ],
+      "centroid": {
+        "x": 1545.35,
+        "y": 1216.72
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-f",
+      "label": "BridgeF",
+      "layer": "bridge",
+      "name": "Airport Link",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1312.67,
+              1162.84
+            ],
+            [
+              1359.78,
+              1097.82
+            ],
+            [
+              1348.48,
+              1095.93
+            ],
+            [
+              1303.24,
+              1160.01
+            ],
+            [
+              1312.67,
+              1162.84
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1359.78,
+          "y": 1097.82
+        },
+        {
+          "x": 1303.24,
+          "y": 1160.01
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1359.78,
+          "y": 1097.82
+        },
+        {
+          "x": 1303.24,
+          "y": 1160.01
+        }
+      ],
+      "connects": [
+        "region:residential-district-a",
+        "region:industrial-b"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:residential-district-a",
+          "label": "ResidentialDistrictA",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:industrial-b",
+          "label": "IndustrialB",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeF",
+          "endpoint": {
+            "x": 1359.78,
+            "y": 1097.82
+          },
+          "regionId": "region:residential-district-a",
+          "distance": 71.72
+        },
+        {
+          "label": "BridgeF",
+          "endpoint": {
+            "x": 1303.24,
+            "y": 1160.01
+          },
+          "regionId": "region:industrial-b",
+          "distance": 7.15
+        }
+      ],
+      "length": 84.05,
+      "bbox": [
+        1303.24,
+        1095.93,
+        1359.78,
+        1162.84
+      ],
+      "centroid": {
+        "x": 1331.44,
+        "y": 1128.62
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-g",
+      "label": "BridgeG",
+      "layer": "bridge",
+      "name": "Industrial Overpass",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1095.93,
+              987.56
+            ],
+            [
+              1167.55,
+              980.02
+            ],
+            [
+              1154.36,
+              973.43
+            ],
+            [
+              1095.93,
+              976.26
+            ],
+            [
+              1095.93,
+              987.56
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1095.93,
+          "y": 987.56
+        },
+        {
+          "x": 1167.55,
+          "y": 980.02
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1095.93,
+          "y": 987.56
+        },
+        {
+          "x": 1167.55,
+          "y": 980.02
+        }
+      ],
+      "connects": [
+        "region:park-b",
+        "region:residential-district-a"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:park-b",
+          "label": "ParkB",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:residential-district-a",
+          "label": "ResidentialDistrictA",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeG",
+          "endpoint": {
+            "x": 1095.93,
+            "y": 987.56
+          },
+          "regionId": "region:park-b",
+          "distance": 74.88
+        },
+        {
+          "label": "BridgeG",
+          "endpoint": {
+            "x": 1167.55,
+            "y": 980.02
+          },
+          "regionId": "region:residential-district-a",
+          "distance": 52.36
+        }
+      ],
+      "length": 72.02,
+      "bbox": [
+        1095.93,
+        973.43,
+        1167.55,
+        987.56
+      ],
+      "centroid": {
+        "x": 1126.48,
+        "y": 979.66
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-h",
+      "label": "BridgeH",
+      "layer": "bridge",
+      "name": "Old Hills Viaduct",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1184.51,
+              774.6
+            ],
+            [
+              1243.88,
+              791.56
+            ],
+            [
+              1247.65,
+              782.13
+            ],
+            [
+              1186.4,
+              765.17
+            ],
+            [
+              1184.51,
+              774.6
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1184.51,
+          "y": 774.6
+        },
+        {
+          "x": 1247.65,
+          "y": 782.13
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1184.51,
+          "y": 774.6
+        },
+        {
+          "x": 1247.65,
+          "y": 782.13
+        }
+      ],
+      "connects": [
+        "region:highrise-district-d",
+        "region:industrial-a"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:highrise-district-d",
+          "label": "HighriseDistrictD",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:industrial-a",
+          "label": "IndustrialA",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeH",
+          "endpoint": {
+            "x": 1184.51,
+            "y": 774.6
+          },
+          "regionId": "region:highrise-district-d",
+          "distance": 21.13
+        },
+        {
+          "label": "BridgeH",
+          "endpoint": {
+            "x": 1247.65,
+            "y": 782.13
+          },
+          "regionId": "region:industrial-a",
+          "distance": 29.76
+        }
+      ],
+      "length": 63.59,
+      "bbox": [
+        1184.51,
+        765.17,
+        1247.65,
+        791.56
+      ],
+      "centroid": {
+        "x": 1215.88,
+        "y": 778.42
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-i",
+      "label": "BridgeI",
+      "layer": "bridge",
+      "name": "Harbor Lift",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              359.03,
+              352.43
+            ],
+            [
+              432.53,
+              281.76
+            ],
+            [
+              420.28,
+              274.22
+            ],
+            [
+              349.6,
+              344.89
+            ],
+            [
+              359.03,
+              352.43
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 432.53,
+          "y": 281.76
+        },
+        {
+          "x": 349.6,
+          "y": 344.89
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 432.53,
+          "y": 281.76
+        },
+        {
+          "x": 349.6,
+          "y": 344.89
+        }
+      ],
+      "connects": [
+        "region:upper-middle-residential-a",
+        "region:dock-c"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:upper-middle-residential-a",
+          "label": "UpperMiddleResidentialA",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:dock-c",
+          "label": "DockC",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeI",
+          "endpoint": {
+            "x": 432.53,
+            "y": 281.76
+          },
+          "regionId": "region:upper-middle-residential-a",
+          "distance": 2.11
+        },
+        {
+          "label": "BridgeI",
+          "endpoint": {
+            "x": 349.6,
+            "y": 344.89
+          },
+          "regionId": "region:dock-c",
+          "distance": 0.41
+        }
+      ],
+      "length": 104.22,
+      "bbox": [
+        349.6,
+        274.22,
+        432.53,
+        352.43
+      ],
+      "centroid": {
+        "x": 391.29,
+        "y": 312.44
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-j",
+      "label": "BridgeJ",
+      "layer": "bridge",
+      "name": "North Gate Bridge",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1497.36,
+              425.93
+            ],
+            [
+              1513.38,
+              486.24
+            ],
+            [
+              1521.87,
+              480.59
+            ],
+            [
+              1504.9,
+              421.22
+            ],
+            [
+              1497.36,
+              425.93
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1513.38,
+          "y": 486.24
+        },
+        {
+          "x": 1504.9,
+          "y": 421.22
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1513.38,
+          "y": 486.24
+        },
+        {
+          "x": 1504.9,
+          "y": 421.22
+        }
+      ],
+      "connects": [
+        "region:high-class-residential-c",
+        "region:high-class-residential-b"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:high-class-residential-c",
+          "label": "HighClassResidentialC",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:high-class-residential-b",
+          "label": "HighClassResidentialB",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeJ",
+          "endpoint": {
+            "x": 1513.38,
+            "y": 486.24
+          },
+          "regionId": "region:high-class-residential-c",
+          "distance": 5.52
+        },
+        {
+          "label": "BridgeJ",
+          "endpoint": {
+            "x": 1504.9,
+            "y": 421.22
+          },
+          "regionId": "region:high-class-residential-b",
+          "distance": 1.49
+        }
+      ],
+      "length": 65.57,
+      "bbox": [
+        1497.36,
+        421.22,
+        1521.87,
+        486.24
+      ],
+      "centroid": {
+        "x": 1509.55,
+        "y": 454.14
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-k",
+      "label": "BridgeK",
+      "layer": "bridge",
+      "name": "Highland Crossing",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1411.61,
+              343.01
+            ],
+            [
+              1460.61,
+              374.11
+            ],
+            [
+              1461.56,
+              366.57
+            ],
+            [
+              1418.21,
+              334.53
+            ],
+            [
+              1411.61,
+              343.01
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1411.61,
+          "y": 343.01
+        },
+        {
+          "x": 1460.61,
+          "y": 374.11
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1411.61,
+          "y": 343.01
+        },
+        {
+          "x": 1460.61,
+          "y": 374.11
+        }
+      ],
+      "connects": [
+        "region:high-class-residential-a",
+        "region:high-class-residential-b"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:high-class-residential-a",
+          "label": "HighClassResidentialA",
+          "strategy": "nearest"
+        },
+        {
+          "id": "region:high-class-residential-b",
+          "label": "HighClassResidentialB",
+          "strategy": "nearest"
+        }
+      ],
+      "nearestReview": [
+        {
+          "label": "BridgeK",
+          "endpoint": {
+            "x": 1411.61,
+            "y": 343.01
+          },
+          "regionId": "region:high-class-residential-a",
+          "distance": 6.06
+        },
+        {
+          "label": "BridgeK",
+          "endpoint": {
+            "x": 1460.61,
+            "y": 374.11
+          },
+          "regionId": "region:high-class-residential-b",
+          "distance": 3.34
+        }
+      ],
+      "length": 58.04,
+      "bbox": [
+        1411.61,
+        334.53,
+        1461.56,
+        374.11
+      ],
+      "centroid": {
+        "x": 1436.23,
+        "y": 353.42
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bridge:bridge-l",
+      "label": "BridgeL",
+      "layer": "bridge",
+      "name": "Forest Road Bridge",
+      "status": "open",
+      "sourceColor": "#bf2fc6",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1447.42,
+              255.37
+            ],
+            [
+              1498.31,
+              286.47
+            ],
+            [
+              1502.08,
+              280.81
+            ],
+            [
+              1456.84,
+              250.66
+            ],
+            [
+              1447.42,
+              255.37
+            ]
+          ]
+        ]
+      },
+      "centerline": [
+        {
+          "x": 1447.42,
+          "y": 255.37
+        },
+        {
+          "x": 1502.08,
+          "y": 280.81
+        }
+      ],
+      "endpoints": [
+        {
+          "x": 1447.42,
+          "y": 255.37
+        },
+        {
+          "x": 1502.08,
+          "y": 280.81
+        }
+      ],
+      "connects": [
+        "region:high-class-residential-a",
+        "region:high-class-residential-b"
+      ],
+      "connectorRegions": [
+        {
+          "id": "region:high-class-residential-a",
+          "label": "HighClassResidentialA",
+          "strategy": "contains"
+        },
+        {
+          "id": "region:high-class-residential-b",
+          "label": "HighClassResidentialB",
+          "strategy": "contains"
+        }
+      ],
+      "nearestReview": [],
+      "length": 60.29,
+      "bbox": [
+        1447.42,
+        250.66,
+        1502.08,
+        286.47
+      ],
+      "centroid": {
+        "x": 1474.99,
+        "y": 267.64
+      }
+    }
+  ]
+}

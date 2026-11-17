@@ -17,13 +17,14 @@ import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
 import { disposeSettingsPanel, mountSettingsPanel, refreshSettingsPanel } from './settings.js';
+import { disposeMapPanel, mountMapPanel } from './map-panel.js';
 
 const logger = createLogger('shell');
 
 const TAB_PLACEHOLDERS = Object.freeze({
     season: {
         title: 'Season',
-        body: 'Choose a season to construct a world. The season menu arrives in a later step.',
+        body: 'Choose a season to construct a world.',
     },
     map: {
         title: 'Map',
@@ -43,6 +44,9 @@ const TAB_PLACEHOLDERS = Object.freeze({
     },
 });
 
+/** Tabs whose panel is a live mountable component instead of a placeholder. */
+const LIVE_PANELS = new Set(['season', 'map']);
+
 let ctx = null;
 let abort = null;
 let mounted = false;
@@ -51,6 +55,7 @@ let mountGeneration = 0;
 let registeredCommand = null;
 let activeTab = 'season';
 let previousFocus = null;
+let mapMounted = false;
 
 function hasDom() {
     return typeof document !== 'undefined' && typeof window !== 'undefined';
@@ -78,12 +83,15 @@ function shellMarkup() {
 
     const panels = SHELL_TABS.map(tab => {
         const placeholder = TAB_PLACEHOLDERS[tab.id];
+        const live = LIVE_PANELS.has(tab.id);
         return `
-        <section class="neoterra-panel" id="neoterra-panel-${tab.id}" role="tabpanel"
+        <section class="neoterra-panel${live ? ' is-live' : ''}" id="neoterra-panel-${tab.id}" role="tabpanel"
             data-neoterra-panel="${tab.id}" aria-labelledby="neoterra-tab-${tab.id}"
             ${tab.id === activeTab ? '' : 'hidden'}>
-            <h3 class="neoterra-panel-title">${placeholder.title}</h3>
-            <p class="neoterra-placeholder">${placeholder.body}</p>
+            ${live ? '' : `<h3 class="neoterra-panel-title">${placeholder.title}</h3>`}
+            <p class="neoterra-placeholder" ${live ? 'hidden' : ''}>${placeholder.body}</p>
+            ${tab.id === 'map' ? '<div class="neoterra-map-host" data-neoterra-map-host></div>' : ''}
+            ${tab.id === 'season' ? '<div class="neoterra-season-host" data-neoterra-season-host></div>' : ''}
             ${tab.id === 'settings' ? '<button type="button" class="menu_button" data-neoterra-open-settings>Open settings panel</button>' : ''}
         </section>`;
     }).join('');
@@ -187,10 +195,33 @@ async function mountSeasonPanel(context) {
     if (!panel) {
         return null;
     }
+    const host = panel.querySelector('[data-neoterra-season-host]') ?? panel;
     try {
-        return await mountSeasonMenu({ root: panel, ctx: context });
+        return await mountSeasonMenu({ root: host, ctx: context });
     } catch (error) {
         logger.warn('Could not mount the season menu', error);
+        return null;
+    }
+}
+
+async function mountMapPanelComponent(context) {
+    if (!hasDom()) {
+        return null;
+    }
+    const host = document.querySelector('[data-neoterra-map-host]');
+    if (!host) {
+        return null;
+    }
+    try {
+        return await mountMapPanel({
+            root: host,
+            ctx: context,
+            settings: getSettings(context).map ?? {},
+            store: null,
+        });
+    } catch (error) {
+        logger.warn('Could not mount the city map', error);
+        host.innerHTML = '<p class="neoterra-error" role="alert">The city map could not be mounted.</p>';
         return null;
     }
 }
@@ -238,6 +269,10 @@ export function setActiveTab(tabId) {
     for (const panel of root.querySelectorAll('[data-neoterra-panel]')) {
         panel.hidden = panel.dataset.neoterraPanel !== tabId;
     }
+    if (tabId === 'map' && !mapMounted) {
+        mapMounted = true;
+        void mountMapPanelComponent(getContext());
+    }
     bus.emit(EVENTS.TAB_CHANGED, { tab: tabId });
     return true;
 }
@@ -250,10 +285,12 @@ export function openShell(tabId = activeTab) {
     if (!root) {
         return false;
     }
-    setActiveTab(tabId);
     previousFocus = document.activeElement;
+    // Unhide before switching tabs so lazily mounted panels (the map) measure a
+    // real viewport instead of a zero-size hidden container.
     root.hidden = false;
     root.classList.add('is-open');
+    setActiveTab(tabId);
     root.querySelector('.neoterra-close')?.focus?.();
     bus.emit(EVENTS.SHELL_OPENED, { tab: activeTab });
     return true;
@@ -422,9 +459,11 @@ export function dispose() {
     mounted = false;
     mounting = null;
     mountGeneration += 1;
+    mapMounted = false;
 
     unregisterSlashCommand(ctx);
     disposeSeasonMenu();
+    disposeMapPanel();
     disposeSettingsPanel();
 
     if (hasDom()) {

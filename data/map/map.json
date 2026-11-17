@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canvas": {
+    "width": 2048,
+    "height": 1536
+  },
+  "source": {
+    "files": [
+      {
+        "layer": "Districts",
+        "primary": "NeoTerra_Districts.svg",
+        "fallback": "NeoTerra.svg",
+        "resolved": "NeoTerra_Districts.svg",
+        "sha256": "44f334dbf1e95a66c1c92fbf347a3bb48058a30af271bf674b073b76a976c37f"
+      },
+      {
+        "layer": "Bridges",
+        "primary": "NeoTerra_Bridges.svg",
+        "fallback": "NeoTerra.svg",
+        "resolved": "NeoTerra_Bridges.svg",
+        "sha256": "558a76ef9c57db50babf0946ea4a430be2ccc8d90b7b4ae8a2519112b2d82f03"
+      },
+      {
+        "layer": "KeyLocations",
+        "primary": "NeoTerra_Locs.svg",
+        "fallback": "NeoTerra.svg",
+        "resolved": "NeoTerra_Locs.svg",
+        "sha256": "b261b60c3283b1d62ba5b51cdd91a7416755e2ccc45285cad7c3345fa48875ca"
+      }
+    ]
+  },
+  "layers": [
+    "Districts",
+    "Bridges",
+    "KeyLocations"
+  ],
+  "expectedCounts": {
+    "districts": 36,
+    "bridges": 12,
+    "keyLocations": 22
+  },
+  "counts": {
+    "districts": 36,
+    "bridges": 12,
+    "keyLocations": 22
+  },
+  "bounds": [
+    [
+      -1536,
+      0
+    ],
+    [
+      0,
+      2048
+    ]
+  ]
+}

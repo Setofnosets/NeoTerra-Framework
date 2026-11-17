@@ -334,3 +334,100 @@ export function areLocationsAdjacent(document, fromId, toId) {
 export function findLocationsByTag(document, tag) {
     return (document?.locations ?? []).filter((location) => location.tags?.includes(tag));
 }
+
+/* ------------------------------------------------------------------ *
+ * MapRef / region helpers (Step 13)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Group named locations by the generated SVG region they resolve to.
+ * Virtual nodes with no region are grouped under `null` so the UI can list
+ * them separately.
+ */
+export function buildLocationsByRegion(document) {
+    const groups = new Map();
+    for (const location of document?.locations ?? []) {
+        const key = location.regionId ?? null;
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+        groups.get(key).push(location);
+    }
+    return groups;
+}
+
+/** Every named location bound to a generated key-location feature id. */
+export function findLocationByMapRef(document, mapRef) {
+    if (!mapRef || typeof mapRef.id !== 'string') {
+        return null;
+    }
+    return (document?.locations ?? []).find(
+        (location) => location.mapRef && location.mapRef.layer === mapRef.layer && location.mapRef.id === mapRef.id,
+    ) ?? null;
+}
+
+/** Every named location resolved to one generated region id. */
+export function findLocationsInRegion(document, regionId) {
+    return (document?.locations ?? []).filter((location) => location.regionId === regionId);
+}
+
+/**
+ * Validate that every non-virtual location's `mapRef` points at a generated
+ * feature and that its `regionId` agrees with the generated assignment.
+ *
+ * @param {object} document `data/locations.json`
+ * @param {{
+ *   regions?: { features: object[] } | null,
+ *   keyLocations?: { keyLocations: object[] } | null,
+ *   bridges?: { features: object[] } | null,
+ * }} generated
+ */
+export function validateLocationMapBindings(document, generated = {}) {
+    const errors = [];
+    const regionIds = new Set((generated.regions?.features ?? []).map((feature) => feature.id));
+    const bridgeIds = new Set((generated.bridges?.features ?? []).map((feature) => feature.id));
+    const keyIds = new Set((generated.keyLocations?.keyLocations ?? []).map((feature) => feature.id));
+    const keyRegions = new Map(
+        (generated.keyLocations?.keyLocations ?? []).map((feature) => [feature.id, feature.regionId ?? null]),
+    );
+
+    for (const location of document?.locations ?? []) {
+        const path = `locations.${location?.id ?? '?'}`;
+        if (!isObject(location)) {
+            add(errors, path, 'must be an object');
+            continue;
+        }
+        if (location.virtual === true) {
+            if (location.mapRef !== null && location.mapRef !== undefined) {
+                add(errors, `${path}.mapRef`, 'virtual locations cannot bind to generated geometry');
+            }
+            continue;
+        }
+        if (!isValidMapRef(location.mapRef)) {
+            add(errors, `${path}.mapRef`, 'non-virtual locations need a valid mapRef');
+            continue;
+        }
+        const known = location.mapRef.layer === 'region'
+            ? regionIds
+            : location.mapRef.layer === 'bridge'
+                ? bridgeIds
+                : keyIds;
+        if (!known.has(location.mapRef.id)) {
+            add(errors, `${path}.mapRef`, `unresolved generated feature "${location.mapRef.id}"`);
+        }
+        if (location.mapRef.layer === 'keyLocation' && keyRegions.has(location.mapRef.id)) {
+            const derived = keyRegions.get(location.mapRef.id);
+            if (location.regionId !== derived) {
+                add(
+                    errors,
+                    `${path}.regionId`,
+                    `must be "${derived}" to match its key-location marker`,
+                );
+            }
+        }
+        if (location.regionId !== null && typeof location.regionId === 'string' && !regionIds.has(location.regionId)) {
+            add(errors, `${path}.regionId`, `unresolved region "${location.regionId}"`);
+        }
+    }
+    return result(errors);
+}

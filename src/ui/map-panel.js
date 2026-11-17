@@ -1,0 +1,704 @@
+/**
+ * Neo Terra city map panel.
+ *
+ * The panel owns the map tab:
+ * - loads generated map geometry plus the authored overlays and lore registry;
+ * - builds the renderer-agnostic view model (`buildMapViewModel`);
+ * - mounts the vendored Leaflet map (`mountCityMap`, fallback `mountFallbackMap`);
+ * - renders layer toggles and the feature submenu, with live `WorldState`;
+ * - keeps a small state machine `closed -> open -> location -> travel`;
+ * - remembers its draggable/resizable geometry in localStorage.
+ *
+ * Travel is validated and reported only; Step 14 owns the actual move.
+ */
+
+import { EVENTS, bus } from '../core/events.js';
+import { createLogger } from '../core/logger.js';
+import { createMachine } from '../core/machine.js';
+import {
+    MAP_LAYER_ORDER,
+    buildMapFeatureIndex,
+    buildMapSubmenu,
+    buildMapViewModel,
+    clearGeneratedMapCaches,
+    loadDistricts,
+    loadGeneratedMapData,
+    loadMapOverrides,
+} from '../data/map.js';
+import { loadLocations } from '../data/locations.js';
+import { loadWorldStateFromMetadata } from '../state/store.js';
+import { mountCityMap, mountFallbackMap } from './map.js';
+
+const logger = createLogger('map-panel');
+
+const STORAGE_KEY = 'neoterra:map:panel';
+const DEFAULT_GEOMETRY = Object.freeze({ x: null, y: null, width: 1080, height: 700 });
+const MIN_WIDTH = 360;
+const MIN_HEIGHT = 300;
+
+let mounted = null;
+
+export function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function hasDom() {
+    return typeof document !== 'undefined' && typeof window !== 'undefined';
+}
+
+function safeLocalStorage() {
+    try {
+        return globalThis.localStorage ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Panel geometry
+ * ------------------------------------------------------------------ */
+
+export function clampPanelGeometry(geometry, viewport = { width: 1920, height: 1080 }) {
+    const viewWidth = Math.max(MIN_WIDTH, Number(viewport?.width) || 1920);
+    const viewHeight = Math.max(MIN_HEIGHT, Number(viewport?.height) || 1080);
+    const width = Math.min(
+        Math.max(Number(geometry?.width) || DEFAULT_GEOMETRY.width, MIN_WIDTH),
+        Math.max(MIN_WIDTH, viewWidth - 24),
+    );
+    const height = Math.min(
+        Math.max(Number(geometry?.height) || DEFAULT_GEOMETRY.height, MIN_HEIGHT),
+        Math.max(MIN_HEIGHT, viewHeight - 24),
+    );
+    const maxX = Math.max(12, viewWidth - width - 12);
+    const maxY = Math.max(12, viewHeight - height - 12);
+    const rawX = Number(geometry?.x);
+    const rawY = Number(geometry?.y);
+    return {
+        x: Number.isFinite(rawX) ? Math.min(Math.max(rawX, 12), maxX) : Math.max(12, Math.round((viewWidth - width) / 2)),
+        y: Number.isFinite(rawY) ? Math.min(Math.max(rawY, 12), maxY) : Math.max(12, Math.round((viewHeight - height) / 2)),
+        width,
+        height,
+    };
+}
+
+export function loadPanelGeometry(storage = null) {
+    if (!storage) {
+        return { ...DEFAULT_GEOMETRY };
+    }
+    try {
+        const parsed = JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null');
+        if (!parsed || typeof parsed !== 'object') {
+            return { ...DEFAULT_GEOMETRY };
+        }
+        return {
+            x: Number.isFinite(parsed.x) ? parsed.x : null,
+            y: Number.isFinite(parsed.y) ? parsed.y : null,
+            width: Number(parsed.width) || DEFAULT_GEOMETRY.width,
+            height: Number(parsed.height) || DEFAULT_GEOMETRY.height,
+        };
+    } catch (error) {
+        logger.warn('Could not read stored map panel geometry', error);
+        return { ...DEFAULT_GEOMETRY };
+    }
+}
+
+export function savePanelGeometry(storage, geometry) {
+    if (!storage) {
+        return false;
+    }
+    try {
+        storage.setItem(STORAGE_KEY, JSON.stringify(geometry));
+        return true;
+    } catch (error) {
+        logger.warn('Could not persist map panel geometry', error);
+        return false;
+    }
+}
+
+const VISIBILITY_KEY = 'neoterra:map:layers';
+
+/** Read the remembered layer visibility (per user, not per chat). */
+export function loadLayerVisibility(storage = null, settings = {}) {
+    const defaults = buildLayerToggleState(settings);
+    if (!storage) {
+        return defaults;
+    }
+    try {
+        const parsed = JSON.parse(storage.getItem(VISIBILITY_KEY) ?? 'null');
+        if (!parsed || typeof parsed !== 'object') {
+            return defaults;
+        }
+        return Object.fromEntries(MAP_LAYER_ORDER.map((layer) => [
+            layer,
+            typeof parsed[layer] === 'boolean' ? parsed[layer] : defaults[layer],
+        ]));
+    } catch (error) {
+        logger.warn('Could not read stored map layer visibility', error);
+        return defaults;
+    }
+}
+
+export function saveLayerVisibility(storage, visibility) {
+    if (!storage) {
+        return false;
+    }
+    try {
+        storage.setItem(VISIBILITY_KEY, JSON.stringify(visibility));
+        return true;
+    } catch (error) {
+        logger.warn('Could not persist map layer visibility', error);
+        return false;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Layer toggles
+ * ------------------------------------------------------------------ */
+
+export function buildLayerToggleState(settings = {}) {
+    return Object.fromEntries(MAP_LAYER_ORDER.map((layer) => [
+        layer,
+        layer === 'fog' ? settings.showFogOfWar === true : settings[layer] !== false,
+    ]));
+}
+
+/* ------------------------------------------------------------------ *
+ * Submenu
+ * ------------------------------------------------------------------ */
+
+export function renderSubmenuMarkup(submenu) {
+    if (!submenu?.ok) {
+        return `
+        <div class="neoterra-map-submenu neoterra-map-submenu-empty" data-neoterra-map-submenu>
+            <p class="neoterra-placeholder">${escapeHtml(submenu?.error ?? 'Select a district, bridge, or location.')}</p>
+        </div>`;
+    }
+    const facts = [
+        ['Type', submenu.typeLabel],
+        ['District', submenu.districtName ?? submenu.districtId],
+        ['Faction', submenu.factionName ?? submenu.factionId],
+        ['Status', submenu.status],
+    ].filter(([, value]) => value);
+    const present = (submenu.present ?? []).filter(Boolean);
+    const connects = (submenu.connects ?? [])
+        .map((id, index) => submenu.connectsNames?.[index] ?? id)
+        .filter(Boolean);
+    const travel = submenu.travel ?? { enabled: false };
+
+    return `
+    <div class="neoterra-map-submenu" data-neoterra-map-submenu
+        data-neoterra-map-selection="${escapeHtml(submenu.selection?.id ?? '')}">
+        <header class="neoterra-map-submenu-header">
+            <h4>${escapeHtml(submenu.title)}</h4>
+            <button type="button" class="neoterra-icon-button" data-neoterra-map-clear
+                aria-label="Clear selection">&times;</button>
+        </header>
+        ${submenu.description ? `<p class="neoterra-map-description">${escapeHtml(submenu.description)}</p>` : ''}
+        <dl class="neoterra-map-facts">
+            ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
+        </dl>
+        ${present.length > 0
+            ? `<p class="neoterra-map-present"><strong>Present:</strong> ${present.map(escapeHtml).join(', ')}</p>`
+            : ''}
+        ${connects.length > 0
+            ? `<p class="neoterra-map-connects"><strong>Connects:</strong> ${connects.map(escapeHtml).join(' &harr; ')}</p>`
+            : ''}
+        <div class="neoterra-map-actions">
+            <button type="button" class="menu_button" data-neoterra-map-travel
+                ${travel.enabled ? '' : 'disabled'}
+                title="${escapeHtml(travel.reason ?? 'Travel to this location')}">Travel</button>
+            ${travel.enabled ? '' : `<span class="neoterra-map-hint">${escapeHtml(travel.reason ?? '')}</span>`}
+        </div>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ *
+ * Data loading
+ * ------------------------------------------------------------------ */
+
+/**
+ * Load every map input. A missing/invalid generated build resolves to
+ * `generated: null` so the panel can fall back to the single-image map.
+ */
+export async function loadMapSources({ fetchImpl = globalThis.fetch } = {}) {
+    const [generated, districts, overrides, locations] = await Promise.all([
+        loadGeneratedMapData({ fetchImpl }),
+        loadDistricts({ fetchImpl }),
+        loadMapOverrides({ fetchImpl }),
+        loadLocations({ fetchImpl }),
+    ]);
+    return { generated, districts, overrides, locations };
+}
+
+/** Build the view model from sources plus live state. */
+export function buildPanelViewModel(sources, state = null) {
+    const { generated, districts, overrides, locations } = sources ?? {};
+    return buildMapViewModel({
+        regions: generated?.regions ?? null,
+        bridges: generated?.bridges ?? null,
+        keyLocations: generated?.keyLocations ?? null,
+        overrides,
+        districts,
+        locations,
+        state,
+    });
+}
+
+/* ------------------------------------------------------------------ *
+ * Mount
+ * ------------------------------------------------------------------ */
+
+/**
+ * @param {{
+ *   root: HTMLElement,
+ *   ctx?: object|null,
+ *   store?: object|null,
+ *   settings?: object,
+ *   storage?: object|null,
+ *   loadSources?: Function,
+ *   leaflet?: object|null,
+ *   onTravel?: Function|null,
+ * }} options
+ */
+export async function mountMapPanel(options = {}) {
+    if (!hasDom()) {
+        return null;
+    }
+    const { root, ctx = null, settings = {}, onTravel = null } = options;
+    if (!root) {
+        throw new TypeError('mountMapPanel requires a root element');
+    }
+
+    disposeMapPanel();
+
+    const storage = options.storage === undefined ? safeLocalStorage() : options.storage;
+    const state = {
+        root,
+        ctx,
+        store: options.store ?? null,
+        settings,
+        storage,
+        controller: new AbortController(),
+        sources: null,
+        viewModel: null,
+        submenu: null,
+        cityMap: null,
+        error: null,
+        loading: true,
+        geometry: loadPanelGeometry(storage),
+        toggles: loadLayerVisibility(storage, settings),
+        loadSources: options.loadSources ?? loadMapSources,
+        leaflet: options.leaflet ?? null,
+        onTravel,
+        flow: null,
+    };
+    mounted = state;
+
+    state.flow = createMachine({
+        name: 'map',
+        initial: 'closed',
+        context: { selection: null, travel: null },
+        states: {
+            closed: { on: { OPEN: 'open' } },
+            open: { on: { SELECT: 'location', CLOSE: 'closed' } },
+            location: {
+                on: {
+                    SELECT: {
+                        target: 'location',
+                        internal: true,
+                        action: (context, payload) => { context.selection = payload; },
+                    },
+                    OPEN_TRAVEL: 'travel',
+                    CLEAR: { target: 'open', action: (context) => { context.selection = null; } },
+                    CLOSE: 'closed',
+                },
+            },
+            travel: {
+                on: {
+                    CONFIRM_TRAVEL: { target: 'location', action: (context) => { context.travel = null; } },
+                    CANCEL_TRAVEL: { target: 'location', action: (context) => { context.travel = null; } },
+                    SELECT: {
+                        target: 'location',
+                        action: (context, payload) => {
+                            context.selection = payload;
+                            context.travel = null;
+                        },
+                    },
+                    CLEAR: {
+                        target: 'open',
+                        action: (context) => {
+                            context.selection = null;
+                            context.travel = null;
+                        },
+                    },
+                    CLOSE: 'closed',
+                },
+            },
+        },
+        onChange: (to) => {
+            if (mounted !== state) {
+                return;
+            }
+            paintSide();
+        },
+    });
+
+    root.innerHTML = renderShellMarkup(state);
+    applyGeometry(state);
+
+    root.addEventListener('click', (event) => {
+        if (mounted !== state) {
+            return;
+        }
+        const toggle = event.target.closest?.('[data-neoterra-map-toggle]');
+        if (toggle) {
+            const layer = toggle.dataset.neoterraMapToggle;
+            state.toggles[layer] = !state.toggles[layer];
+            if (layer === 'fog') {
+                state.settings.showFogOfWar = state.toggles[layer];
+            } else {
+                state.settings[layer] = state.toggles[layer];
+            }
+            saveLayerVisibility(state.storage, state.toggles);
+            state.cityMap?.setVisibility?.(layer, state.toggles[layer]);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-map-clear]')) {
+            selectFeature(state, null);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-map-close]')) {
+            state.flow.send('CLOSE');
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-map-travel]')) {
+            void openTravel(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-map-recenter]')) {
+            state.cityMap?.fitBounds?.();
+        }
+    }, { signal: state.controller.signal });
+
+    const onTab = (payload) => {
+        if (payload?.tab === 'map' && mounted === state) {
+            refreshMapPanel();
+        }
+    };
+    bus.on(EVENTS.TAB_CHANGED, onTab);
+    state.controller.signal.addEventListener('abort', () => {
+        bus.off?.(EVENTS.TAB_CHANGED, onTab);
+    }, { once: true });
+
+    state.flow.send('OPEN');
+    void loadAndMount(state);
+    return {
+        refresh: refreshMapPanel,
+        dispose: disposeMapPanel,
+        getState: () => state.flow?.state ?? 'closed',
+        getViewModel: () => state.viewModel,
+        getSubmenu: () => state.submenu,
+        select: (selection) => selectFeature(state, selection),
+    };
+}
+
+function renderShellMarkup(state) {
+    const toggles = MAP_LAYER_ORDER.map((layer) => `
+        <label class="neoterra-map-toggle">
+            <input type="checkbox" data-neoterra-map-toggle="${layer}"
+                ${state.toggles[layer] ? 'checked' : ''}>
+            <span>${escapeHtml(layerLabel(layer))}</span>
+        </label>`).join('');
+    return `
+    <div class="neoterra-map" data-neoterra-map>
+        <header class="neoterra-map-toolbar" data-neoterra-map-drag>
+            <div class="neoterra-map-toggles" role="group" aria-label="Map layers">${toggles}</div>
+            <div class="neoterra-map-buttons">
+                <button type="button" class="menu_button" data-neoterra-map-recenter>Recenter</button>
+                <button type="button" class="neoterra-icon-button" data-neoterra-map-close aria-label="Close map">&times;</button>
+            </div>
+        </header>
+        <div class="neoterra-map-body">
+            <div class="neoterra-map-canvas" data-neoterra-map-canvas aria-label="Neo Terra city map"></div>
+            <aside class="neoterra-map-side" data-neoterra-map-side>
+                <p class="neoterra-placeholder">Loading map data…</p>
+            </aside>
+        </div>
+        <span class="neoterra-map-resize" data-neoterra-map-resize aria-hidden="true"></span>
+    </div>`;
+}
+
+function layerLabel(layer) {
+    if (layer === 'keyLocations') return 'Key locations';
+    if (layer === 'namedLocations') return 'Named locations';
+    return layer[0].toUpperCase() + layer.slice(1);
+}
+
+function viewportSize(element) {
+    const host = element?.parentElement;
+    const rect = host?.getBoundingClientRect?.();
+    if (rect && rect.width > 0 && rect.height > 0) {
+        return { width: Math.round(rect.width), height: Math.round(rect.height) };
+    }
+    return {
+        width: (typeof window !== 'undefined' && window.innerWidth) || 1920,
+        height: (typeof window !== 'undefined' && window.innerHeight) || 1080,
+    };
+}
+
+function applyGeometry(state) {
+    if (!hasDom()) {
+        return;
+    }
+    const element = state.root.querySelector('[data-neoterra-map]');
+    if (!element) {
+        return;
+    }
+    state.geometry = clampPanelGeometry(state.geometry, viewportSize(element));
+    element.style.left = `${state.geometry.x}px`;
+    element.style.top = `${state.geometry.y}px`;
+    element.style.width = `${state.geometry.width}px`;
+    element.style.height = `${state.geometry.height}px`;
+}
+
+function persistGeometry(state) {
+    const element = state.root.querySelector('[data-neoterra-map]');
+    state.geometry = clampPanelGeometry(state.geometry, viewportSize(element));
+    savePanelGeometry(state.storage, state.geometry);
+}
+
+function selectFeature(state, selection) {
+    if (!selection) {
+        state.submenu = null;
+        state.cityMap?.setSelection?.(null);
+        state.flow.send('CLEAR');
+        return;
+    }
+    state.submenu = buildMapSubmenu(selection, state.viewModel, { state: readState(state) });
+    state.cityMap?.setSelection?.(selection);
+    // `location.SELECT` is an internal self-transition, so the machine does not
+    // fire `onChange`; repaint here or the side panel keeps the first feature.
+    state.flow.send('SELECT', selection);
+    paintSide();
+}
+
+async function openTravel(state) {
+    if (!state.submenu?.selection) {
+        return false;
+    }
+    // Rebuild against live state first: combat may have started since the
+    // feature was selected, and travel must be blocked the moment it does.
+    const liveState = readState(state);
+    state.submenu = buildMapSubmenu(state.submenu.selection, state.viewModel, { state: liveState });
+    paintSide();
+    const submenu = state.submenu;
+    if (!submenu?.travel?.enabled) {
+        return false;
+    }
+    const travel = {
+        from: liveState?.scene?.locationId ?? null,
+        to: submenu.travel.locationId,
+        featureId: submenu.selection?.id ?? null,
+        connections: submenu.travel.connections ?? [],
+        combat: Boolean(liveState?.scene?.combat || liveState?.meta?.inCombat),
+    };
+    state.flow.send('OPEN_TRAVEL', travel);
+    state.flow.context.travel = travel;
+    let handled = false;
+    try {
+        if (typeof state.onTravel === 'function') {
+            handled = Boolean(await state.onTravel(travel));
+        }
+    } catch (error) {
+        logger.warn('Travel request failed', error);
+    }
+    // Without a travel flow (Step 14) the panel returns to the location view
+    // instead of parking in an unreachable state.
+    if (!handled && mounted === state && state.flow?.state === 'travel') {
+        state.flow.send('CANCEL_TRAVEL');
+    }
+    return handled;
+}
+
+function readState(state) {
+    if (state.store && typeof state.store.get === 'function') {
+        return state.store.get();
+    }
+    return loadWorldStateFromMetadata(state.ctx?.chatMetadata ?? null);
+}
+
+function paintSide() {
+    const state = mounted;
+    if (!state?.root?.isConnected) {
+        return;
+    }
+    const side = state.root.querySelector('[data-neoterra-map-side]');
+    if (!side) {
+        return;
+    }
+    if (state.loading) {
+        side.innerHTML = '<p class="neoterra-placeholder">Loading map data…</p>';
+        return;
+    }
+    const error = state.error
+        ? `<p class="neoterra-error" role="alert">${escapeHtml(state.error)}</p>
+           <p class="neoterra-placeholder">Showing the single-image fallback with named-location markers.</p>`
+        : '';
+    const counts = state.viewModel
+        ? `<footer class="neoterra-map-counts">
+                <span>${state.viewModel.counts.regions} districts</span>
+                <span>${state.viewModel.counts.bridges} bridges</span>
+                <span>${state.viewModel.counts.keyLocations} key locations</span>
+           </footer>`
+        : '';
+    side.innerHTML = `${error}${renderSubmenuMarkup(state.submenu)}${counts}`;
+}
+
+async function loadAndMount(state) {
+    try {
+        const sources = await state.loadSources({ fetchImpl: globalThis.fetch });
+        if (mounted !== state) {
+            return;
+        }
+        state.sources = sources;
+        state.viewModel = buildPanelViewModel(sources, readState(state));
+        state.generated = Boolean(sources.generated);
+        state.loading = false;
+        paintSide();
+
+        const container = state.root.querySelector('[data-neoterra-map-canvas]');
+        if (!container || !state.viewModel) {
+            return;
+        }
+        const mount = state.generated ? mountCityMap : mountFallbackMap;
+        const cityMap = await mount({
+            container,
+            viewModel: state.viewModel,
+            visibility: state.toggles,
+            leaflet: state.leaflet,
+            onSelect: (selection) => selectFeature(state, selection),
+        });
+        if (mounted !== state) {
+            cityMap?.destroy?.();
+            return;
+        }
+        state.cityMap = cityMap;
+        if (state.generated && !state.cityMap) {
+            state.error = 'The map renderer is unavailable.';
+            paintSide();
+        }
+        mountDragResize(state);
+    } catch (error) {
+        if (mounted !== state) {
+            return;
+        }
+        logger.warn('Could not load the city map', error);
+        state.loading = false;
+        state.error = error?.message ?? String(error);
+        paintSide();
+    }
+}
+
+function mountDragResize(state) {
+    if (!hasDom()) {
+        return;
+    }
+    const element = state.root.querySelector('[data-neoterra-map]');
+    const dragHandle = state.root.querySelector('[data-neoterra-map-drag]');
+    const resizeHandle = state.root.querySelector('[data-neoterra-map-resize]');
+    if (!element || !dragHandle || !resizeHandle) {
+        return;
+    }
+    const signal = state.controller.signal;
+
+    dragHandle.addEventListener('pointerdown', (event) => {
+        if (event.target.closest?.('button, input, label')) {
+            return;
+        }
+        const start = { x: event.clientX, y: event.clientY, left: state.geometry.x, top: state.geometry.y };
+        dragHandle.setPointerCapture?.(event.pointerId);
+        const move = (moveEvent) => {
+            state.geometry = clampPanelGeometry({
+                ...state.geometry,
+                x: start.left + (moveEvent.clientX - start.x),
+                y: start.top + (moveEvent.clientY - start.y),
+            }, { width: window.innerWidth, height: window.innerHeight });
+            applyGeometry(state);
+        };
+        const end = () => {
+            dragHandle.releasePointerCapture?.(event.pointerId);
+            persistGeometry(state);
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', end);
+        };
+        window.addEventListener('pointermove', move, { signal });
+        window.addEventListener('pointerup', end, { signal, once: true });
+    }, { signal });
+
+    resizeHandle.addEventListener('pointerdown', (event) => {
+        const start = { x: event.clientX, y: event.clientY, width: state.geometry.width, height: state.geometry.height };
+        resizeHandle.setPointerCapture?.(event.pointerId);
+        const move = (moveEvent) => {
+            state.geometry = clampPanelGeometry({
+                ...state.geometry,
+                width: start.width + (moveEvent.clientX - start.x),
+                height: start.height + (moveEvent.clientY - start.y),
+            }, { width: window.innerWidth, height: window.innerHeight });
+            applyGeometry(state);
+        };
+        const end = () => {
+            resizeHandle.releasePointerCapture?.(event.pointerId);
+            persistGeometry(state);
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', end);
+        };
+        window.addEventListener('pointermove', move, { signal });
+        window.addEventListener('pointerup', end, { signal, once: true });
+    }, { signal });
+}
+
+/**
+ * Rebuild the view model from the latest `WorldState` without reloading static
+ * data. Safe to call on every state change.
+ */
+export function refreshMapPanel() {
+    const state = mounted;
+    if (!state?.sources || !state.viewModel) {
+        return null;
+    }
+    const worldState = readState(state);
+    state.viewModel = buildPanelViewModel(state.sources, worldState);
+    if (state.submenu?.selection) {
+        state.submenu = buildMapSubmenu(state.submenu.selection, state.viewModel, { state: worldState });
+    }
+    paintSide();
+    // Leaflet computes its size at mount; when the tab was hidden it needs a
+    // nudge after becoming visible.
+    state.cityMap?.map?.invalidateSize?.();
+    return state.viewModel;
+}
+
+export function disposeMapPanel() {
+    if (!mounted) {
+        return;
+    }
+    const state = mounted;
+    mounted = null;
+    state.controller?.abort();
+    state.cityMap?.destroy?.();
+    if (state.root?.isConnected) {
+        state.root.innerHTML = '';
+    }
+}
+
+/** Force the next mount to re-read the generated build. */
+export function resetMapDataCaches() {
+    clearGeneratedMapCaches();
+}
+
+export { buildMapFeatureIndex };

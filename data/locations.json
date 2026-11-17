@@ -34,7 +34,7 @@
         "rally-point"
       ],
       "districtId": "downtown",
-      "regionId": null,
+      "regionId": "region:center",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:city-core"
@@ -67,7 +67,7 @@
         "high-security"
       ],
       "districtId": "downtown",
-      "regionId": null,
+      "regionId": "region:center",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:big-office-b"
@@ -102,7 +102,7 @@
         "high-security"
       ],
       "districtId": "downtown",
-      "regionId": null,
+      "regionId": "region:center",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:big-office-c"
@@ -135,7 +135,7 @@
         "information"
       ],
       "districtId": "downtown",
-      "regionId": null,
+      "regionId": "region:residential-district-a",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -165,7 +165,7 @@
         "matic-family"
       ],
       "districtId": "maple-heights",
-      "regionId": null,
+      "regionId": "region:high-class-residential-a",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:rich-home-a"
@@ -197,7 +197,7 @@
         "superhero-support"
       ],
       "districtId": "fashion-row",
-      "regionId": null,
+      "regionId": "region:center",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:big-office-d"
@@ -229,7 +229,7 @@
         "hero-team"
       ],
       "districtId": "fashion-row",
-      "regionId": null,
+      "regionId": "region:high-class-residential-c",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -261,7 +261,7 @@
         "dispatch"
       ],
       "districtId": "civic-center",
-      "regionId": null,
+      "regionId": "region:highrise-district-d",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -290,7 +290,7 @@
         "trauma"
       ],
       "districtId": "civic-center",
-      "regionId": null,
+      "regionId": "region:lake-park",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -322,7 +322,7 @@
         "industrial"
       ],
       "districtId": "harbor",
-      "regionId": null,
+      "regionId": "region:major-dock-a",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:biggest-dock"
@@ -354,7 +354,7 @@
         "menis-family"
       ],
       "districtId": "coast",
-      "regionId": null,
+      "regionId": "region:undeveloped-forest-mountains",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -386,7 +386,7 @@
         "hideout"
       ],
       "districtId": "industrial-belt",
-      "regionId": null,
+      "regionId": "region:industrial-b",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:industrial-park-a"
@@ -417,7 +417,7 @@
         "villain-base"
       ],
       "districtId": "industrial-belt",
-      "regionId": null,
+      "regionId": "region:residential-district-b",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -451,7 +451,7 @@
         "travel"
       ],
       "districtId": "underground",
-      "regionId": null,
+      "regionId": "region:park-b",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -481,7 +481,7 @@
         "matic-family"
       ],
       "districtId": "maple-heights",
-      "regionId": null,
+      "regionId": "region:residential-district-a",
       "mapRef": {
         "layer": "keyLocation",
         "id": "key:home-a"
@@ -512,7 +512,7 @@
         "security"
       ],
       "districtId": "outskirts",
-      "regionId": null,
+      "regionId": "region:airport",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -542,7 +542,7 @@
         "surveillance"
       ],
       "districtId": "downtown",
-      "regionId": null,
+      "regionId": "region:high-class-residential-a",
       "mapRef": null,
       "virtual": true,
       "travel": [
@@ -572,7 +572,7 @@
         "villain-base"
       ],
       "districtId": "old-hills",
-      "regionId": null,
+      "regionId": "region:residential-district-d",
       "mapRef": null,
       "virtual": true,
       "travel": [
