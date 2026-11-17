@@ -19,12 +19,15 @@ import {
     validateFormRules,
     validateRegistry,
 } from '../src/data/schema.js';
+import { validateSeasonDefinition } from '../src/data/seasons.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY_PATH = join(ROOT, 'data', 'characters', 'index.json');
 const OVERRIDES_PATH = join(ROOT, 'data', 'characters', 'overrides.json');
 const FORM_GROUPS_PATH = join(ROOT, 'data', 'form-groups.json');
 const FORM_RULES_PATH = join(ROOT, 'data', 'form-rules.json');
+const SEASON_DIR_PATH = join(ROOT, 'data', 'seasons');
+const SEASON_INDEX_PATH = join(SEASON_DIR_PATH, 'index.json');
 
 export const SEASON_DIRS = Object.freeze({
     s1: 'S1',
@@ -35,7 +38,69 @@ export const SEASON_DIRS = Object.freeze({
     others: 'Others',
 });
 
-const SEASON_INDEX = new Map(SEASON_IDS.map((seasonId, index) => [seasonId, index]));
+const SEASON_ORDER = new Map([
+    ['s1', 0],
+    ['s1dark', 1],
+    ['s2', 2],
+    ['s3', 3],
+    ['s4', 4],
+    ['others', 100],
+]);
+
+function seasonSortKey(seasonId) {
+    if (SEASON_ORDER.has(seasonId)) {
+        return [SEASON_ORDER.get(seasonId), seasonId];
+    }
+    const match = /^s(\d+)(dark)?$/.exec(seasonId);
+    if (match) {
+        return [10 + Number(match[1]), match[2] ? 1 : 0];
+    }
+    return [50, seasonId];
+}
+
+function compareSeasonIds(left, right) {
+    const a = seasonSortKey(left);
+    const b = seasonSortKey(right);
+    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+        const av = a[index] ?? 0;
+        const bv = b[index] ?? 0;
+        if (av < bv) {
+            return -1;
+        }
+        if (av > bv) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Discover card folders under `Chars/`.
+ *
+ * A new season is added by dropping `Chars/<Season>/` plus
+ * `data/seasons/<id>.json`; no code change is required.
+ */
+export function discoverSeasonDirs(root = ROOT) {
+    const charsDir = join(root, 'Chars');
+    let entries;
+    try {
+        entries = readdirSync(charsDir, { withFileTypes: true });
+    } catch (error) {
+        throw new Error(`Cannot read ${charsDir}. Run this tool from the repository root (${error.message}).`);
+    }
+    const found = [];
+    for (const dirent of entries) {
+        if (!dirent.isDirectory()) {
+            continue;
+        }
+        const seasonId = dirent.name.toLowerCase();
+        if (seasonId === 'neohorizon' || seasonId === 'lore' || seasonId === 'lorebooks') {
+            continue;
+        }
+        found.push({ seasonId, dir: dirent.name });
+    }
+    return found.sort((left, right) => compareSeasonIds(left.seasonId, right.seasonId));
+}
 
 const FORM_WORD_KINDS = new Set([
     'corrupted',
@@ -68,8 +133,8 @@ function normalizeKey(file) {
     return toPosix(file).replace(/^Chars\//, '');
 }
 
-function assertKnownSeason(seasonId) {
-    if (!SEASON_INDEX.has(seasonId)) {
+function assertKnownSeason(seasonId, seasonIds = SEASON_IDS) {
+    if (!seasonIds.includes(seasonId)) {
         throw new Error(`unknown season id "${String(seasonId)}"`);
     }
 }
@@ -248,8 +313,8 @@ export function parseThreatLevel(description) {
 /**
  * Parse one card into a registry entry before overrides/group resolution.
  */
-export function parseCard(raw, { file, seasonId }) {
-    assertKnownSeason(seasonId);
+export function parseCard(raw, { file, seasonId, seasonIds = SEASON_IDS }) {
+    assertKnownSeason(seasonId, seasonIds);
     const validation = validateCardSource(raw);
     if (!validation.ok) {
         const reason = validation.errors.map((error) => `${error.path}: ${error.message}`).join('; ');
@@ -410,10 +475,11 @@ function resolveGroups(entries, formGroups) {
     }
 }
 
-function sortEntries(entries) {
+function sortEntries(entries, seasonIds = SEASON_IDS) {
+    const order = new Map(seasonIds.map((seasonId, index) => [seasonId, index]));
     return entries.sort((left, right) => {
-        const leftSeason = SEASON_INDEX.get(left.seasonId) ?? Number.MAX_SAFE_INTEGER;
-        const rightSeason = SEASON_INDEX.get(right.seasonId) ?? Number.MAX_SAFE_INTEGER;
+        const leftSeason = order.get(left.seasonId) ?? Number.MAX_SAFE_INTEGER;
+        const rightSeason = order.get(right.seasonId) ?? Number.MAX_SAFE_INTEGER;
         if (leftSeason !== rightSeason) {
             return leftSeason - rightSeason;
         }
@@ -436,12 +502,15 @@ function sortEntries(entries) {
  *   formGroups: { groups: Array<object> },
  * }} input
  */
-export function buildRegistry({ cards, overrides, formGroups }) {
+export function buildRegistry({ cards, overrides, formGroups, seasonIds = SEASON_IDS }) {
     if (!Array.isArray(cards)) {
         throw new Error('buildRegistry: cards must be an array');
     }
     if (!formGroups || !Array.isArray(formGroups.groups)) {
         throw new Error('buildRegistry: formGroups.groups must be an array');
+    }
+    if (!Array.isArray(seasonIds) || seasonIds.length === 0) {
+        throw new Error('buildRegistry: seasonIds must be a non-empty array');
     }
 
     const entries = cards.map((card) => {
@@ -449,8 +518,8 @@ export function buildRegistry({ cards, overrides, formGroups }) {
             throw new Error('buildRegistry: every card must be an object');
         }
         const file = toPosix(card.file);
-        const seasonId = card.seasonId ?? seasonIdFromPath(file);
-        return parseCard(card.raw, { file, seasonId });
+        const seasonId = card.seasonId ?? seasonIdFromPath(file, seasonIds);
+        return parseCard(card.raw, { file, seasonId, seasonIds });
     });
 
     applyOverrides(entries, overrides);
@@ -471,9 +540,9 @@ export function buildRegistry({ cards, overrides, formGroups }) {
         unique.add(entry.id);
     }
 
-    sortEntries(entries);
+    sortEntries(entries, seasonIds);
 
-    const counts = Object.fromEntries(SEASON_IDS.map((seasonId) => [seasonId, 0]));
+    const counts = Object.fromEntries(seasonIds.map((seasonId) => [seasonId, 0]));
     for (const entry of entries) {
         counts[entry.seasonId] = (counts[entry.seasonId] ?? 0) + 1;
     }
@@ -488,13 +557,17 @@ export function buildRegistry({ cards, overrides, formGroups }) {
     };
 }
 
-export function seasonIdFromPath(file) {
+export function seasonIdFromPath(file, seasonIds = SEASON_IDS) {
     const normalized = normalizeKey(file);
     const top = normalized.split('/')[0];
-    for (const [seasonId, dir] of Object.entries(SEASON_DIRS)) {
+    for (const dir of Object.values(SEASON_DIRS)) {
         if (dir === top) {
-            return seasonId;
+            return dir.toLowerCase();
         }
+    }
+    const inferred = top.toLowerCase();
+    if (seasonIds.includes(inferred)) {
+        return inferred;
     }
     throw new Error(`${file}: cannot infer a season from its folder`);
 }
@@ -503,12 +576,11 @@ function readJson(path) {
     return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function readCards() {
+function readCards(seasonDirs) {
     const cards = [];
     const errors = [];
 
-    for (const seasonId of SEASON_IDS) {
-        const dir = SEASON_DIRS[seasonId];
+    for (const { seasonId, dir } of seasonDirs) {
         const absolute = join(ROOT, 'Chars', dir);
         for (const dirent of readdirSync(absolute, { withFileTypes: true })) {
             if (!dirent.isFile() || !dirent.name.toLowerCase().endsWith('.json')) {
@@ -535,12 +607,108 @@ function readCards() {
     return { cards, errors };
 }
 
+function seasonIdFromFilename(filename) {
+    return basename(filename)
+        .replace(/\.json$/i, '')
+        .replace(/\.aux$/i, '');
+}
+
+/**
+ * Read and structurally check `data/seasons/*.json`.
+ *
+ * `index.json` is generated output, not an authored season.
+ */
+export function readSeasonDocuments(directory = SEASON_DIR_PATH) {
+    const documents = [];
+    const errors = [];
+
+    for (const dirent of readdirSync(directory, { withFileTypes: true })) {
+        if (!dirent.isFile() || !dirent.name.toLowerCase().endsWith('.json') || dirent.name === 'index.json') {
+            continue;
+        }
+        const file = `data/seasons/${dirent.name}`;
+        let document;
+        try {
+            document = readJson(join(directory, dirent.name));
+        } catch (error) {
+            errors.push(`${file}: ${error instanceof Error ? error.message : String(error)}`);
+            continue;
+        }
+        const expectedId = seasonIdFromFilename(dirent.name);
+        if (!document || typeof document !== 'object') {
+            errors.push(`${file}: season document must be an object`);
+            continue;
+        }
+        if (document.id !== expectedId) {
+            errors.push(`${file}: id "${document.id}" does not match filename id "${expectedId}"`);
+            continue;
+        }
+        documents.push({ ...document, file: dirent.name });
+    }
+
+    documents.sort((left, right) => compareSeasonIds(left.id, right.id));
+    const seen = new Set();
+    for (const document of documents) {
+        if (seen.has(document.id)) {
+            errors.push(`${document.file}: duplicate season id "${document.id}"`);
+        }
+        seen.add(document.id);
+    }
+
+    return { documents, errors };
+}
+
+/** Build the generated `data/seasons/index.json` manifest. */
+export function buildSeasonIndex(documents, seasonDirs = []) {
+    const folderById = new Map(
+        seasonDirs.map((entry) => [entry.seasonId, entry.dir]),
+    );
+    const seasons = documents
+        .map((document) => ({
+            id: document.id,
+            file: document.file,
+            playable: document.playable !== false,
+            folder: folderById.get(document.id) ?? null,
+        }))
+        .sort((left, right) => compareSeasonIds(left.id, right.id));
+    return {
+        schemaVersion: 1,
+        generatedBy: 'tools/build-data.mjs',
+        seasons,
+    };
+}
+
 function formatValidationErrors(label, validation) {
     return validation.errors.map((error) => `${label}: ${error.path}: ${error.message}`);
 }
 
+function validateSeasonDocuments(documents, registry) {
+    const errors = [];
+    const factions = readJson(join(ROOT, 'data', 'factions.json'));
+    const locations = readJson(join(ROOT, 'data', 'locations.json'));
+    const districts = readJson(join(ROOT, 'data', 'districts.json'));
+    const seasonIds = documents.map((document) => document.id);
+
+    for (const document of documents) {
+        const validation = validateSeasonDefinition(document, {
+            registry,
+            factions,
+            locations,
+            districts,
+            seasonIds,
+        });
+        if (!validation.ok) {
+            errors.push(...formatValidationErrors(document.file, validation));
+        }
+    }
+
+    return errors;
+}
+
 function buildAndValidate() {
-    const { cards, errors: cardErrors } = readCards();
+    const seasonDirs = discoverSeasonDirs();
+    const seasonIds = seasonDirs.map((entry) => entry.seasonId);
+    const { cards, errors: cardErrors } = readCards(seasonDirs);
     if (cardErrors.length > 0) {
         return { errors: cardErrors.map((error) => `${error.file}: ${error.reason}`) };
     }
@@ -550,20 +718,20 @@ function buildAndValidate() {
     const formRules = readJson(FORM_RULES_PATH);
 
     const errors = [];
-    const groupsValidation = validateFormGroups(formGroups);
+    const groupsValidation = validateFormGroups(formGroups, { seasonIds });
     if (!groupsValidation.ok) {
         errors.push(...formatValidationErrors('form-groups.json', groupsValidation));
     }
 
     let registry;
     try {
-        registry = buildRegistry({ cards, overrides, formGroups });
+        registry = buildRegistry({ cards, overrides, formGroups, seasonIds });
     } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
         return { errors };
     }
 
-    const registryValidation = validateRegistry(registry);
+    const registryValidation = validateRegistry(registry, { seasonIds });
     if (!registryValidation.ok) {
         errors.push(...formatValidationErrors('index.json', registryValidation));
     }
@@ -573,18 +741,33 @@ function buildAndValidate() {
         errors.push(...formatValidationErrors('form-rules.json', rulesValidation));
     }
 
-    return { registry, errors };
+    const { documents, errors: seasonErrors } = readSeasonDocuments();
+    errors.push(...seasonErrors);
+    if (seasonErrors.length === 0) {
+        errors.push(...validateSeasonDocuments(documents, registry));
+    }
+    const seasonIndex = buildSeasonIndex(documents, seasonDirs);
+
+    return { registry, seasonIndex, errors };
 }
 
-function summary(registry) {
+function summary(registry, seasonIndex) {
     const lines = [];
+    const seasonIds = [...new Set([
+        ...seasonIndex.seasons.map((season) => season.id),
+        ...Object.keys(registry.counts).filter((key) => key !== 'total'),
+    ])];
     lines.push(
         `Neo Terra registry: ${registry.counts.total} cards (` +
-            SEASON_IDS.map((seasonId) => `${seasonId}=${registry.counts[seasonId]}`).join(', ') +
+            seasonIds
+                .filter((seasonId) => Object.hasOwn(registry.counts, seasonId))
+                .map((seasonId) => `${seasonId}=${registry.counts[seasonId]}`)
+                .join(', ') +
             ')',
     );
     lines.push(`Bundles: ${registry.entries.filter((entry) => entry.bundle).length}`);
     lines.push(`Form groups: ${new Set(registry.entries.map((entry) => entry.formGroup).filter(Boolean)).size}`);
+    lines.push(`Seasons: ${seasonIndex.seasons.map((season) => `${season.id}${season.playable ? '' : ' (not playable)'}`).join(', ')}`);
     return lines.join('\n');
 }
 
@@ -594,36 +777,47 @@ function printErrors(errors) {
     }
 }
 
+function compareGeneratedFile(path, serialized, label, errors) {
+    let existing;
+    try {
+        existing = readFileSync(path, 'utf8');
+    } catch (error) {
+        errors.push(`${relative(ROOT, path)}: cannot read generated file (${error.message})`);
+        return;
+    }
+    if (existing !== serialized) {
+        errors.push(`${relative(ROOT, path)}: ${label} out of date; run node tools/build-data.mjs`);
+    }
+}
+
 export function main(argv = process.argv.slice(2)) {
     const check = argv.includes('--check');
-    const { registry, errors } = buildAndValidate();
+    const { registry, seasonIndex, errors } = buildAndValidate();
 
     if (errors.length > 0) {
         printErrors(errors);
         return 1;
     }
 
-    const serialized = `${JSON.stringify(registry, null, 2)}\n`;
+    const registryText = `${JSON.stringify(registry, null, 2)}\n`;
+    const seasonIndexText = `${JSON.stringify(seasonIndex, null, 2)}\n`;
 
     if (check) {
-        let existing;
-        try {
-            existing = readFileSync(REGISTRY_PATH, 'utf8');
-        } catch (error) {
-            printErrors([`${REGISTRY_PATH}: cannot read existing registry (${error.message})`]);
+        const checkErrors = [];
+        compareGeneratedFile(REGISTRY_PATH, registryText, 'registry', checkErrors);
+        compareGeneratedFile(SEASON_INDEX_PATH, seasonIndexText, 'season index', checkErrors);
+        if (checkErrors.length > 0) {
+            printErrors(checkErrors);
             return 1;
         }
-        if (existing !== serialized) {
-            printErrors(['registry out of date; run node tools/build-data.mjs']);
-            return 1;
-        }
-        console.log(`Registry is up to date. ${summary(registry)}`);
+        console.log(`Registry is up to date. ${summary(registry, seasonIndex)}`);
         return 0;
     }
 
-    writeFileSync(REGISTRY_PATH, serialized);
-    console.log(`Wrote ${relative(ROOT, REGISTRY_PATH)}.`);
-    console.log(summary(registry));
+    writeFileSync(REGISTRY_PATH, registryText);
+    writeFileSync(SEASON_INDEX_PATH, seasonIndexText);
+    console.log(`Wrote ${relative(ROOT, REGISTRY_PATH)} and ${relative(ROOT, SEASON_INDEX_PATH)}.`);
+    console.log(summary(registry, seasonIndex));
     return 0;
 }
 

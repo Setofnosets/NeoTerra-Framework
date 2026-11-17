@@ -19,7 +19,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1144,9 +1144,45 @@ export function loadSources(root = ROOT) {
     };
 }
 
+/**
+ * `--check` must also prove the committed generated files match the SVGs.
+ * A geometry change that was not regenerated is just as dangerous as an
+ * unparsable SVG.
+ */
+function checkGeneratedFiles(root, result) {
+    const mapDir = join(root, 'data', 'map');
+    const files = [
+        [join(mapDir, 'map.json'), result.map],
+        [join(mapDir, 'regions.geojson'), result.regions],
+        [join(mapDir, 'bridges.geojson'), result.bridges],
+        [join(mapDir, 'key-locations.json'), result.keyLocations],
+        [join(mapDir, 'report.json'), result.report],
+        [join(root, 'data', 'locations.json'), result.locations],
+    ];
+    const errors = [];
+    for (const [path, document] of files) {
+        const expected = serialize(document);
+        let actual = null;
+        try {
+            actual = readFileSync(path, 'utf8');
+        } catch {
+            errors.push(`${relative(root, path)}: generated file is missing; run node tools/build-map.mjs`);
+            continue;
+        }
+        if (actual !== expected) {
+            errors.push(`${relative(root, path)}: out of date; run node tools/build-map.mjs`);
+        }
+    }
+    return errors;
+}
+
 export function runBuild({ root = ROOT, check = false, report = false } = {}) {
     const sources = loadSources(root);
     const result = buildMapData(sources);
+
+    if (check && result.errors.length === 0) {
+        result.errors.push(...checkGeneratedFiles(root, result));
+    }
 
     if (!check && result.errors.length === 0) {
         const mapDir = join(root, 'data', 'map');

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "tools/build-data.mjs",
+  "seasons": [
+    {
+      "id": "s1",
+      "file": "s1.json",
+      "playable": true,
+      "folder": "S1"
+    },
+    {
+      "id": "s1dark",
+      "file": "s1dark.json",
+      "playable": true,
+      "folder": "S1Dark"
+    },
+    {
+      "id": "s2",
+      "file": "s2.json",
+      "playable": true,
+      "folder": "S2"
+    },
+    {
+      "id": "s3",
+      "file": "s3.json",
+      "playable": true,
+      "folder": "S3"
+    },
+    {
+      "id": "s4",
+      "file": "s4.json",
+      "playable": true,
+      "folder": "S4"
+    },
+    {
+      "id": "s5",
+      "file": "s5.aux.json",
+      "playable": false,
+      "folder": null
+    },
+    {
+      "id": "sandbox",
+      "file": "sandbox.json",
+      "playable": true,
+      "folder": null
+    }
+  ]
+}

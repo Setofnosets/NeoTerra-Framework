@@ -307,6 +307,54 @@
                 <button type="button" class="menu_button" data-neoterra-export-settings>Export settings JSON</button>
                 <button type="button" class="menu_button" data-neoterra-import-settings>Import settings JSON</button>
                 <input type="file" accept="application/json,.json" hidden data-neoterra-import-file>
+            </div>
+
+            <h4 class="neoterra-section-title">World export and import</h4>
+            <p class="neoterra-hint">
+                A world bundle contains the WorldState, season definition, roster slice, player
+                identity, and cast mode. Importing into another chat keeps the story but rebinds
+                it to that chat; the generated world book is re-materialized on demand.
+            </p>
+            <div class="neoterra-settings-actions">
+                <button type="button" class="menu_button" data-neoterra-export-world>Export this chat's world</button>
+                <button type="button" class="menu_button" data-neoterra-import-world>Import world JSON</button>
+                <input type="file" accept="application/json,.json" hidden data-neoterra-import-world-file>
+            </div>
+            <div class="neoterra-panel neoterra-hint" data-neoterra-world-drop>
+                Drop a Neo Terra world JSON here to import it into this chat.
+            </div>
+
+            <h4 class="neoterra-section-title">Import character cards</h4>
+            <p class="neoterra-hint">
+                Copy the card files into the matching <code>Chars/&lt;Season&gt;/</code> folder,
+                then drop them here. The extension generates the override entries and downloads
+                <code>neoterra-character-overrides.json</code>; merge it into
+                <code>data/characters/overrides.json</code> and run <code>npm run build:data</code>.
+                Nothing is written to the repository automatically.
+            </p>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-field">
+                    <span>Season folder</span>
+                    <select data-neoterra-card-season>
+                        <option value="s1">S1</option>
+                        <option value="s1dark">S1Dark</option>
+                        <option value="s2">S2</option>
+                        <option value="s3">S3</option>
+                        <option value="s4">S4</option>
+                        <option value="others">Others (out of V1 scope)</option>
+                    </select>
+                </label>
+            </div>
+            <div class="neoterra-settings-actions">
+                <button type="button" class="menu_button" data-neoterra-import-cards>Choose card files</button>
+                <input type="file" accept="application/json,.json" multiple hidden data-neoterra-card-import-file>
+            </div>
+            <div class="neoterra-panel neoterra-hint" data-neoterra-card-drop>
+                Drop character-card JSON files here to generate override entries.
+            </div>
+            <pre class="neoterra-hint" data-neoterra-card-import-report hidden></pre>
+
+            <div class="neoterra-settings-actions">
                 <button type="button" class="menu_button neoterra-danger" data-neoterra-reset-world>
                     Reset this chat's world
                 </button>

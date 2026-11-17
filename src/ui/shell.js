@@ -980,6 +980,11 @@ function exposeDebugApi(context) {
             return settings;
         },
         resetWorld: () => resetChatWorld(context),
+        refreshWorld: () => {
+            invalidateChatRuntimes(context);
+            bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-refresh' });
+            return true;
+        },
         mount: initialize,
         dispose,
     };

@@ -1,0 +1,21 @@
+# Node / development
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local captures and drafts
+data/locations.draft.json
+NeoTerra_backup.svg
+*.bak
+*.local.json
+
+# Internal working briefs (not part of the shipped extension)
+plans/briefs/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

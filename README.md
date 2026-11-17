@@ -1,0 +1,288 @@
+# Neo Terra Framework
+
+A self-contained [SillyTavern](https://github.com/SillyTavern/SillyTavern)
+extension for the Neo Terra superhero setting. It turns each chat into an
+independent season timeline: a world is constructed from a season definition,
+kept in a structured `WorldState`, narrated by the Director, and updated by
+small schema-constrained agents that never free-write state.
+
+**Minimum SillyTavern:** 1.19.0  
+**License:** MIT  
+**Runtime dependencies:** none (no CDN, no npm install, no other extension)
+
+---
+
+## Features
+
+- **Six entry points** — S1, S1Dark, S2, S3, S4, and Sandbox. S1Dark is the
+  alternate **Villain POV** season (play as Carol Fate / Bleeding Heart); S5
+  appears as a disabled "auxiliary data present — coming later" card.
+- **Player identity** — custom persona by default, or "Play as" a canon
+  character from the current roster (any registry character in Sandbox, with a
+  persistent non-canon warning).
+- **World state** — one versioned `WorldState` document per chat, written only
+  through typed events. Per-chat storage, per-swipe snapshots, and a WAL guard
+  against reloads mid-pass.
+- **Agents** — Architect, Storyline Tracker, State Tracker, Cast Director, Lore
+  Agent, Continuity Auditor, Epilogue Agent, Choices Agent, and Bad End
+  Detector. Every call is validated JSON; failures are logged, never applied.
+- **Canon Beat Ledger** — flexible completion, adaptation, short-circuiting,
+  soft deadlines with escalating consequences, and a recorded villain victory.
+- **Villain victory** — a ~5-paragraph epilogue, then **Resistance**, **Join the
+  villain**, or **End here**. Both continuations rewrite the world into a
+  post-victory arc with new beats.
+- **Bad ends (opt-in)** — death, identity loss, autonomy loss, permanent
+  corruption, imprisonment, and retirement. Deterministic predicates first;
+  stored epilogues; continue as the character or as someone else.
+- **Optional CYOA choices** — 4 context-derived choices by default, labels up
+  to 100 characters, plus a completely independent tactical combat-choices
+  setting.
+- **Content gate (off by default)** — `full`, `reduced`, `mature-only`,
+  `strict`, with per-character and per-player hard limits that always win.
+- **SVG map** — 36 districts, 12 bridges, and 22 key locations extracted from
+  the authoring SVGs into GeoJSON, rendered with vendored Leaflet. Travel uses
+  the bridge graph, not straight-line distance. The editor changes overrides,
+  never the SVG art.
+- **Combat resolver** — seeded `d20 + modifiers` into five bounded tiers, no HP
+  attrition, with `/neoterra-roll` and a registered dice function tool.
+- **Codex and settings** — searchable cast, live state, form lineage, bad-end
+  badges, "Play as", agent routing/prompts/cadence, token budgets, world
+  export/import, and card-import override generation.
+
+---
+
+## Install
+
+1. Clone or copy this folder into SillyTavern's third-party extensions
+   directory:
+
+   ```bash
+   cd SillyTavern/data/default-user/extensions
+   git clone https://github.com/Setofnosets/NeoTerra-Framework.git
+   ```
+
+   The resulting path is
+   `SillyTavern/data/default-user/extensions/NeoTerra-Framework/`.
+
+2. Reload SillyTavern (or refresh the browser). No build step and no
+   `npm install` are required for the extension to run.
+3. Open the **Extensions** settings drawer and confirm **Neo Terra Framework**
+   appears. Use the top-right **Neo Terra** button or `/neoterra` to open the
+   shell.
+
+The map loads its assets from `vendor/leaflet/`. It works offline and does not
+read Leaflet from a CDN, npm, or another extension's global.
+
+---
+
+## First run
+
+1. Open the shell and choose a season. Each card shows the era, premise, player
+   role, main threat(s), and cast count.
+2. Choose an identity: **custom persona** or **play as a canon character**
+   (S1Dark preselects Carol / Bleeding Heart).
+3. The extension seeds the world deterministically, materializes a chat-scoped
+   world book, selects the Director card, and writes the opening scene.
+4. Play normally. State Tracker runs every assistant turn; Storyline runs every
+   six turns or on a location change; Cast Director runs on scene changes; Lore
+   runs every ten turns. All cadences are configurable.
+
+World state is stored in `chatMetadata.neoterra`, so two chats with the same
+season are independent timelines.
+
+---
+
+## Canon beats and deadlines
+
+Each season declares a **Canon Beat Ledger**. A beat has an act, eligibility
+conditions, a completion predicate, flexibility (`strict`, `adaptable`,
+`optional`), a soft deadline, a declared consequence, and rewrite hints. The
+Storyline Tracker may:
+
+- resolve a beat whose predicate the observed events satisfy;
+- emit a setup nudge for the next eligible beat;
+- mark a beat `deferred` or `adapted`, recording `adaptedFrom` / `adaptedTo`;
+- mark an impossible beat `short-circuited` and re-plan the next act.
+
+Missing a soft deadline never blocks play; it makes the world worse according
+to the beat's declared consequence. Beat pressure is configurable
+(`off`, `generous`, `standard`, `harsh`, default `standard`). If the season's
+final deadline passes, the main threat achieves a complete **villain victory**,
+recorded once. Early villain defeat is a legal win and is recorded as a
+divergence, not reversed. See [docs/canon-beats.md](docs/canon-beats.md).
+
+---
+
+## Villain victory and post-victory play
+
+When the final deadline fires (or the main threat reaches its terminal stage),
+the Epilogue Agent writes a ~5-paragraph epilogue grounded in `WorldState`:
+who won, how, cast fates, faction control, and the player's status. The ending
+fires once, is cached, and is not regenerated on reload.
+
+The player then chooses:
+
+1. **Resistance** — an underground movement with reduced resources and new
+   resistance beats.
+2. **Join the villain** — serve the victor: defeat the resistance, govern
+   captured districts, conquer further places, or act as an enforcer. Join is
+   state-aware (always available to villain/corrupted/brainwashed players,
+   plausible for coerced heroes).
+3. **End here** — stop at the epilogue; the world remains viewable.
+
+Both continuations set `arc: 'post-victory'`, rewrite factions/threats, and
+generate new beats with deadlines. See [docs/endings.md](docs/endings.md).
+
+---
+
+## Bad ends (opt-in)
+
+`badEnds.enabled` is **false** by default. While off, no detection runs and
+nothing is stored. When enabled, deterministic predicates are checked first
+(stamina/willpower, corruption stage, captivity, permanent form rules) and the
+LLM only confirms ambiguous cases. A confirmed state stores a short epilogue
+and a persistent record keyed by `continuityKey`.
+
+The player may continue as the bad-ended character when its state permits
+agency (death only when `badEnds.allowDeadContinuation` is enabled), continue
+as someone else, or end there. Records survive reloads, exports, and declared
+reversals; they are never silently deleted. See
+[docs/bad-ends.md](docs/bad-ends.md).
+
+---
+
+## CYOA choices (optional)
+
+Exploration choices and tactical combat choices are two independent settings,
+both off by default. When enabled, the Choices Agent reads recent context plus
+`WorldState` and returns 2–6 choices (default 4). Labels are capped at 100
+characters. Clicking a chip sends exactly that text through SillyTavern's
+normal send path; "write your own" is always available.
+
+Themes: `auto`, `heroic`, `villainous`, `romantic`, `noir`, `comedic`,
+`tactical`, `lewd`. Combat choices default to `tactical` and are constrained to
+actions the resolver understands (strike, defend, grapple, feint, skill,
+retreat, surrender, talk down). See [docs/cyoa.md](docs/cyoa.md).
+
+---
+
+## Content gate
+
+The global gate defaults to `full` (a byte-identical no-op). `reduced`,
+`mature-only`, and `strict` transform every rendered block and tracker prompt.
+Per-character and per-player hard limits are layered on top and always win;
+the global gate can only be as strict as those limits require. See
+[docs/data-schema.md](docs/data-schema.md#content-limits).
+
+---
+
+## Map
+
+The four `NeoTerra*.svg` layers are the authoring source of truth on a
+**2048 × 1536** canvas. `tools/build-map.mjs` extracts districts, bridges, and
+key locations by their `inkscape:label`, derives the bridge graph, merges
+`data/map/overrides.json`, and writes `data/map/*` plus updated location
+bindings. The runtime never parses SVG.
+
+- Canvas: 2048 × 1536, y-down, origin top-left.
+- Leaflet: `L.CRS.Simple` with `toLatLng({x, y}) => L.latLng(-y, x)`.
+- Layer labels, not `sodipodi:docname`/`inkscape:export-filename`, decide layer
+  membership.
+- The base PNG (2017 × 1512) is stretched to the canonical box.
+- Re-run `npm run build:map` after any SVG change. `--check` fails on missing
+  layers, duplicate/empty labels, zero-area geometry, count drift, or stale
+  generated files.
+
+See [docs/map-authoring.md](docs/map-authoring.md).
+
+---
+
+## Data and extensibility
+
+All season-specific content is data:
+
+```
+data/characters/index.json      # generated registry
+data/characters/overrides.json  # authored fixes and multi-actor cards
+data/seasons/index.json         # generated season manifest
+data/seasons/<id>.json          # season definition
+data/locations.json             # named-location lore (2048×1536)
+data/districts.json             # lore districts
+data/factions.json
+data/form-groups.json           # mutually exclusive forms
+data/form-rules.json            # legal transformations
+data/map/*                      # generated geometry + authored overrides
+data/schemas/*.schema.json      # published schemas
+```
+
+To add a season:
+
+1. Drop character cards into `Chars/<Season>/`.
+2. Add `data/seasons/<id>.json` with `id` matching the lowercase folder name.
+3. Run `npm run build:data`. The season appears in the menu without code
+   changes.
+
+To add characters to an existing season, drop the cards into its folder and
+re-run `npm run build:data`. Use the settings panel's **Import character
+cards** drop zone to generate override entries for unusual cards; then merge
+the downloaded file into `data/characters/overrides.json` and rebuild.
+
+See [docs/adding-a-season.md](docs/adding-a-season.md) and
+[docs/data-schema.md](docs/data-schema.md).
+
+---
+
+## Development
+
+```bash
+# Regenerate generated data
+npm run build:data                 # data/characters/index.json + data/seasons/index.json
+npm run build:map                  # data/map/* + data/locations.json bindings
+
+# Validation
+node tools/build-data.mjs --check  # cards, form groups, form rules, seasons, index freshness
+node tools/build-map.mjs --check   # SVG geometry, graph, counts, generated-file freshness
+node tools/map-coords.mjs --check  # named locations, optional draft validation
+node --test tests/*.test.js        # unit and integration tests
+npm run check                      # all of the above + syntax checks + smoke test
+```
+
+`tools/map-coords.mjs` is a **dev-only** fallback that asks a vision model for
+coordinates of unlabeled/new sites. It never writes `data/locations.json`;
+every proposal is human-verified. It requires `DEEPSEEK_API_KEY` for `--draft`.
+
+No runtime npm dependencies are added. Node 20+ is only required for the
+development tools and tests.
+
+---
+
+## World export and import
+
+The settings panel can export the current chat's world as a JSON bundle
+(WorldState, season definition, roster slice, player identity, cast mode) and
+import it into another chat. Import rebinds the state's `chatId` to the target
+chat, preserves every character, beat, relationship, and bad-end record, and
+re-materializes the world book on demand. Export/import does not include
+SillyTavern chat messages.
+
+---
+
+## Known limitations
+
+- V1 ships S1–S4 plus Sandbox. Season 5 has only auxiliary data and refuses
+  entry with a clear message; the data format accepts a real S5 later.
+- The `Others` / NeoHorizon setting is out of scope for V1.
+- Combat is a narrative conflict resolver, not a tactical grid or HP system.
+- No internet image fetching, card art generation, localization, multi-user
+  sync, or plugin marketplace.
+- Browser-only UI features (agent routing to a live SillyTavern connection,
+  map rendering, world-book writes) cannot be exercised by the Node test suite;
+  use the manual checklist in the plan for live QA.
+- Imported character cards are not written to the repository by the browser;
+  override generation is a download-and-merge workflow.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).

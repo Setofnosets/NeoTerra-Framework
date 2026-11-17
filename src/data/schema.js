@@ -50,13 +50,13 @@ function isPosixRelativePath(value) {
     );
 }
 
-function checkCounts(errors, counts, entries, path = 'counts') {
+function checkCounts(errors, counts, entries, seasonIds = SEASON_IDS, path = 'counts') {
     if (!isObject(counts)) {
         add(errors, path, 'counts must be an object');
         return;
     }
 
-    const actual = Object.fromEntries(SEASON_IDS.map((seasonId) => [seasonId, 0]));
+    const actual = Object.fromEntries(seasonIds.map((seasonId) => [seasonId, 0]));
     for (const entry of entries) {
         if (isObject(entry) && Object.hasOwn(actual, entry.seasonId)) {
             actual[entry.seasonId] += 1;
@@ -64,7 +64,7 @@ function checkCounts(errors, counts, entries, path = 'counts') {
     }
     actual.total = entries.length;
 
-    for (const seasonId of SEASON_IDS) {
+    for (const seasonId of seasonIds) {
         if (counts[seasonId] !== actual[seasonId]) {
             add(
                 errors,
@@ -82,10 +82,22 @@ function checkCounts(errors, counts, entries, path = 'counts') {
  * Validate `data/characters/index.json`.
  *
  * @param {unknown} registry
+ * @param {{ seasonIds?: string[] }} [options] discovered season ids
  * @returns {{ ok: boolean, errors: Array<{ path: string, message: string }> }}
  */
-export function validateRegistry(registry) {
+export function validateRegistry(registry, options = {}) {
     const errors = [];
+    const inferred = new Set(SEASON_IDS);
+    if (isObject(registry) && Array.isArray(registry.entries)) {
+        for (const entry of registry.entries) {
+            if (isObject(entry) && typeof entry.seasonId === 'string' && entry.seasonId.length > 0) {
+                inferred.add(entry.seasonId);
+            }
+        }
+    }
+    const seasonIds = Array.isArray(options.seasonIds) && options.seasonIds.length > 0
+        ? [...options.seasonIds]
+        : [...inferred];
 
     if (!isObject(registry)) {
         add(errors, '$', 'registry must be an object');
@@ -149,7 +161,7 @@ export function validateRegistry(registry) {
             byId.set(entry.id, entry);
         }
 
-        if (!SEASON_IDS.includes(entry.seasonId)) {
+        if (!seasonIds.includes(entry.seasonId)) {
             add(errors, `${path}.seasonId`, `unknown season "${String(entry.seasonId)}"`);
         } else if (typeof entry.id === 'string' && !entry.id.startsWith(`${entry.seasonId}.`)) {
             add(errors, `${path}.id`, `id must start with "${entry.seasonId}."`);
@@ -264,7 +276,7 @@ export function validateRegistry(registry) {
         }
     }
 
-    checkCounts(errors, registry.counts, entries);
+    checkCounts(errors, registry.counts, entries, seasonIds);
 
     return result(errors);
 }
@@ -273,10 +285,22 @@ export function validateRegistry(registry) {
  * Validate `data/form-groups.json`.
  *
  * @param {unknown} formGroups
+ * @param {{ seasonIds?: string[] }} [options]
  * @returns {{ ok: boolean, errors: Array<{ path: string, message: string }> }}
  */
-export function validateFormGroups(formGroups) {
+export function validateFormGroups(formGroups, options = {}) {
     const errors = [];
+    const inferred = new Set(SEASON_IDS);
+    if (isObject(formGroups) && Array.isArray(formGroups.groups)) {
+        for (const group of formGroups.groups) {
+            if (isObject(group) && typeof group.seasonId === 'string' && group.seasonId.length > 0) {
+                inferred.add(group.seasonId);
+            }
+        }
+    }
+    const seasonIds = Array.isArray(options.seasonIds) && options.seasonIds.length > 0
+        ? [...options.seasonIds]
+        : [...inferred];
 
     if (!isObject(formGroups)) {
         add(errors, '$', 'form groups must be an object');
@@ -308,7 +332,7 @@ export function validateFormGroups(formGroups) {
             groupIds.add(group.id);
         }
 
-        if (!SEASON_IDS.includes(group.seasonId)) {
+        if (!seasonIds.includes(group.seasonId)) {
             add(errors, `${path}.seasonId`, `unknown season "${String(group.seasonId)}"`);
         } else if (typeof group.id === 'string' && !group.id.startsWith(`${group.seasonId}.`)) {
             add(errors, `${path}.id`, `group id must start with "${group.seasonId}."`);

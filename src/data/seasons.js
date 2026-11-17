@@ -61,10 +61,12 @@ const SEASON_FILES = Object.freeze({
     s5: 's5.aux.json',
 });
 
-const SEASON_URL = (id) => new URL(`../../data/seasons/${SEASON_FILES[id]}`, import.meta.url);
+const SEASON_INDEX_URL = new URL('../../data/seasons/index.json', import.meta.url);
 
 const cache = new Map();
 const inFlight = new Map();
+let seasonIndex = null;
+let seasonIndexInFlight = null;
 
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -103,7 +105,10 @@ export function validateSeasonDefinition(season, context = {}) {
     if (season.schemaVersion !== 1) {
         add(errors, 'schemaVersion', 'must be 1');
     }
-    if (!SEASON_DEFINITION_IDS.includes(season.id)) {
+    const knownIds = Array.isArray(context.seasonIds) && context.seasonIds.length > 0
+        ? context.seasonIds
+        : SEASON_DEFINITION_IDS;
+    if (!knownIds.includes(season.id)) {
         add(errors, 'id', `unknown season id "${String(season.id)}"`);
     }
     for (const field of ['title', 'era', 'premise', 'toneNotes']) {
@@ -626,14 +631,90 @@ export function assertPlayableSeason(season) {
     return season;
 }
 
+function normalizeSeasonIndex(document) {
+    if (!isObject(document) || !Array.isArray(document.seasons)) {
+        throw new Error('data/seasons/index.json must contain a seasons array');
+    }
+    const seen = new Set();
+    return document.seasons.map((entry, index) => {
+        if (!isObject(entry)) {
+            throw new Error(`data/seasons/index.json: seasons[${index}] must be an object`);
+        }
+        const id = seasonIdOf(entry.id);
+        if (!id) {
+            throw new Error(`data/seasons/index.json: seasons[${index}].id must be non-empty`);
+        }
+        if (seen.has(id)) {
+            throw new Error(`data/seasons/index.json: duplicate season id "${id}"`);
+        }
+        seen.add(id);
+        const file = typeof entry.file === 'string'
+            ? entry.file
+            : SEASON_FILES[id] ?? `${id}.json`;
+        if (file.includes('/') || file.includes('\\') || !file.endsWith('.json')) {
+            throw new Error(`data/seasons/index.json: invalid file for season "${id}"`);
+        }
+        return {
+            id,
+            file,
+            playable: entry.playable !== false,
+        };
+    });
+}
+
+/**
+ * Read the generated season manifest.
+ *
+ * The manifest is written by `tools/build-data.mjs` so a new season appears in
+ * the menu after dropping its folder/JSON and regenerating. The hardcoded
+ * fallback keeps older installs working if the manifest cannot be fetched.
+ */
+export async function loadSeasonIndex({ fetchImpl = globalThis.fetch } = {}) {
+    if (seasonIndex) {
+        return seasonIndex;
+    }
+    if (seasonIndexInFlight) {
+        return seasonIndexInFlight;
+    }
+    if (typeof fetchImpl !== 'function') {
+        seasonIndex = SEASON_DEFINITION_IDS.map((id) => ({
+            id,
+            file: SEASON_FILES[id] ?? `${id}.json`,
+            playable: PLAYABLE_SEASON_IDS.includes(id),
+        }));
+        return seasonIndex;
+    }
+    seasonIndexInFlight = (async () => {
+        try {
+            const response = await fetchImpl(SEASON_INDEX_URL.href);
+            if (response && response.ok === false) {
+                throw new Error(`HTTP ${response.status ?? 'unknown'}`);
+            }
+            seasonIndex = normalizeSeasonIndex(await response.json());
+        } catch (error) {
+            seasonIndex = SEASON_DEFINITION_IDS.map((id) => ({
+                id,
+                file: SEASON_FILES[id] ?? `${id}.json`,
+                playable: PLAYABLE_SEASON_IDS.includes(id),
+            }));
+        }
+        return seasonIndex;
+    })().finally(() => {
+        seasonIndexInFlight = null;
+    });
+    return seasonIndexInFlight;
+}
+
 async function fetchSeasonDocument(id, { fetchImpl = globalThis.fetch } = {}) {
-    if (!SEASON_DEFINITION_IDS.includes(id)) {
+    const entries = await loadSeasonIndex({ fetchImpl });
+    const entry = entries.find((candidate) => candidate.id === id);
+    if (!entry) {
         throw new Error(`Unknown season id "${id}"`);
     }
     if (typeof fetchImpl !== 'function') {
         throw new Error('loadSeason: no fetch implementation is available');
     }
-    const url = SEASON_URL(id);
+    const url = new URL(`../../data/seasons/${entry.file}`, import.meta.url);
     const response = await fetchImpl(url.href);
     if (response && response.ok === false) {
         throw new Error(`loadSeason("${id}"): HTTP ${response.status ?? 'unknown'}`);
@@ -677,7 +758,11 @@ export async function loadSeason(id, options = {}) {
             (async () => {
                 const { document } = await fetchSeasonDocument(id, { fetchImpl });
                 const context = await loadContext({ fetchImpl, ...options });
-                const validation = validateSeasonDefinition(document, context);
+                const index = await loadSeasonIndex({ fetchImpl });
+                const validation = validateSeasonDefinition(document, {
+                    ...context,
+                    seasonIds: index.map((entry) => entry.id),
+                });
                 if (!validation.ok) {
                     const details = validation.errors
                         .map((error) => `${error.path}: ${error.message}`)
@@ -700,19 +785,24 @@ export async function loadSeason(id, options = {}) {
  * Load every season definition, including the non-playable auxiliary entry.
  */
 export async function loadSeasonDefinitions(options = {}) {
+    const { fetchImpl = globalThis.fetch } = options;
+    const index = await loadSeasonIndex({ fetchImpl });
     const results = await Promise.all(
-        SEASON_DEFINITION_IDS.map(async (id) => {
-            if (cache.has(id)) {
-                return cache.get(id);
+        index.map(async (entry) => {
+            if (cache.has(entry.id)) {
+                return cache.get(entry.id);
             }
-            const { document } = await fetchSeasonDocument(id, options);
+            const { document } = await fetchSeasonDocument(entry.id, options);
             return document;
         }),
     );
     const context = await loadContext(options);
     const byId = {};
     for (const season of results) {
-        const validation = validateSeasonDefinition(season, context);
+        const validation = validateSeasonDefinition(season, {
+            ...context,
+            seasonIds: index.map((entry) => entry.id),
+        });
         if (!validation.ok) {
             const details = validation.errors
                 .map((error) => `${error.path}: ${error.message}`)
@@ -726,16 +816,17 @@ export async function loadSeasonDefinitions(options = {}) {
 }
 
 /**
- * Entry-menu cards: the six playable entries plus the disabled S5 notice.
+ * Entry-menu cards: every season in the generated manifest, including the
+ * disabled auxiliary notice.
  */
 export async function getSeasonEntryMenu(options = {}) {
     const seasons = await loadSeasonDefinitions(options);
-    return Object.values(seasons)
-        .filter((season) => PLAYABLE_SEASON_IDS.includes(season.id) || season.playable === false)
-        .map(toEntryMenuCard);
+    return Object.values(seasons).map(toEntryMenuCard);
 }
 
 export function clearSeasonsCache() {
     cache.clear();
     inFlight.clear();
+    seasonIndex = null;
+    seasonIndexInFlight = null;
 }

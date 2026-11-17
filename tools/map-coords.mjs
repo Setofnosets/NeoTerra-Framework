@@ -14,7 +14,7 @@
  *   DEEPSEEK_API_KEY=... node tools/map-coords.mjs --draft [--model deepseek-vl2]
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -67,6 +67,62 @@ function checkLocations(document) {
     console.log(
         `OK: ${document.locations.length} locations inside ${image.width}x${image.height} (${image.path})`,
     );
+}
+
+/**
+ * Validate a draft produced by `--draft` (or hand-edited) without touching the
+ * canonical `data/locations.json`.
+ *
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function validateDraft(draft, document) {
+    const errors = [];
+    const warnings = [];
+    if (!draft || typeof draft !== 'object' || !Array.isArray(draft.locations)) {
+        return { ok: false, errors: ['draft must contain a locations array'], warnings };
+    }
+    const image = draft.image && typeof draft.image === 'object' ? draft.image : document.image;
+    const known = new Set((document.locations ?? []).map((location) => location.id));
+    const seen = new Set();
+    for (const [index, location] of draft.locations.entries()) {
+        if (!location || typeof location !== 'object') {
+            errors.push(`locations[${index}] must be an object`);
+            continue;
+        }
+        if (typeof location.id !== 'string' || location.id.length === 0) {
+            errors.push(`locations[${index}].id must be a non-empty string`);
+            continue;
+        }
+        if (!known.has(location.id)) {
+            errors.push(`locations[${index}].id "${location.id}" is not in locations.json`);
+        }
+        if (seen.has(location.id)) {
+            errors.push(`duplicate draft location "${location.id}"`);
+        }
+        seen.add(location.id);
+        if (!Number.isInteger(location.x) || !Number.isInteger(location.y)) {
+            errors.push(`"${location.id}" needs integer x/y coordinates`);
+        } else if (!isCoordinateInImage(location.x, location.y, image)) {
+            errors.push(`"${location.id}" sits outside the ${image.width}x${image.height} canvas`);
+        }
+    }
+    for (const id of known) {
+        if (!seen.has(id)) {
+            warnings.push(`draft is missing location "${id}"; it will keep its authored coordinates`);
+        }
+    }
+    if (draft.proposals !== undefined) {
+        if (!draft.proposals || typeof draft.proposals !== 'object' || Array.isArray(draft.proposals)) {
+            errors.push('draft.proposals must be an object keyed by location id');
+        } else {
+            for (const id of Object.keys(draft.proposals)) {
+                if (!known.has(id)) {
+                    warnings.push(`proposal for unknown location "${id}" is ignored`);
+                }
+            }
+        }
+    }
+    return { ok: errors.length === 0, errors, warnings };
 }
 
 async function requestDraft(document, model) {
@@ -148,13 +204,55 @@ async function main() {
         checkLocations(document);
     }
     if (!args.draft) {
+        if (args.check && existsSync(DRAFT_PATH)) {
+            const draft = JSON.parse(readFileSync(DRAFT_PATH, 'utf8'));
+            const validation = validateDraft(draft, document);
+            for (const warning of validation.warnings) {
+                console.log(`  warning: ${warning}`);
+            }
+            if (!validation.ok) {
+                for (const error of validation.errors) {
+                    console.error(`  ${error}`);
+                }
+                throw new Error(`locations.draft.json failed validation with ${validation.errors.length} error(s)`);
+            }
+            console.log(
+                `Draft OK: ${draft.locations.length} locations (${Object.keys(draft.proposals ?? {}).length} proposals).`,
+            );
+        }
         return;
     }
 
     console.log(`Requesting coordinates from ${args.model}…`);
     const text = await requestDraft(document, args.model);
     const parsed = extractJson(text);
-    const proposals = Array.isArray(parsed?.locations) ? parsed.locations : [];
+    const rawProposals = Array.isArray(parsed?.locations) ? parsed.locations : [];
+    const known = new Set((document.locations ?? []).map((location) => location.id));
+    const seen = new Set();
+    const proposals = [];
+    for (const proposal of rawProposals) {
+        if (!proposal || typeof proposal !== 'object') {
+            continue;
+        }
+        if (typeof proposal.id !== 'string' || !known.has(proposal.id)) {
+            console.warn(`Ignoring proposal for unknown location "${String(proposal?.id)}"`);
+            continue;
+        }
+        if (!Number.isInteger(proposal.x) || !Number.isInteger(proposal.y)) {
+            console.warn(`Ignoring "${proposal.id}": coordinates must be integers`);
+            continue;
+        }
+        if (!isCoordinateInImage(proposal.x, proposal.y, document.image)) {
+            console.warn(`Ignoring "${proposal.id}": coordinate falls outside the map`);
+            continue;
+        }
+        if (seen.has(proposal.id)) {
+            console.warn(`Ignoring duplicate proposal for "${proposal.id}"`);
+            continue;
+        }
+        seen.add(proposal.id);
+        proposals.push(proposal);
+    }
 
     const byId = new Map(proposals.map((proposal) => [proposal.id, proposal]));
     const draft = {
@@ -185,6 +283,14 @@ async function main() {
             ]),
         ),
     };
+
+    const validation = validateDraft(draft, document);
+    if (!validation.ok) {
+        for (const error of validation.errors) {
+            console.error(`  ${error}`);
+        }
+        throw new Error(`generated draft failed validation with ${validation.errors.length} error(s)`);
+    }
 
     writeFileSync(DRAFT_PATH, `${JSON.stringify(draft, null, 2)}\n`, 'utf8');
     console.log(`Wrote ${DRAFT_PATH} (${proposals.length} proposals). Human-verify before commit.`);

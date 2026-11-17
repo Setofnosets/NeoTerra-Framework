@@ -60,7 +60,7 @@ Current version of the map is NeoTerra.png.
 - Extensive settings
 - Map, characters, seasons should be extensible as there will be new characters and seasons, and potentially new locations outside of the main city
 ### Notes
-- The other extensions at C:\Users\locua\OneDrive\Escritorio\KI\extensions may serve as a possible reference for some of these systems
+- The other extensions in the sibling `extensions` directory may serve as a possible reference for some of these systems
 - Please make proposals as to other additionas that may be necessary, or could provide interesting gameplay/experiences.
     - Same goes for this proposal and what could change for a better, more robust system.
 - The Chars folder contains json files for many of the current characters divided into seasons as well as lorebooks (Characters can also be png files but json is easir to read for AI models and as such this implementation) The Others folder contains a different setting, so it's saved for a second version.
