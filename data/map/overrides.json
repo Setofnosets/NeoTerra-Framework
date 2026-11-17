@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "canvas": {
+    "width": 2048,
+    "height": 1536
+  },
+  "note": "Authored names, parent districts, factions, and marker bindings for the generic Inkscape labels. Edit this file, never the SVGs.",
+  "regions": {
+    "Center": { "districtId": "downtown", "name": "Center" },
+    "Airport": { "districtId": "outskirts", "name": "Neo Terra International Airport" },
+    "MajorDockA": { "districtId": "harbor", "name": "Major Dock A" },
+    "ResidentialDistrictA": { "districtId": "maple-heights" },
+    "ResidentialDistrictB": { "districtId": "maple-heights" },
+    "ResidentialDistrictC": { "districtId": "maple-heights" },
+    "HighriseDistrictA": { "districtId": "downtown" },
+    "HighriseDistrictB": { "districtId": "downtown" },
+    "HighriseDistrictC": { "districtId": "downtown" },
+    "HighriseDistrictD": { "districtId": "fashion-row" },
+    "ResidentialDistrictD": { "districtId": "maple-heights" },
+    "SmallAirport": { "districtId": "outskirts" },
+    "WarehousesA": { "districtId": "industrial-belt" },
+    "SlumA": { "districtId": "industrial-belt" },
+    "SlumB": { "districtId": "industrial-belt" },
+    "MajorDockB": { "districtId": "harbor", "name": "Major Dock B" },
+    "IndustrialA": { "districtId": "industrial-belt" },
+    "HighClassResidentialA": { "districtId": "old-hills" },
+    "HighClassResidentialB": { "districtId": "old-hills" },
+    "HighClassResidentialC": { "districtId": "old-hills" },
+    "HighClassResidentialD": { "districtId": "old-hills" },
+    "IslandA": { "districtId": "coast" },
+    "IslandB": { "districtId": "coast" },
+    "IslandC": { "districtId": "coast" },
+    "IndustrialB": { "districtId": "industrial-belt" },
+    "LakePark": { "districtId": "old-hills", "name": "Lake Park" },
+    "HighriseDistrictE": { "districtId": "fashion-row" },
+    "DockC": { "districtId": "harbor" },
+    "UpperMiddleResidentialA": { "districtId": "maple-heights" },
+    "River": { "districtId": "coast", "name": "Neo Terra River" },
+    "Bay": { "districtId": "coast", "name": "Neo Terra Bay" },
+    "UndevelopedForestMountains": { "districtId": "old-hills" },
+    "ParkA": { "districtId": "maple-heights" },
+    "ParkB": { "districtId": "maple-heights" },
+    "ParkC": { "districtId": "old-hills" },
+    "ParkD": { "districtId": "old-hills" }
+  },
+  "bridges": {
+    "BridgeA": { "name": "Center Bridge A", "status": "open" },
+    "BridgeB": { "name": "Center Bridge B", "status": "open" },
+    "BridgeC": { "name": "West Approach", "status": "open" },
+    "BridgeD": { "name": "Fashion Row Crossing", "status": "open" },
+    "BridgeE": { "name": "South Bay Span", "status": "open" },
+    "BridgeF": { "name": "Airport Link", "status": "open" },
+    "BridgeG": { "name": "Industrial Overpass", "status": "open" },
+    "BridgeH": { "name": "Old Hills Viaduct", "status": "open" },
+    "BridgeI": { "name": "Harbor Lift", "status": "open" },
+    "BridgeJ": { "name": "North Gate Bridge", "status": "open" },
+    "BridgeK": { "name": "Highland Crossing", "status": "open" },
+    "BridgeL": { "name": "Forest Road Bridge", "status": "open" }
+  },
+  "keyLocations": {
+    "BigOfficeA": {
+      "locationId": null,
+      "name": "Unassigned Office A",
+      "districtId": "downtown"
+    },
+    "BigOfficeB": {
+      "locationId": "petrabyte-tower",
+      "name": "PetraByte Tower",
+      "districtId": "downtown"
+    },
+    "BigOfficeC": {
+      "locationId": "clarity-hq",
+      "name": "Clarity Incorporated HQ",
+      "districtId": "downtown"
+    },
+    "BigOfficeD": {
+      "locationId": "corvus-corp",
+      "name": "Corvus Corp Atelier",
+      "districtId": "fashion-row"
+    },
+    "CityCore": {
+      "locationId": "central-plaza",
+      "name": "Central Plaza",
+      "districtId": "downtown"
+    },
+    "Warehouse": {
+      "locationId": null,
+      "name": "East Warehouse",
+      "districtId": "industrial-belt"
+    },
+    "HomeA": {
+      "locationId": "maple-heights",
+      "name": "Maple Heights",
+      "districtId": "maple-heights"
+    },
+    "RichHomeA": {
+      "locationId": "matic-estate",
+      "name": "Matic Estate",
+      "districtId": "maple-heights"
+    },
+    "SlumsSafehouse": {
+      "locationId": null,
+      "name": "Slums Safehouse",
+      "districtId": "industrial-belt"
+    },
+    "AirportTerminal": {
+      "locationId": null,
+      "name": "Neo Terra International Airport",
+      "districtId": "outskirts"
+    },
+    "LakeParkIsland": {
+      "locationId": null,
+      "name": "Lake Park Island",
+      "districtId": "old-hills"
+    },
+    "BiggestDock": {
+      "locationId": "neon-docks",
+      "name": "Neon Docks",
+      "districtId": "harbor"
+    },
+    "HomeB": {
+      "locationId": null,
+      "name": "Unnamed Residence B",
+      "districtId": "maple-heights"
+    },
+    "HomeC": {
+      "locationId": null,
+      "name": "Unnamed Residence C",
+      "districtId": "old-hills"
+    },
+    "HomeD": {
+      "locationId": null,
+      "name": "Unnamed Residence D",
+      "districtId": "industrial-belt"
+    },
+    "HomeE": {
+      "locationId": null,
+      "name": "Unnamed Residence E",
+      "districtId": "maple-heights"
+    },
+    "RichHomeB": {
+      "locationId": null,
+      "name": "Unnamed Rich Residence B",
+      "districtId": "old-hills"
+    },
+    "RichHomeC": {
+      "locationId": null,
+      "name": "Unnamed Rich Residence C",
+      "districtId": "old-hills"
+    },
+    "Stadium": {
+      "locationId": null,
+      "name": "Neo Terra Stadium",
+      "districtId": "civic-center"
+    },
+    "HomeF": {
+      "locationId": null,
+      "name": "Unnamed Residence F",
+      "districtId": "downtown"
+    },
+    "IndustrialParkA": {
+      "locationId": "rust-yard",
+      "name": "Rust Yard",
+      "districtId": "industrial-belt"
+    },
+    "StadiumB": {
+      "locationId": null,
+      "name": "Old Stadium Grounds",
+      "districtId": "maple-heights"
+    }
+  }
+}

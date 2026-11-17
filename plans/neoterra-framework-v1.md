@@ -3,13 +3,13 @@
 ## Meta
 - **Slug:** neoterra-framework-v1
 - **Status:** in progress — Steps 1–6 complete
-- **Date:** 2026-11-16
+- **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
 - **Repo:** `https://github.com/Setofnosets/NeoTerra-Framework.git` (private/empty at planning time; configured as `origin`)
 - **License:** MIT
 - **Minimum SillyTavern:** `1.19.0`
-- **Reference material:** `Chars/` (cards + lorebooks), `NeoTerra.png` (2017×1512), sibling extensions `Combat-Multihog` and `silly-teyvat-dist`
+- **Reference material:** `Chars/` (cards + lorebooks), `NeoTerra.png` (2017×1512) and `NeoTerra*.svg` (2048×1536 layer authoring), sibling extensions `Combat-Multihog` and `silly-teyvat-dist`
 
 ## Summary
 
@@ -19,6 +19,7 @@
 - **Player identity:** the player is a custom persona by default, and may optionally **play as a canon character** (via a "Play as" action in the Character Codex/registry). Play-as is restricted to the **current season roster**; Sandbox allows any registry character, and any non-roster/manual/imported character carries a persistent **"non-canon"** warning with canon beats disabled. A player-controlled canon character is treated as the player for narration and tracking, is removed from the NPC cast pool, and is excluded from group-chat speaker selection. `S1Dark` ships with this as its intended mode (player = Carol Fate / Bleeding Heart, the season's villain).
 - **Canon beats:** each season carries a **Canon Beat Ledger** of major milestones with flexible completion conditions. The Storyline Tracker must land the *function* of each beat ("in some form") while allowing divergence in who, where, when, and how — including early villain defeat or retargeted heroes. Beats have **soft deadlines with escalating consequences**; the final deadline for the season's main threat is **complete villain victory** (a legitimate, recorded ending).
 - **Villain victory is playable, not a dead end.** When the final deadline passes, the threat wins: a ~5-paragraph epilogue describes the victory, then the player chooses to continue as a **resistance** or to **join the villain** (defeat the resistance, conquer further districts/cities, or serve as a brainwashed enforcer). Both paths rewrite the world into a post-victory arc.
+- **SVG-authored map.** The four `NeoTerra*.svg` layers are the authoring source of truth. A build tool extracts the 36 districts, 12 bridges, and 22 key locations into GeoJSON + a location registry, and Leaflet renders them as interactive geometry rather than a flat image. The bridge graph drives travel; district polygons drive faction control, fog, and status overlays.
 - **Character bad ends are tracked (opt-in).** Death, identity loss, autonomy loss, permanent corruption, imprisonment, and similar terminal states are recorded with a short epilogue and an editable tracking prompt. The player may continue as the bad-ended character (when narratively possible) or switch to someone else; the record persists for consistency.
 - **Optional CYOA mode:** configurable choice buttons after each assistant turn. Default is 4 context-derived choices (labels up to **100 characters**), with customizable count, theme, and content mix. Off by default; clicking a choice sends it as the player's message. A **second, independent setting** controls tactical choices during combat.
 - **Content gate:** an optional global violence/explicitness reducer, **disabled by default**, plus per-character and per-player limits.
@@ -28,10 +29,25 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- Repo contains only `start.md`, `NeoTerra.png`, `Chars/`, and a bare `.git`. **No extension scaffold, no `manifest.json`, no `package.json`, no code.**
+- As of this update, Steps 1–5 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. **Step 6 (context renderer/budget/interceptor) is in progress.**
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
-- No location/node metadata, coordinates, season ordering, faction registry, or transformation mapping exists anywhere. All of that must be **authored**, not extracted.
-- `.git` is local-only (`repositoryformatversion = 0`, no remotes).
+- Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
+- `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
+
+### Map assets (added while Step 6 is in progress)
+- Four SVGs now exist at the repo root, all **2048×1536** (`viewBox="0 0 2048 1536"`):
+  - `NeoTerra.svg` — combined reference: embedded map image (`layer3`) + `Districts` (`g1`) + `Bridges` (`layer4`) + `KeyLocations` (`layer2`), all visible.
+  - `NeoTerra_Districts.svg` — same canvas, image hidden, only `Districts` visible. Transparent overlay.
+  - `NeoTerra_Bridges.svg` — same canvas, image hidden, only `Bridges` visible. Transparent overlay.
+  - `NeoTerra_Locs.svg` — same canvas, image hidden, only `KeyLocations` visible. Transparent overlay.
+- Counts: **36 district shapes**, **12 bridges**, **22 key locations**. Labels exist **only** in `inkscape:label`; there is no `<text>` and no `<title>`/`<desc>`.
+- Geometry: districts are `<ellipse>` and `<path>` polygons; bridges are `<rect>` and thin `<path>` slivers; key locations are 5-point `<path>` stars with explicit `sodipodi:cx` / `sodipodi:cy`.
+- Labels are generic placeholders (`Center`, `ResidentialDistrictA`, `BridgeA`, `BigOfficeA`, `HomeA`, `SlumA`), not lore names. No faction, status, description, or parent-district metadata exists in the SVGs.
+- Per-element colors and `opacity:0.423` are inline; there is no shared CSS palette.
+- Inkscape export metadata is cross-wired (`NeoTerra_Districts.svg` says it exports to `NeoTerra_Bridges.svg`, etc.). **Layer labels are the source of truth, not `sodipodi:docname` / `inkscape:export-filename`.**
+- Canvas mismatch: the PNG is **2017×1512**, the SVGs are **2048×1536**. The SVGs embed the PNG at 2048×1536 with `preserveAspectRatio="none"`, so SVG coordinates are already stretched. The plan standardizes on **2048×1536** and stretches the base PNG by ~0.15% to match.
+- Existing `data/locations.json` has **18 named lore locations** on a 2017×1512 image with hand-authored `x/y` and arbitrary `connections`. It predates the SVGs and has been scaled to the 2048×1536 space and given `districtId`/`mapRef`/`virtual` bindings in the Step 3 amendment; Step 13 fills derived `regionId`s and verifies bridge/region alignment.
+- `tools/map-coords.mjs` (DeepSeek multimodal coordinate spike) already exists. With SVG labels providing exact positions, it is now a **fallback** for unlabeled or newly drawn sites, not the primary authoring path.
 
 ### Character card data (from `Chars/`)
 - 66 season cards + 4 "Others" cards are `spec: "chara_card_v3"` / `3.0`; 8 `Others/NeoHorizon` cards are `chara_card_v2` / `2.0`.
@@ -263,14 +279,114 @@ Cadence is configurable; default = State Tracker every assistant turn, Storyline
 
 ### 6. Map
 
-- **Implementation:** Leaflet with `L.CRS.Simple`, `imageOverlay('NeoTerra.png')`, standard pan/zoom, marker clustering optional. Use only Leaflet's public API.
+The map has three inputs: the SVG layer art, the existing named-location lore, and `WorldState`. The SVGs are the **authoring source of truth for geometry**; the lore registry is the source of truth for names, descriptions, and factions; `WorldState` supplies live status, control, and occupancy.
+
+#### 6.1 Authoring layers and canvas
+- `NeoTerra.svg` is the combined reference at **2048×1536**: embedded image (`layer3`), `Districts` (`g1`), `Bridges` (`layer4`), `KeyLocations` (`layer2`).
+- `NeoTerra_Districts.svg`, `NeoTerra_Bridges.svg`, and `NeoTerra_Locs.svg` are transparent single-layer exports (image hidden). They are useful for visual diffing and as a fallback overlay, but **not** the runtime renderer.
+- Canonical map space is **2048×1536**, y-down, origin top-left. The PNG (2017×1512) is stretched to that box; the ~0.15% scale difference is imperceptible and keeps every SVG coordinate exact.
+- Leaflet uses `L.CRS.Simple` with the map bounds `[[-1536, 0], [0, 2048]]` and a single conversion helper `toLatLng({x, y}) => L.latLng(-y, x)`. All data stays in y-down SVG coordinates; only the renderer converts. Never store Leaflet lat/lng in `WorldState`.
+- Layer visibility is determined by the ancestor group label (`Districts`, `Bridges`, `KeyLocations`), **not** by `sodipodi:docname`/`inkscape:export-filename`, which are cross-wired in the current files.
+
+#### 6.2 Build pipeline (`tools/build-map.mjs`)
+- Parse each element under the three layer groups. Read `inkscape:label`, `id`, inline `fill`, and geometry.
+- Shapes:
+  - `ellipse` → polygon approximation from `cx/cy/rx/ry`.
+  - `rect` → polygon from `x/y/width/height`.
+  - `path` → parse `d` (absolute/relative `m l h v c s q t a z`) into polygon(s).
+  - key-location stars → point from `sodipodi:cx/cy` (fall back to path bbox center).
+  - bridge slivers → polygon plus a centerline; derive two endpoints from the longest axis / first-last path points.
+- Compute per-feature `bbox`, `centroid`, `area`, and `sourceColor`. Reject zero-area or duplicate-label features.
+- Infer a coarse `kind` from the label prefix (`Residential*`, `Highrise*`, `Industrial*`, `Slum*`, `Park*`, `Dock*`, `Airport`, `Island*`, `River`, `Bay`, `Forest*`, `BigOffice*`, `Home*`, `RichHome*`, `Stadium*`, `Warehouse*`) and leave the rest `unknown`.
+- Auto-derive bridge connections: point-in-polygon or nearest-region lookup for both endpoints; store `connects: [regionId, regionId]` and `length`.
+- Auto-derive each key location's `regionId` by point-in-polygon; if none, nearest region within a threshold plus a warning.
+- Emit:
+  - `data/map/map.json` — schema version, source files, canvas size, layer metadata, extraction timestamp, counts.
+  - `data/map/regions.geojson` — 36 district Features with `id`, `label`, `kind`, `sourceColor`, `centroid`, `bbox`.
+  - `data/map/bridges.geojson` — 12 bridge Features with `connects`, `endpoints`, `length`, `sourceColor`.
+  - `data/map/key-locations.json` — 22 point features with `id`, `label`, `x`, `y`, `regionId`, `kind`.
+  - `data/map/report.json` — duplicate labels, unmapped features, bridges with no district, key locations with no region, area outliers.
+- `--check` fails on unparsable geometry, duplicate IDs, missing layers, or count drift from the expected 36/12/22 baseline (counts are configurable in `map.json`). `--report` prints a human-readable diff.
+- The runtime **never parses SVG**. It consumes the generated JSON/GeoJSON. Re-run the tool whenever the SVGs change.
+- Dev-only SVG path parsing may use a small pinned parser (`svg-path-parser` + a bbox helper) or a browser extraction page. Runtime dependencies remain zero; any dev dependency is optional and documented.
+
+#### 6.3 Merge with the named-location registry
+- `data/locations.json` remains the canonical **lore registry** (18 named locations). It gains:
+  - `mapRef`: `{ layer: 'keyLocation'|'region', id: 'key:big-office-a' }`
+  - `regionId` (derived district)
+  - `districtId` (canonical lore district, e.g. `downtown`, `harbor`)
+  - `x`/`y` in **2048×1536** space, derived from the marker centroid (or manual for virtual nodes)
+  - `travel`: graph metadata (`walk`, `bridge`, `flight`, `secret`) instead of the current arbitrary `connections`
+- Migration rule: for every existing named location, pick the **nearest key-location marker of a matching kind**, then human-confirm the semantic fit; recompute `x/y` from the marker centroid; validate `regionId`; preserve the existing `id` so seasons/codex references keep working. "Nearest" alone is not the rule: a corporate tower belongs at an office marker, not whichever home happens to be adjacent. Locations with no semantically plausible marker (e.g. `old-subway`, `bcp-facility`, the casino, the hospital) become `virtual: true` with manual coordinates and a warning. The Step 3 amendment already applied these bindings; Step 13 fills the derived `regionId`s.
+- Generic SVG labels become authored entries via `data/map/overrides.json`:
+  - `BigOfficeA` → "PetraByte Tower" or "Clarity HQ" (human decision, not guessed).
+  - `CityCore` → "Central Plaza".
+  - `HomeA`/`RichHomeA` → named residences or "Unnamed Residence".
+  - Unmapped labels appear as "Unnamed site" and are editable in the map panel.
+- Canonical lore districts are authored in `data/districts.json` (`downtown`, `harbor`, `maple-heights`, `fashion-row`, `civic-center`, `industrial-belt`, `coast`, `old-hills`, `outskirts`, `underground`). Each SVG region maps to one `districtId`; several regions may share a district. `underground` is virtual (no polygon). `civic-center` has no dedicated polygon; it is a lore district whose facilities are grouped from key locations, and a key-location override's `districtId` takes precedence over the polygon-derived region for that marker. The same override precedence applies to any future district without a polygon.
+- Season definitions continue to reference named location IDs, not SVG labels.
+
+#### 6.3.1 Map data model (generated + authored)
+
+```
+RegionFeature {            // data/map/regions.geojson
+  id, label, layer: 'district',
+  kind: 'residential'|'highrise'|'industrial'|'slum'|'park'|'dock'|'airport'|'island'|'water'|'wilderness'|'center'|'unknown',
+  sourceColor, geometry: GeoJSON.Polygon,
+  centroid: { x, y }, bbox: [minX, minY, maxX, maxY],
+  districtId?, factionId?, status?        // from overrides + WorldState
+}
+
+BridgeFeature {            // data/map/bridges.geojson
+  id, label, layer: 'bridge',
+  geometry: GeoJSON.Polygon, centerline: [{x,y}, ...],
+  endpoints: [{x,y},{x,y}], connects: [regionId, regionId],
+  length, status: 'open'|'contested'|'blocked'|'destroyed'
+}
+
+KeyLocation {              // data/map/key-locations.json
+  id, label, layer: 'keyLocation',
+  kind: 'office'|'home'|'safehouse'|'terminal'|'dock'|'stadium'|'park'|'industrial'|'unknown',
+  x, y, regionId, locationId?
+}
+
+NamedLocation {            // data/locations.json (authored, migrated)
+  id, name, description, kind, districtId, regionId,
+  mapRef?: { layer: 'keyLocation'|'region', id },
+  x, y,                    // 2048×1536
+  travel: ['walk'|'bridge'|'flight'|'secret'],
+  connections: [locationId],   // derived + curated exceptions
+  virtual?: boolean
+}
+```
+
+
+- Base: `imageOverlay('NeoTerra.png')` at the 2048×1536 bounds, at low opacity or under a dark theme tint.
+- Districts: `L.polygon` per Feature, styled by `sourceColor` with a theme overlay; hover brightens, selection outlines, faction control adds a border/pattern. Optional permanent labels at centroids.
+- Bridges: `L.polyline`/thin polygon; statuses `open`, `contested`, `blocked`, `destroyed` drive color/dash. Clicking opens bridge details and "Travel" if both ends are reachable.
+- Key locations and named locations: `L.circleMarker`/`divIcon`; named locations take precedence, generic markers are dimmed or hidden when unmapped. Clusters optional.
+- Layer toggles: **Districts**, **Bridges**, **Key locations**, **Named locations**, **Labels**, **Fog**. Persist per user, default all on.
+- Submenu: name, type, parent district, description, controlling faction, live status, present characters, recent events, and "Travel" (disabled during combat). Districts show faction influence and key locations inside; bridges show both endpoints and blockade state.
+- Travel is graph-validated (see 6.5), not straight-line distance.
+- Fog of war: unknown regions/bridges hide labels and details until visited or revealed.
+
+#### 6.5 Travel graph
+- Nodes: regions (districts/neighborhoods) and named locations inside them.
+- Edges: bridges connect regions; named locations connect to their region; virtual locations (subway, underground) connect via authored `travel` edges.
+- Pathfinding: shortest path over open bridges; blocked/destroyed bridges force a detour or reject travel. Flight/teleport/swim abilities can bypass with a cost or check.
+- Same-region travel is a short hop; cross-region travel advances in-game time proportional to path length.
+- The Storyline Tracker receives `{type:'travel', from, to, path, bridges}` and can update bridge/location status, ambushes, and faction response.
+
+#### 6.6 Editability and fallbacks
+- Node editor edits **overrides**, never the SVGs: rename, describe, assign faction, set status, move a marker (`x/y` in 2048×1536), add a node (`mapRef: null`), delete an override, reset to defaults. Export/import overrides globally.
+- Optional per-chat map overrides for a specific timeline (e.g. a destroyed bridge) live in `WorldState.locations`, not in the global data files.
+- If `build-map.mjs` output is missing or invalid, the map falls back to a single `NeoTerra.svg` image overlay plus `locations.json` markers. The core UI still works, but districts/bridges lose interactivity.
+- The DeepSeek coordinate spike is only for **unlabeled** or newly drawn sites; SVG-labeled features never need it.
+
+#### 6.7 Leaflet packaging
+- **Implementation:** Leaflet with `L.CRS.Simple`, standard pan/zoom, marker clustering optional. Use only Leaflet's public API.
 - **Vendored Leaflet, explained:** Leaflet normally arrives via a CDN, a bundler, or a global `L` from another extension. All three are bad fits here: CDN breaks offline/private installs, a bundler adds a build step to a repo that must load directly as a third-party extension, and borrowing another extension's global `L` creates a hidden dependency. Instead we copy Leaflet's `dist/leaflet.js`, `dist/leaflet.css`, and `dist/images/*` into `vendor/leaflet/`, pin the exact version already proven in `silly-teyvat-dist`, and keep `vendor/leaflet/LICENSE` + `vendor/leaflet/VERSION`. The extension then injects those local assets itself, so the map works with no network, no npm install, and no other extension installed. We never patch the vendored files; upgrades are a deliberate copy-and-diff.
-- **Fallback if vendoring is rejected:** a minimal SVG/canvas pan-zoom image viewer is feasible for the base map, but Leaflet is preferred for marker/tooltip ergonomics and touch support. This is a fallback, not the plan.
-- **Node model:** `{ id, name, description, x, y, district, kind, factionId, capacity, defaultStatus, tags[] }` in `data/locations.json`, pixel coordinates on the 2017×1512 image.
-- **Interaction:** click node → submenu (name, description, present characters, status, faction control, "Travel"). Travel disabled while `scene.combat` exists or `inCombat`.
-- **Travel flow:** validate adjacency/allowed travel → advance time → run Storyline Tracker with `{type:'travel'}` → update character/location state → generate a location intro through the narrator → optionally introduce present characters.
-- **Top overlay:** active factions + goals, main threat(s) with progress meters, latest actions, optional newspaper headlines.
-- **Editability:** node add/edit/delete and "reset to default" persisted per chat (overrides) with a global default export. Optional fog-of-war for undiscovered nodes.
+- **Fallback if vendoring is rejected:** a minimal SVG/canvas pan-zoom image viewer is feasible for the base map, but Leaflet is preferred for polygon/marker ergonomics and touch support. This is a fallback, not the plan.
 
 ### 7. Combat
 
@@ -305,7 +421,7 @@ Cadence is configurable; default = State Tracker every assistant turn, Storyline
 - Everything season-specific is data: `seasons/*.json`, `locations.json`, `factions.json`, `form-groups.json`, `form-rules.json`.
 - `tools/build-data.mjs` regenerates `data/characters/index.json` from `Chars/` plus `data/characters/overrides.json`; `--check` fails CI on schema drift.
 - Add a season by dropping a folder and one season JSON; add characters by dropping cards and re-running the tool. A drag-drop importer is a V1.1 stretch.
-- **Map coordinate authoring:** coordinates are authored manually, but the plan includes an implementation-time spike to accelerate this with a multimodal model: a dev-only script crops `NeoTerra.png` into labeled tiles, asks a vision-capable **DeepSeek** model to locate named landmarks and propose pixel coordinates, and emits a draft `locations.json`. **Every proposed coordinate is human-verified before commit**; the script is a dev tool, never a runtime dependency. Fallback is a click-to-place node editor in the map panel (Steps 13/15).
+- **Map authoring:** the SVGs are the geometry source. `tools/build-map.mjs` extracts labels/geometry into `data/map/*`; humans map generic labels to lore names/factions via `data/map/overrides.json`. Adding a district/bridge/key location means drawing it in Inkscape with a unique `inkscape:label`, re-running `build-map --check`, then filling in the override. The DeepSeek spike (`tools/map-coords.mjs`) remains only for **unlabeled/new** sites; every proposed coordinate is human-verified. A click-to-place editor handles virtual nodes (Steps 13/15).
 - **S5 forward compatibility:** `tools/build-data.mjs` and the season loader must accept `NeoTerra-Season5(EnvyArc)Auxiliary.json` as an auxiliary book without treating it as a playable season. A real S5 later needs only a folder + season JSON.
 
 ## File Layout (target)
@@ -321,21 +437,33 @@ NeoTerra-Framework/
   CHANGELOG.md
   .gitignore
   NeoTerra.png
+  NeoTerra.svg
+  NeoTerra_Districts.svg
+  NeoTerra_Bridges.svg
+  NeoTerra_Locs.svg
   data/
     characters/index.json
     characters/overrides.json
     seasons/{s1,s1dark,s2,s3,s4,sandbox}.json
     seasons/s5.aux.json            # metadata only; not playable in V1
-    locations.json
+    locations.json                 # authored lore registry; mapRef points into data/map
+    districts.json                 # canonical lore districts
     factions.json
     form-groups.json
     form-rules.json
+    map/
+      map.json                     # generated canvas/layer/count metadata
+      regions.geojson              # generated from NeoTerra_Districts.svg
+      bridges.geojson              # generated from NeoTerra_Bridges.svg
+      key-locations.json           # generated from NeoTerra_Locs.svg
+      overrides.json               # authored names/descriptions/factions/parent districts
+      report.json                  # generated extraction warnings
     schemas/*.schema.json
-  tools/{build-data.mjs,map-coords.mjs}
+  tools/{build-data.mjs,build-map.mjs,map-coords.mjs}
   vendor/leaflet/{leaflet.js,leaflet.css,images/*,LICENSE,VERSION}
   src/
     core/{constants,settings,defaults,migrations,logger,events,chat-affinity,wal,content-gate}.js
-    data/{registry,forms,seasons,locations,factions,beats,schema}.js
+    data/{registry,forms,seasons,locations,factions,beats,map,schema}.js
     state/{world-state,reducer,store,selectors,migrations}.js
     agents/{client,runner,prompts,architect,storyline,state-tracker,cast-director,lore,auditor,epilogue,choices,bad-end}.js
     context/{renderer,budget,interceptor,worldbook}.js
@@ -365,9 +493,9 @@ NeoTerra-Framework/
 - [ ] Step 10 — Player State Tracker and player panel
 - [ ] Step 11 — Bad-end states and continuation (opt-in)
 - [ ] Step 12 — Lore Agent, relationships, and lorebook writes
-- [ ] Step 13 — City map component and location submenu
+- [ ] Step 13 — SVG map pipeline and city map component
 - [ ] Step 14 — Travel flow and location intro
-- [ ] Step 15 — World overlay: factions, threats, headlines, node editor
+- [ ] Step 15 — World overlay: factions, threats, headlines, district/bridge editor
 - [ ] Step 16 — Villain-victory epilogue and post-victory play
 - [ ] Step 17 — Optional CYOA choices mode (exploration + tactical combat)
 - [ ] Step 18 — Character Codex, settings surface, and theme polish
@@ -395,11 +523,12 @@ NeoTerra-Framework/
 - **Commit sketch:** `feat(data): build character/form registry from Chars`
 
 ### Step 3 — Season, faction, and location definitions
-- **Files:** `data/seasons/{s1,s1dark,s2,s3,s4,sandbox}.json`, `data/seasons/s5.aux.json`, `data/factions.json`, `data/locations.json`, `src/data/{seasons,locations,factions,beats}.js`, `data/schemas/season.schema.json`, `data/schemas/beat.schema.json`, `tools/map-coords.mjs` (spike), `tests/seasons.test.js`
+- **Files:** `data/seasons/{s1,s1dark,s2,s3,s4,sandbox}.json`, `data/seasons/s5.aux.json`, `data/factions.json`, `data/locations.json`, `data/districts.json`, `data/map/overrides.json`, `src/data/{seasons,locations,factions,beats,map}.js`, `data/schemas/season.schema.json`, `data/schemas/beat.schema.json`, `data/schemas/map.schema.json`, `tools/map-coords.mjs` (spike), `tests/seasons.test.js`
 - **Depends on:** Step 2 (character IDs)
 - **Parallelizable:** with Step 4
-- **Expected behavior:** each season JSON declares `id`, `title`, `era`, `anchorDate`, `premise`, `toneNotes`, `playerRole`, `defaultPlayerCharacterId?`, `roster[]` (character IDs + active forms at start), `factions[]` with goals and influence, `threats[]` with agenda/stages/progress, `startLocationId`, `openingBeats[]`, `canonBeats[]` with soft deadlines and consequences, `finalDeadline` + `failureState: 'villain-victory'` (see 2.5), `manualOnly[]`, `altFormsAllowed[]`. Locations declare pixel coordinates on 2017×1512, kind, district, controlling faction, capacity, default description/status. Node positions are authored manually; optionally run the dev-only DeepSeek multimodal spike (`tools/map-coords.mjs`) to draft coordinates, then human-verify every proposal before commit. Sandbox uses the base world with no threats and no canon beats. `s1dark` sets `playerRole: 'villain'` and `defaultPlayerCharacterId: s1dark.carol.bleeding-heart`. `s5.aux` describes the auxiliary book, is marked `playable: false`, and is excluded from the entry menu except as a disabled notice.
-- **Acceptance criteria:** all six playable entries validate; S5 aux parses and is rejected with a clear "not yet playable" message; every roster ID exists in the registry; every referenced faction/location/threat/beat ID resolves; location coordinates fall inside the image; tests assert S4 has ≥2 main threats, S1Dark is `alt: true` + villain POV + Carol default, every season has at least one beat per act, every beat has a deadline consequence, and every playable season has a `finalDeadline`/`failureState`.
+- **Expected behavior:** each season JSON declares `id`, `title`, `era`, `anchorDate`, `premise`, `toneNotes`, `playerRole`, `defaultPlayerCharacterId?`, `roster[]` (character IDs + active forms at start), `factions[]` with goals and influence, `threats[]` with agenda/stages/progress, `startLocationId`, `openingBeats[]`, `canonBeats[]` with soft deadlines and consequences, `finalDeadline` + `failureState: 'villain-victory'` (see 2.5), `manualOnly[]`, `altFormsAllowed[]`. Locations declare `mapRef`, `regionId`, `districtId`, kind, controlling faction, capacity, default description/status, and `x/y` in the canonical map space. The SVG map adds the canonical **2048×1536** space; the existing Step 3 data was authored at **2017×1512** and has been scaled into the canonical space as part of the Step 3 amendment. DeepSeek (`tools/map-coords.mjs`) is now only a fallback for unlabeled or newly drawn sites. Sandbox uses the base world with no threats and no canon beats. `s1dark` sets `playerRole: 'villain'` and `defaultPlayerCharacterId: s1dark.carol.bleeding-heart`. `s5.aux` describes the auxiliary book, is marked `playable: false`, and is excluded from the entry menu except as a disabled notice.
+- **Map amendment (Step 6 in progress):** the four `NeoTerra*.svg` files introduce 36 districts, 12 bridges, and 22 key locations on a 2048×1536 canvas. Step 3's location schema is extended with `mapRef`/`regionId`/`districtId`/`travel`; `data/districts.json`, `data/map/overrides.json`, `src/data/map.js`, and `data/schemas/map.schema.json` are authored now. Existing location IDs are preserved and coordinates are already scaled to 2048×1536. Step 13 extracts geometry and fills derived `regionId`s and validates visual alignment; it does not re-scale or rename locations.
+- **Acceptance criteria:** all six playable entries validate; S5 aux parses and is rejected with a clear "not yet playable" message; every roster ID exists in the registry; every referenced faction/location/threat/beat/district ID resolves; location coordinates fall inside the canonical map; every season start location has a valid `mapRef` or is explicitly `virtual`; tests assert S4 has ≥2 main threats, S1Dark is `alt: true` + villain POV + Carol default, every season has at least one beat per act, every beat has a deadline consequence, and every playable season has a `finalDeadline`/`failureState`.
 - **Risk:** medium (authored content; wrong coordinates/threats are cheap to fix but visible)
 - **Route:** standard implementer, medium effort (content authoring assisted by the explore findings)
 - **Commit sketch:** `feat(data): author season, faction, and map-node definitions`
@@ -494,32 +623,32 @@ NeoTerra-Framework/
 - **Route:** implement-hard, high effort
 - **Commit sketch:** `feat(lore): add lore agent, relationship tracking, and world-book commits`
 
-### Step 13 — City map component and location submenu
-- **Files:** `src/ui/map.js`, `src/ui/map-panel.js`, `src/ui/shell.js` (extend), `src/core/machine.js`, `vendor/leaflet/{leaflet.js,leaflet.css,images/*,LICENSE,VERSION}`, `style.css`, `tests/map-model.test.js`
+### Step 13 — SVG map pipeline and city map component
+- **Files:** `tools/build-map.mjs`, `src/data/map.js` (extend), `src/data/locations.js` (2048×1536 defaults + mapRef helpers), `src/ui/map.js`, `src/ui/map-panel.js`, `src/ui/shell.js` (extend), `src/core/machine.js`, `data/map/{map.json,regions.geojson,bridges.geojson,key-locations.json,overrides.json,report.json}`, `data/locations.json` (verify/fill regionIds), `data/districts.json`, `data/schemas/map.schema.json`, `vendor/leaflet/{leaflet.js,leaflet.css,images/*,LICENSE,VERSION}`, `style.css`, `tests/map-model.test.js`, `tests/map-extract.test.js`
 - **Depends on:** Steps 1, 3, 4
 - **Parallelizable:** with Steps 9–12
-- **Expected behavior:** top-right map button opens a floating panel with `NeoTerra.png` as a Leaflet `imageOverlay` on `CRS.Simple`; pan/zoom/reset; nodes from `locations.json` (plus per-chat overrides); click opens a submenu with name, description, present characters, status, controlling faction, and "Travel" (disabled during combat). Panel is draggable/resizable and remembers geometry in localStorage. Map state participates in a small state machine (`closed → open → location → travel`). Leaflet is loaded from the vendored local files (pinned to the `silly-teyvat-dist` version, `LICENSE` + `VERSION` retained), not from a CDN, npm, or another extension's global.
-- **Acceptance criteria:** image fills correctly and nodes land on intended pixels; zoom limits and reset work; submenu reflects live state; travel is disabled the moment combat starts; no Leaflet internal APIs used; the map loads with DevTools offline mode and with no other extension installed; `vendor/leaflet/LICENSE` and `VERSION` are present and the CSS/images resolve locally; map model tests pass; panel works at 1080p and 1440p.
-- **Risk:** medium
-- **Route:** standard implementer, medium effort
-- **Commit sketch:** `feat(map): add city map overlay with location nodes`
+- **Expected behavior:** `tools/build-map.mjs` parses the three SVG layers by `inkscape:label` (not export metadata), extracts the expected **36 districts / 12 bridges / 22 key locations**, computes geometry/centroid/bbox/sourceColor, derives bridge endpoints → region connections and key-location → region assignment, and writes `data/map/*`. It completes the Step 3 map bindings: verifies the already-canonical 2048×1536 coordinates in `data/locations.json`, fills derived `regionId`s from generated regions, checks every `mapRef` against generated key-location ids, preserves every existing location ID, and confirms unmappable sites remain `virtual: true`. The map UI opens from the top-right button: base `NeoTerra.png` stretched to the 2048×1536 bounds on `L.CRS.Simple` with the `toLatLng({x,y}) => L.latLng(-y, x)` helper; district polygons, bridge lines, key-location markers, and named-location markers render from the generated data; layer toggles (districts, bridges, key locations, named locations, labels, fog); click opens a submenu with name, type, parent district, description, present characters, status, faction control, and "Travel" (disabled during combat). Panel is draggable/resizable and remembers geometry in localStorage. Map state uses a small state machine (`closed → open → location → travel`). Leaflet is loaded from vendored local files (pinned to the `silly-teyvat-dist` version, `LICENSE` + `VERSION` retained), not from a CDN, npm, or another extension's global. If generated data is missing, fall back to a single `NeoTerra.svg` overlay plus `locations.json` markers.
+- **Acceptance criteria:** `node tools/build-map.mjs --check` passes; extraction yields exactly 36/12/22 features with unique IDs and no zero-area polygons; every bridge connects two valid regions; every key location resolves to a region; every existing `locations.json` ID keeps its `mapRef` or `virtual: true` binding; all coordinates fall inside 2048×1536; district/bridge/marker positions visually align with the source art within a small tolerance; layer toggles work independently; the submenu reflects live `WorldState`; travel is disabled the moment combat starts; no SVG parsing happens at runtime; the map loads with DevTools offline mode and with no other extension installed; `vendor/leaflet/LICENSE` and `VERSION` are present and CSS/images resolve locally; map extraction/model tests pass; panel works at 1080p and 1440p.
+- **Risk:** high (new parser, coordinate migration, label-to-lore mapping)
+- **Route:** implement-hard, high effort
+- **Commit sketch:** `feat(map): extract SVG layers and build the city map`
 
 ### Step 14 — Travel flow and location intro
-- **Files:** `src/flows/travel.js`, `src/flows/scene.js` (extend), `src/agents/storyline.js` (travel event), `tests/travel.test.js`
+- **Files:** `src/flows/travel.js`, `src/flows/scene.js` (extend), `src/agents/storyline.js` (travel event), `src/data/map.js` (graph/pathfinding), `data/map/bridges.geojson`, `tests/travel.test.js`
 - **Depends on:** Steps 9, 13
 - **Parallelizable:** with Steps 15, 17
-- **Expected behavior:** travel validates the destination, advances in-game time, moves the player, runs the Storyline Tracker with a travel event, recomputes present cast, updates location status, and generates a location intro through the narrator (optionally introducing present characters). Travel history is recorded on the message and in `recentEvents`. Combat blocks travel.
-- **Acceptance criteria:** travel updates player/location/present cast atomically; a failed tracker pass still completes the move with a deterministic fallback; time advances consistently; combat blocks travel; intro names the correct location and cast; tests cover blocked, same-location, and cross-district travel.
+- **Expected behavior:** travel validates the destination against the **bridge/region graph** (`data/map/bridges.geojson` + `locations.json` `travel` edges), computes a shortest path over open bridges, advances in-game time proportional to path length, moves the player, runs the Storyline Tracker with `{type:'travel', from, to, path, bridges}`, recomputes present cast, updates location/bridge status, and generates a location intro through the narrator (optionally introducing present characters). Blocked/destroyed bridges force a detour or reject the trip; flight/teleport/swim abilities can bypass with a cost or check. Same-region travel is a short hop. Travel history is recorded on the message and in `recentEvents`. Combat blocks travel.
+- **Acceptance criteria:** travel follows the bridge graph, not straight-line distance; cross-region paths list the bridges used; a blocked bridge removes that route and either finds a detour or rejects with a clear reason; same-region travel is cheap; ability bypasses are recorded with their cost; travel updates player/location/present cast atomically; a failed tracker pass still completes the move with a deterministic fallback; time advances consistently; combat blocks travel; intro names the correct location and cast; tests cover blocked, same-region, cross-district, detour, and ability-bypass travel.
 - **Risk:** medium
 - **Route:** standard implementer, medium effort
 - **Commit sketch:** `feat(travel): add travel flow and location intro`
 
-### Step 15 — World overlay: factions, threats, headlines, node editor
-- **Files:** `src/ui/overlay.js`, `src/ui/map-panel.js` (extend), `src/ui/settings.js` (extend), `tests/overlay.test.js`
+### Step 15 — World overlay: factions, threats, headlines, district/bridge editor
+- **Files:** `src/ui/overlay.js`, `src/ui/map-panel.js` (extend), `src/ui/settings.js` (extend), `src/data/map.js` (override helpers), `data/map/overrides.json`, `tests/overlay.test.js`
 - **Depends on:** Steps 9, 13
 - **Parallelizable:** with Steps 14, 17
-- **Expected behavior:** a top overlay summarizes active factions and goals, main threat(s) with progress bars (supports 2+ in S4), current act, the next 1–2 canon beats as rumors/headlines, a divergence indicator, latest actions, and optional newspaper-style headlines. Node editor adds/edits/deletes nodes, supports click-to-place, and resets to defaults, persisted per chat with a global export. Threat progress uses stage labels, not raw numbers only. This overlay also doubles as the "where am I in the story" view.
-- **Acceptance criteria:** S4 renders two independent threats; progress and beat status update within one tracker pass; adapted/short-circuited beats are visibly marked; reset restores `locations.json`; added nodes survive reload and appear in travel; headings fit without overflow; tests cover multi-threat, beat display, divergence, and reset.
+- **Expected behavior:** a top overlay summarizes active factions and goals, main threat(s) with progress bars (supports 2+ in S4), current act, the next 1–2 canon beats as rumors/headlines, a divergence indicator, latest actions, and optional newspaper-style headlines. District polygons are tinted/outlined by controlling faction and status; bridge lines show `open`/`contested`/`blocked`/`destroyed`; key-location markers show latest activity. The editor works on **map overrides, never the SVGs**: rename/describe a region, bridge, key location, or named location; assign a parent district or faction; set status; move a marker in 2048×1536 space; add a virtual node; delete an override; reset to defaults. Per-chat overrides (a destroyed bridge, a captured district) live in `WorldState.locations`; global edits go to `data/map/overrides.json` with export/import. Threat progress uses stage labels, not raw numbers only. This overlay doubles as the "where am I in the story" view.
+- **Acceptance criteria:** S4 renders two independent threats; district control and bridge status update within one tracker pass; adapted/short-circuited beats are visibly marked; all 36 districts, 12 bridges, and 22 key locations are selectable and editable through overrides; editing a name/faction/status survives reload; a per-chat destroyed bridge blocks travel in that chat but not globally; reset restores generated defaults; added virtual nodes survive reload and appear in travel; headings fit without overflow; tests cover multi-threat, district/bridge status, beat display, divergence, override edit/reset, and per-chat isolation.
 - **Risk:** low–medium
 - **Route:** standard implementer, medium effort
 - **Commit sketch:** `feat(map): add faction/threat overlay and node editor`
@@ -565,11 +694,11 @@ NeoTerra-Framework/
 - **Commit sketch:** `feat(combat): add dice-based conflict resolution`
 
 ### Step 20 — Extensibility tooling, import/export, docs, and release QA
-- **Files:** `tools/build-data.mjs` (harden), `tools/map-coords.mjs`, `src/ui/settings.js` (import/export), `README.md`, `LICENSE`, `CHANGELOG.md`, `.gitignore`, `docs/data-schema.md`, `docs/adding-a-season.md`, `docs/canon-beats.md`, `docs/endings.md`, `docs/bad-ends.md`, `docs/cyoa.md`, `tests/integration.test.js`, `package.json` (scripts)
+- **Files:** `tools/build-data.mjs` (harden), `tools/build-map.mjs` (harden), `tools/map-coords.mjs`, `src/ui/settings.js` (import/export), `README.md`, `LICENSE`, `CHANGELOG.md`, `.gitignore`, `docs/data-schema.md`, `docs/adding-a-season.md`, `docs/canon-beats.md`, `docs/endings.md`, `docs/bad-ends.md`, `docs/cyoa.md`, `docs/map-authoring.md`, `tests/integration.test.js`, `package.json` (scripts)
 - **Depends on:** all prior steps
 - **Parallelizable:** no (final integration)
-- **Expected behavior:** documented data schemas, an "add a season/character" guide, a canon-beat/deadline authoring guide, drag-drop card import with override generation, full world export/import as JSON, and a smoke-test script. `npm run check` runs data validation, syntax checks, and unit tests. Version bumped and changelog written. Repo is ready to publish to GitHub: **MIT `LICENSE`**, `homePage`/manifest pointing at `https://github.com/Setofnosets/NeoTerra-Framework`, README with third-party install steps (`ST/data/default-user/extensions/NeoTerra-Framework/`), no secrets or local absolute paths, `.gitignore` excludes build artifacts and local captures. Initial push targets `origin` (already configured).
-- **Acceptance criteria:** a new season can be added using only docs + one JSON + cards and appears in the menu; import/export round-trips a world exactly; `npm run check` passes from a clean clone; README covers install, first run, canon beats/deadlines, the villain-victory ending, bad ends, CYOA mode, the content gate, and known limitations; S1–S4 plus Sandbox all boot in a live ST instance; `git ls-files` contains no absolute Windows paths or generated junk; the repo can be cloned into `third-party/` and loaded without edits.
+- **Expected behavior:** documented data schemas, an "add a season/character" guide, a canon-beat/deadline authoring guide, a **map-authoring guide** (SVG layer contract, label rules, `build-map`, overrides, coordinate space), drag-drop card import with override generation, full world export/import as JSON, and a smoke-test script. `npm run build:map` regenerates `data/map/*`; `npm run build:data` regenerates the character registry; `npm run check` runs both validations, syntax checks, and unit tests. Version bumped and changelog written. Repo is ready to publish to GitHub: **MIT `LICENSE`**, `homePage`/manifest pointing at `https://github.com/Setofnosets/NeoTerra-Framework`, README with third-party install steps (`ST/data/default-user/extensions/NeoTerra-Framework/`), no secrets or local absolute paths, `.gitignore` excludes build artifacts and local captures. Initial push targets `origin` (already configured).
+- **Acceptance criteria:** a new season can be added using only docs + one JSON + cards and appears in the menu; import/export round-trips a world exactly; `npm run check` passes from a clean clone; README covers install, first run, canon beats/deadlines, the villain-victory ending, bad ends, CYOA mode, map authoring/SVG layer contract, the content gate, and known limitations; the map extraction yields exactly 36 districts / 12 bridges / 22 key locations from the shipped SVGs; S1–S4 plus Sandbox all boot in a live ST instance; `git ls-files` contains no absolute Windows paths or generated junk; the repo can be cloned into `third-party/` and loaded without edits.
 - **Risk:** medium
 - **Route:** standard implementer, medium effort
 - **Commit sketch:** `chore(release): harden data tooling, add docs, and finalize V1`
@@ -582,11 +711,14 @@ NeoTerra-Framework/
 npm install                       # only if dev deps are added; runtime must stay dependency-free
 node tools/build-data.mjs         # regenerate data/characters/index.json
 node tools/build-data.mjs --check # fail on unparseable cards, dangling altOf, or invalid form groups
+node tools/build-map.mjs          # regenerate data/map/* from the SVGs + migrate locations.json
+node tools/build-map.mjs --check  # fail on unparsable SVG geometry, duplicate labels, missing layers, or count drift
 node --test tests/                # unit tests (Node's built-in test runner)
 node --check index.js             # syntax check of the extension entry point
-npm run check                     # aggregate: build-data --check + node --test + syntax checks
+npm run check                     # aggregate: build-data --check + build-map --check + node --test + syntax checks
 ```
-- Tests are plain ESM (`"type": "module"` in `package.json`); no browser test runner is required. UI logic is factored into pure modules (`map-model`, `renderer`, `reducer`) so it is testable in Node.
+- Tests are plain ESM (`"type": "module"` in `package.json`); no browser test runner is required. UI logic is factored into pure modules (`map-model`, `map-extract`, `renderer`, `reducer`) so it is testable in Node.
+- Map extraction tests assert 36 districts, 12 bridges, 22 key locations, unique IDs, valid bridge endpoints, every key location inside a region, every named location migrated with `mapRef` or `virtual`, and 2048×1536 bounds.
 - Schema validation uses a tiny in-repo validator (no Ajv runtime dependency) or Ajv as a dev-only dependency.
 
 ### Manual checks (live SillyTavern)
@@ -599,7 +731,7 @@ npm run check                     # aggregate: build-data --check + node --test 
 5c. Trigger the villain victory: confirm the epilogue is ~5 paragraphs, names the victor/player status/cast fates, and fires once. Choose **Resistance** and verify a valid post-victory arc. Reset, trigger again, and choose **Join the villain** as a brainwashed/corrupted player: verify villain-side goals, resistance threat, and conquest targets. Confirm "End here" leaves the world inert but viewable.
 5d. Enable bad ends. Force a player death and an NPC identity-loss: confirm the deterministic predicates fire, a 1–3 paragraph epilogue is stored, and the record appears in Codex/journal. Continue as the bad-ended character in the identity-loss case, then reload and confirm the altered goals/labels persist. Repeat with "continue as someone else" and confirm the old record remains. Disable bad ends and confirm no detection or records; edit the tracking prompt and confirm it survives reload.
 6. Corrupt a hero through a declared rule: base form disappears from cast/codex, alt form appears, world-book injection swaps, and the pair never coexists.
-7. Open map, travel to a node, verify time/state/cast/intro; start a conflict and confirm travel is disabled.
+7. Open map. Confirm the 36 district polygons, 12 bridges, and 22 key-location markers align with `NeoTerra.svg`; toggle each layer independently; select a district, a bridge, and a key location and confirm the submenu. Travel within a region, then across a bridge; block/destroy a bridge in a chat and confirm the route detours or is rejected only in that chat. Reset overrides and confirm the bridge returns. Start a conflict and confirm travel is disabled.
 8. Toggle the content gate through each level and confirm rendered context and tracker output change; confirm `full` is a no-op and per-character hard limits still apply at `strict`.
 8b. Enable CYOA: confirm 4 context-appropriate choices, labels respect the 100-character cap, click sends exactly once, regenerate gives a different set, S1Dark `auto` yields villain-flavoured choices, `strict` removes explicit options, and the ending screen suppresses the row. Enable the second combat-choices setting, start a conflict, and confirm tactical chips appear with resolver risk tiers and no exploration-style choices; end combat and confirm exploration choices return. Disable CYOA and confirm zero agent calls.
 9. Reset the world: generated world book is removed and defaults restore.
@@ -640,6 +772,15 @@ npm run check                     # aggregate: build-data --check + node --test 
 - Player continues as someone else while the bad-ended character was the prior POV: cast director and state tracker retarget atomically; no duplicate POV.
 - Bad-end record exported, imported into a new chat, and reloaded: same record and epilogue, no duplicate.
 - Editable bad-end prompt contains malformed template variables: falls back to default with a warning, does not crash the tracker.
+- SVG label is duplicated, empty, or contains characters that slug badly: `build-map --check` fails with the element ID/path.
+- A district/bridge/key-location layer is accidentally hidden or renamed in Inkscape: extraction still uses layer labels, but a missing layer is a hard error.
+- A bridge endpoint falls in no district: build reports it, does not silently connect to the nearest polygon without a threshold.
+- A key-location star sits outside every region (border/island): report it and keep it as an unassigned-site candidate.
+- An existing named location has no plausible SVG marker: migrate it as `virtual: true` with manual coordinates and a warning, never drop it.
+- Overlapping district polygons or a bridge crossing multiple regions: selection returns the topmost/nearest feature and the report lists the overlap.
+- The base PNG is stretched to 2048×1536: marker/region alignment is checked against `NeoTerra.svg`, not raw 2017×1512 pixels.
+- A bridge is destroyed while a travel path is in progress: the move either completes with a recorded incident or aborts cleanly, never teleports.
+- A new SVG export changes canvas size or layer names: `build-map --check` fails before writing, and the fallback single-image map remains usable.
 
 ## Risks & Mitigations
 
@@ -662,6 +803,11 @@ npm run check                     # aggregate: build-data --check + node --test 
 | Player-as-canon narration bleed | Narrator writes the player's actions or duplicates them as an NPC | `controlledBy` flag enforced in cast selection, tracker, renderer, and combat; tests for exclusion; prompt explicitly forbids narrating player choices |
 | Identity switch mid-season | State split or lost character | Atomic `SET_PLAYER_IDENTITY` event, snapshot/rollback, confirmation dialog, tests |
 | Content gate bypass | Limits not respected | Gate applied at render *and* agent-prompt layer; hard limits always enforced; tests assert hard limits win |
+| SVG re-export breaks labels/geometry or hides a layer | Map extraction fails or silently drops features | `build-map --check` fails on missing layers, duplicate labels, zero-area geometry, or count drift; fallback single-image map; commit generated JSON with the SVG change |
+| 2048×1536 SVG vs 2017×1512 PNG mismatch | Markers/polygons drift off the art | Standardize on 2048×1536, stretch the PNG, one `toLatLng` helper, visual alignment check in Step 13, never mix coordinate spaces in data |
+| Generic SVG labels are not lore names | "Unnamed site" spam; wrong location panels | `data/map/overrides.json` + `data/locations.json` `mapRef`; unmapped labels flagged in `report.json`; editor for renames |
+| Bridge/region graph is wrong | Travel teleports or blocks valid routes | Auto-derive endpoints, report bridges with no/ambiguous districts, human review the report, tests for detours and blocked bridges |
+| SVG path parser mishandles arcs/curves | Distorted polygons | Use a pinned dev parser or browser `getBBox`/`getPointAtLength`; validate against rendered overlay; fallback to image overlay |
 | Scope creep into UI polish | Delays core loop | UI polish is Step 18; Steps 1–15 use functional, minimally styled panels |
 
 ## Out of Scope (V1)
@@ -703,7 +849,7 @@ Still optional, in rough priority order:
 9. **Alternate season.** `S1Dark` is the alternate season and is **player-as-villain**: player = Carol Fate / Bleeding Heart by default.
 10. **`Others/`.** Out of V1.
 11. **Card payload.** `data.*` is authoritative; the duplicated legacy top-level block is disposable.
-12. **Map nodes.** Coordinates authored manually. Implementation-time spike drafts them with a vision-capable **DeepSeek** multimodal model, human-verified; click-to-place editor is the fallback. The spike is a dev tool only and never ships in the runtime path.
+12. **Map geometry.** The four `NeoTerra*.svg` layers are the authoring source of truth (2048×1536). `tools/build-map.mjs` extracts 36 districts, 12 bridges, and 22 key locations into GeoJSON/JSON, derives the bridge graph, and migrates the 18 named lore locations into the same space. Names/factions/parent districts come from authored overrides. DeepSeek is only a fallback for unlabeled/new sites; click-to-place handles virtual nodes. The runtime never parses SVG.
 13. **Combat.** Standalone: own dice resolver, function tool, and `/neoterra-roll`; no runtime dependency on Combat-Multihog.
 14. **Content.** Optional global gate reduces violence/explicitness, **disabled by default**, plus per-character and per-player limits.
 15. **Distribution.** SillyTavern third-party install + public GitHub repo: **MIT**, `https://github.com/Setofnosets/NeoTerra-Framework.git` (already `origin`, currently private/empty), minimum ST **1.19.0**.
@@ -715,10 +861,11 @@ Still optional, in rough priority order:
 
 ## Open Questions & Implementation Details
 
-No open questions. The plan is ready for approval to begin Step 1.
+No open questions. Steps 1–6 are implemented or in progress; the plan is ready to continue with Step 7.
 
 Remaining implementation details are fully specified by the decisions above:
-- Map-coordinate spike uses a vision-capable **DeepSeek** model and is human-verified.
+- Map geometry comes from the SVG layers via `build-map`; DeepSeek is only a fallback for unlabeled/new sites and is human-verified.
+- The canonical map space is 2048×1536, y-down; runtime uses GeoJSON generated from the SVGs, never SVG parsing.
 - Leaflet is vendored from `silly-teyvat-dist` with `LICENSE` + `VERSION`, no CDN/npm/global dependency.
 - Combat choices are an independent CYOA setting (`cyoa.combatChoices`), off by default.
 - `badEnds.allowDeadContinuation` ships off.

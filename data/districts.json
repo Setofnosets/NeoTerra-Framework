@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "canvas": {
+    "width": 2048,
+    "height": 1536
+  },
+  "districts": [
+    {
+      "id": "downtown",
+      "name": "Downtown",
+      "description": "Neo Terra's corporate core: towers, plazas, and the institutions everyone pretends are independent.",
+      "color": "#6f7cff",
+      "virtual": false,
+      "regionLabels": ["Center", "HighriseDistrictA", "HighriseDistrictB", "HighriseDistrictC"],
+      "tags": ["corporate", "civic", "high-value"]
+    },
+    {
+      "id": "harbor",
+      "name": "Harbor",
+      "description": "Container yards, docks, islands, and the unlicensed shipping that keeps Clarity's black market alive.",
+      "color": "#3fb8c9",
+      "virtual": false,
+      "regionLabels": ["MajorDockA", "MajorDockB", "DockC"],
+      "tags": ["docks", "smuggling", "waterfront"]
+    },
+    {
+      "id": "maple-heights",
+      "name": "Maple Heights",
+      "description": "Tree-lined residential blocks and the Matic estate. Civilian ground that villains keep making personal.",
+      "color": "#7bc96f",
+      "virtual": false,
+      "regionLabels": [
+        "ResidentialDistrictA",
+        "ResidentialDistrictB",
+        "ResidentialDistrictC",
+        "ResidentialDistrictD",
+        "UpperMiddleResidentialA",
+        "ParkA",
+        "ParkB"
+      ],
+      "tags": ["residential", "civilian", "matic-family"]
+    },
+    {
+      "id": "fashion-row",
+      "name": "Fashion Row",
+      "description": "Boutiques, ateliers, and Monicium showrooms. Superhero couture by day, image warfare by night.",
+      "color": "#ff6fb5",
+      "virtual": false,
+      "regionLabels": ["HighriseDistrictD", "HighriseDistrictE"],
+      "tags": ["fashion", "commerce", "superhero-support"]
+    },
+    {
+      "id": "civic-center",
+      "name": "Civic Center",
+      "description": "Police headquarters, hospitals, and the administrative machinery that tries to keep metahuman incidents legible. No dedicated SVG polygon; its facilities are grouped from key locations.",
+      "color": "#e3c567",
+      "virtual": false,
+      "regionLabels": [],
+      "tags": ["civic", "police", "hospital"]
+    },
+    {
+      "id": "industrial-belt",
+      "name": "Industrial Belt",
+      "description": "Dead factories, salvage crews, warehouses, and the kind of quiet that hides laboratories and bodies.",
+      "color": "#b08a62",
+      "virtual": false,
+      "regionLabels": ["IndustrialA", "IndustrialB", "WarehousesA", "SlumA", "SlumB"],
+      "tags": ["industrial", "salvage", "hideout"]
+    },
+    {
+      "id": "coast",
+      "name": "Coast",
+      "description": "Beaches, islands, and Sand Shine Town. The city's edge, where storms and old grief wash ashore.",
+      "color": "#55c7d8",
+      "virtual": false,
+      "regionLabels": ["IslandA", "IslandB", "IslandC", "River", "Bay"],
+      "tags": ["coastal", "waterfront", "menis-family"]
+    },
+    {
+      "id": "old-hills",
+      "name": "Old Hills",
+      "description": "Old money, lake parks, forested ridges, and the Renya shrine hidden where the city forgets to look.",
+      "color": "#9b8bd6",
+      "virtual": false,
+      "regionLabels": [
+        "HighClassResidentialA",
+        "HighClassResidentialB",
+        "HighClassResidentialC",
+        "HighClassResidentialD",
+        "LakePark",
+        "ParkC",
+        "ParkD",
+        "UndevelopedForestMountains"
+      ],
+      "tags": ["old-money", "parks", "renya-clan"]
+    },
+    {
+      "id": "outskirts",
+      "name": "Outskirts",
+      "description": "Airports, containment facilities, and the long roads out of Neo Terra. Officially outside the action; never actually safe.",
+      "color": "#8a8f98",
+      "virtual": false,
+      "regionLabels": ["Airport", "SmallAirport"],
+      "tags": ["airport", "prison", "edge"]
+    },
+    {
+      "id": "underground",
+      "name": "Underground",
+      "description": "Sealed subway tunnels and unlisted facilities beneath the city. No polygon; travel is authored through secret edges.",
+      "color": "#4d4a5c",
+      "virtual": true,
+      "regionLabels": [],
+      "tags": ["tunnels", "stealth", "virtual"]
+    }
+  ]
+}

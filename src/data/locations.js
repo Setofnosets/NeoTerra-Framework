@@ -1,17 +1,30 @@
 /**
- * Location registry and map-node helpers.
+ * Named-location lore registry and map-node helpers.
  *
- * Coordinates are pixel positions on `NeoTerra.png` (2017 x 1512). They are
- * authored manually and must always stay inside the source image.
+ * Coordinates use the canonical SVG map space (2048 x 1536, y-down). The base
+ * PNG was authored at 2017 x 1512 and is stretched to the canonical box; the
+ * legacy coordinates were scaled once. SVG extraction and feature ids live in
+ * `src/data/map.js`; this module owns the authored lore locations that seasons
+ * reference by stable id.
  */
+
+import {
+    CANONICAL_MAP,
+    isValidMapRef,
+    resolveMapRef,
+} from './map.js';
 
 const LOCATIONS_URL = new URL('../../data/locations.json', import.meta.url);
 
 export const DEFAULT_MAP_IMAGE = Object.freeze({
-    path: 'NeoTerra.png',
-    width: 2017,
-    height: 1512,
+    path: CANONICAL_MAP.path,
+    width: CANONICAL_MAP.width,
+    height: CANONICAL_MAP.height,
+    sourceWidth: CANONICAL_MAP.sourceWidth,
+    sourceHeight: CANONICAL_MAP.sourceHeight,
 });
+
+export const TRAVEL_MODES = Object.freeze(['walk', 'bridge', 'flight', 'secret']);
 
 export const LOCATION_KINDS = Object.freeze([
     'landmark',
@@ -85,10 +98,21 @@ export function validateLocations(document, context = {}) {
     if (typeof image.path !== 'string' || image.path.length === 0) {
         add(errors, 'image.path', 'must be a non-empty string');
     }
-    for (const dimension of ['width', 'height']) {
-        if (!Number.isInteger(image[dimension]) || image[dimension] <= 0) {
-            add(errors, `image.${dimension}`, 'must be a positive integer');
-        }
+    if (image.path !== CANONICAL_MAP.path) {
+        add(errors, 'image.path', `must be "${CANONICAL_MAP.path}"`);
+    }
+    if (image.width !== CANONICAL_MAP.width || image.height !== CANONICAL_MAP.height) {
+        add(
+            errors,
+            'image',
+            `canonical map space must be ${CANONICAL_MAP.width}x${CANONICAL_MAP.height}`,
+        );
+    }
+    if (image.sourceWidth !== undefined && image.sourceWidth !== CANONICAL_MAP.sourceWidth) {
+        add(errors, 'image.sourceWidth', `must be ${CANONICAL_MAP.sourceWidth}`);
+    }
+    if (image.sourceHeight !== undefined && image.sourceHeight !== CANONICAL_MAP.sourceHeight) {
+        add(errors, 'image.sourceHeight', `must be ${CANONICAL_MAP.sourceHeight}`);
     }
 
     if (!Array.isArray(document.locations) || document.locations.length === 0) {
@@ -146,6 +170,50 @@ export function validateLocations(document, context = {}) {
         if (!Array.isArray(location.tags) || !location.tags.every((tag) => typeof tag === 'string')) {
             add(errors, `${path}.tags`, 'must be an array of strings');
         }
+
+        // --- canonical map binding -------------------------------------
+        if (typeof location.districtId !== 'string' || location.districtId.length === 0) {
+            add(errors, `${path}.districtId`, 'must be a canonical district id');
+        } else if (context.districtIds && !context.districtIds.has(location.districtId)) {
+            add(errors, `${path}.districtId`, `unresolved district "${location.districtId}"`);
+        }
+        if (location.regionId !== null && typeof location.regionId !== 'string') {
+            add(errors, `${path}.regionId`, 'must be an SVG region id or null');
+        } else if (
+            typeof location.regionId === 'string'
+            && context.regionIds
+            && !context.regionIds.has(location.regionId)
+        ) {
+            add(errors, `${path}.regionId`, `unresolved region "${location.regionId}"`);
+        }
+        if (typeof location.virtual !== 'boolean') {
+            add(errors, `${path}.virtual`, 'must be a boolean');
+        }
+        if (location.mapRef !== null && location.mapRef !== undefined) {
+            if (!isValidMapRef(location.mapRef)) {
+                add(errors, `${path}.mapRef`, 'must be a valid { layer, id } map reference');
+            } else {
+                if (location.virtual === true) {
+                    add(errors, `${path}.mapRef`, 'virtual locations cannot also bind to an SVG feature');
+                }
+                if (context.mapFeatures) {
+                    const resolved = resolveMapRef(location.mapRef, context.mapFeatures);
+                    if (!resolved.ok && resolved.error) {
+                        add(errors, `${path}.mapRef`, resolved.error);
+                    }
+                }
+            }
+        } else if (location.virtual !== true) {
+            add(errors, `${path}.mapRef`, 'a location must declare a mapRef or be explicitly virtual');
+        }
+        if (!Array.isArray(location.travel) || location.travel.length === 0) {
+            add(errors, `${path}.travel`, 'must be a non-empty array of travel modes');
+        } else {
+            const unknown = location.travel.filter((mode) => !TRAVEL_MODES.includes(mode));
+            if (unknown.length > 0) {
+                add(errors, `${path}.travel`, `unknown travel mode "${unknown[0]}"`);
+            }
+        }
     });
 
     for (const location of document.locations) {
@@ -183,10 +251,10 @@ export function validateLocations(document, context = {}) {
 }
 
 /**
- * @param {{ fetchImpl?: typeof fetch }} [options]
+ * @param {{ fetchImpl?: typeof fetch, context?: object }} [options]
  * @returns {Promise<object>}
  */
-export async function loadLocations({ fetchImpl = globalThis.fetch } = {}) {
+export async function loadLocations({ fetchImpl = globalThis.fetch, context = {} } = {}) {
     if (cached) {
         return cached;
     }
@@ -200,7 +268,7 @@ export async function loadLocations({ fetchImpl = globalThis.fetch } = {}) {
                 throw new Error(`loadLocations: HTTP ${response.status ?? 'unknown'}`);
             }
             const document = await response.json();
-            const validation = validateLocations(document);
+            const validation = validateLocations(document, context);
             if (!validation.ok) {
                 const details = validation.errors
                     .map((error) => `${error.path}: ${error.message}`)

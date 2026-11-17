@@ -16,6 +16,7 @@ import {
 } from './beats.js';
 import { buildFactionIndex, loadFactions, validateFactions } from './factions.js';
 import { buildLocationIndex, loadLocations, validateLocations } from './locations.js';
+import { buildDistrictIndex, loadDistricts, validateDistricts } from './map.js';
 import { buildRegistryIndex, loadRegistry } from './registry.js';
 import { validateRegistry } from './schema.js';
 
@@ -88,7 +89,7 @@ function seasonIdOf(id) {
  * Validate a season document against its siblings.
  *
  * @param {object} season
- * @param {{ registry?: object, factions?: object, locations?: object }} [context]
+ * @param {{ registry?: object, factions?: object, locations?: object, districts?: object }} [context]
  * @returns {{ ok: boolean, errors: Array<{ path: string, message: string }> }}
  */
 export function validateSeasonDefinition(season, context = {}) {
@@ -130,10 +131,12 @@ export function validateSeasonDefinition(season, context = {}) {
     const registryIndex = context.registry ? buildRegistryIndex(context.registry) : null;
     const factionIndex = context.factions ? buildFactionIndex(context.factions) : null;
     const locationIndex = context.locations ? buildLocationIndex(context.locations) : null;
+    const districtIndex = context.districts ? buildDistrictIndex(context.districts) : null;
 
     const characterIds = new Set(Object.keys(registryIndex?.byId ?? {}));
     const factionIds = new Set(Object.keys(factionIndex?.byId ?? {}));
     const locationIds = new Set(Object.keys(locationIndex?.byId ?? {}));
+    const districtIds = new Set(Object.keys(districtIndex?.byId ?? {}));
 
     // Optional context documents are validated too, so a season check always
     // fails loudly on a broken cross-file dependency. Faction and location
@@ -150,8 +153,14 @@ export function validateSeasonDefinition(season, context = {}) {
             add(errors, `factions.${error.path}`, error.message);
         }
     }
+    if (context.districts) {
+        const validation = validateDistricts(context.districts);
+        for (const error of validation.errors) {
+            add(errors, `districts.${error.path}`, error.message);
+        }
+    }
     if (context.locations) {
-        const validation = validateLocations(context.locations, { factionIds });
+        const validation = validateLocations(context.locations, { factionIds, districtIds });
         for (const error of validation.errors) {
             add(errors, `locations.${error.path}`, error.message);
         }
@@ -313,6 +322,18 @@ export function validateSeasonDefinition(season, context = {}) {
         add(errors, 'startLocationId', 'must be a string');
     } else if (locationIndex && !locationIds.has(season.startLocationId)) {
         add(errors, 'startLocationId', `unresolved location "${season.startLocationId}"`);
+    } else if (locationIndex) {
+        const start = locationIndex.byId[season.startLocationId];
+        if (start && !start.mapRef && start.virtual !== true) {
+            add(
+                errors,
+                'startLocationId',
+                'the start location must declare a mapRef or be explicitly virtual',
+            );
+        }
+        if (typeof start?.districtId === 'string' && districtIndex && !districtIds.has(start.districtId)) {
+            add(errors, 'startLocationId', `unresolved district "${start.districtId}"`);
+        }
     }
 
     // --- canon beats ------------------------------------------------------
@@ -541,16 +562,18 @@ async function fetchSeasonDocument(id, { fetchImpl = globalThis.fetch } = {}) {
     return { document, url };
 }
 
-async function loadContext({ fetchImpl, registry, factions, locations }) {
-    const [loadedRegistry, loadedFactions, loadedLocations] = await Promise.all([
+async function loadContext({ fetchImpl, registry, factions, locations, districts }) {
+    const [loadedRegistry, loadedFactions, loadedLocations, loadedDistricts] = await Promise.all([
         registry ?? loadRegistry({ fetchImpl }),
         factions ?? loadFactions({ fetchImpl }),
         locations ?? loadLocations({ fetchImpl }),
+        districts ?? loadDistricts({ fetchImpl }),
     ]);
     return {
         registry: loadedRegistry,
         factions: loadedFactions,
         locations: loadedLocations,
+        districts: loadedDistricts,
     };
 }
 

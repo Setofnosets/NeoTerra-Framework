@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neoterra.local/schemas/map.schema.json",
+  "title": "Neo Terra Map Data",
+  "description": "Documentation schema for canonical districts, generated SVG map data, and authored map overrides. Runtime validation lives in src/data/map.js; no Ajv dependency is required.",
+  "oneOf": [
+    { "$ref": "#/$defs/districtDocument" },
+    { "$ref": "#/$defs/overridesDocument" },
+    { "$ref": "#/$defs/mapManifest" },
+    { "$ref": "#/$defs/regionCollection" },
+    { "$ref": "#/$defs/bridgeCollection" },
+    { "$ref": "#/$defs/keyLocationCollection" },
+    { "$ref": "#/$defs/namedLocationDocument" }
+  ],
+  "$defs": {
+    "canvas": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "const": 2048 },
+        "height": { "const": 1536 }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 2048 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1536 }
+      }
+    },
+    "mapRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layer", "id"],
+      "properties": {
+        "layer": {
+          "enum": ["region", "bridge", "keyLocation"],
+          "description": "Reference target. A generated region feature itself uses layer='district'; a mapRef points at it with layer='region'."
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^(region|bridge|key):[a-z0-9-]+$"
+        }
+      }
+    },
+    "district": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "name", "description", "color", "virtual", "regionLabels", "tags"],
+      "properties": {
+        "id": {
+          "enum": [
+            "downtown",
+            "harbor",
+            "maple-heights",
+            "fashion-row",
+            "civic-center",
+            "industrial-belt",
+            "coast",
+            "old-hills",
+            "outskirts",
+            "underground"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "virtual": { "type": "boolean" },
+        "regionLabels": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "districtDocument": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "canvas", "districts"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "canvas": { "$ref": "#/$defs/canvas" },
+        "districts": {
+          "type": "array",
+          "minItems": 10,
+          "items": { "$ref": "#/$defs/district" }
+        }
+      }
+    },
+    "regionOverride": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["districtId"],
+      "properties": {
+        "districtId": { "type": "string", "minLength": 1 },
+        "name": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] },
+        "factionId": { "type": ["string", "null"] }
+      }
+    },
+    "bridgeOverride": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "enum": ["open", "contested", "blocked", "destroyed"] }
+      }
+    },
+    "keyLocationOverride": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "locationId": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] },
+        "districtId": { "type": "string" },
+        "factionId": { "type": ["string", "null"] }
+      }
+    },
+    "overridesDocument": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "canvas", "regions", "bridges", "keyLocations"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "canvas": { "$ref": "#/$defs/canvas" },
+        "regions": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/regionOverride" }
+        },
+        "bridges": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/bridgeOverride" }
+        },
+        "keyLocations": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/keyLocationOverride" }
+        }
+      }
+    },
+    "featureBase": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "label", "layer", "geometry"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^(region|bridge|key):[a-z0-9-]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "layer": {
+          "enum": ["district", "bridge", "keyLocation"],
+          "description": "Generated drawing layer. A mapRef to a region uses layer='region'."
+        },
+        "geometry": { "type": "object" },
+        "sourceColor": { "type": "string" },
+        "centroid": { "$ref": "#/$defs/point" },
+        "bbox": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "regionFeature": {
+      "allOf": [
+        { "$ref": "#/$defs/featureBase" },
+        {
+          "type": "object",
+          "properties": {
+            "layer": { "const": "district" },
+            "kind": {
+              "enum": [
+                "residential",
+                "highrise",
+                "industrial",
+                "slum",
+                "park",
+                "dock",
+                "airport",
+                "island",
+                "water",
+                "wilderness",
+                "center",
+                "unknown"
+              ]
+            },
+            "districtId": { "type": ["string", "null"] },
+            "factionId": { "type": ["string", "null"] },
+            "status": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "bridgeFeature": {
+      "allOf": [
+        { "$ref": "#/$defs/featureBase" },
+        {
+          "type": "object",
+          "required": ["connects", "endpoints", "length", "status"],
+          "properties": {
+            "layer": { "const": "bridge" },
+            "centerline": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/point" }
+            },
+            "endpoints": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/point" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "connects": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "length": { "type": "number", "minimum": 0 },
+            "status": { "enum": ["open", "contested", "blocked", "destroyed"] }
+          }
+        }
+      ]
+    },
+    "keyLocationFeature": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "label", "layer", "kind", "x", "y", "regionId"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^key:[a-z0-9-]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "layer": { "const": "keyLocation" },
+        "kind": {
+          "enum": [
+            "office",
+            "home",
+            "safehouse",
+            "terminal",
+            "dock",
+            "stadium",
+            "park",
+            "industrial",
+            "unknown"
+          ]
+        },
+        "x": { "type": "number", "minimum": 0, "maximum": 2048 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1536 },
+        "regionId": { "type": ["string", "null"] },
+        "locationId": { "type": ["string", "null"] }
+      }
+    },
+    "mapManifest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "canvas", "layers", "counts"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "canvas": { "$ref": "#/$defs/canvas" },
+        "layers": { "type": "array", "items": { "type": "string" } },
+        "counts": {
+          "type": "object",
+          "required": ["districts", "bridges", "keyLocations"],
+          "properties": {
+            "districts": { "const": 36 },
+            "bridges": { "const": 12 },
+            "keyLocations": { "const": 22 }
+          }
+        }
+      }
+    },
+    "regionCollection": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type", "features"],
+      "properties": {
+        "type": { "const": "FeatureCollection" },
+        "features": {
+          "type": "array",
+          "minItems": 36,
+          "items": { "$ref": "#/$defs/regionFeature" }
+        }
+      }
+    },
+    "bridgeCollection": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type", "features"],
+      "properties": {
+        "type": { "const": "FeatureCollection" },
+        "features": {
+          "type": "array",
+          "minItems": 12,
+          "items": { "$ref": "#/$defs/bridgeFeature" }
+        }
+      }
+    },
+    "keyLocationCollection": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "keyLocations"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "keyLocations": {
+          "type": "array",
+          "minItems": 22,
+          "items": { "$ref": "#/$defs/keyLocationFeature" }
+        }
+      }
+    },
+    "namedLocation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "name",
+        "description",
+        "kind",
+        "districtId",
+        "regionId",
+        "x",
+        "y",
+        "travel",
+        "connections",
+        "virtual"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["landmark", "base", "district", "venue", "facility", "hideout", "wilderness"]
+        },
+        "districtId": { "type": "string", "minLength": 1 },
+        "regionId": { "type": ["string", "null"] },
+        "mapRef": {
+          "oneOf": [
+            { "$ref": "#/$defs/mapRef" },
+            { "type": "null" }
+          ]
+        },
+        "x": { "type": "number", "minimum": 0, "maximum": 2048 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1536 },
+        "travel": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["walk", "bridge", "flight", "secret"] }
+        },
+        "connections": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "virtual": { "type": "boolean" },
+        "factionId": { "type": ["string", "null"] },
+        "capacity": { "type": "integer", "minimum": 1 },
+        "defaultStatus": {
+          "enum": ["peaceful", "patrolled", "contested", "hostile", "locked", "unknown"]
+        },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "namedLocationDocument": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "image", "locations"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "image": {
+          "type": "object",
+          "required": ["path", "width", "height"],
+          "properties": {
+            "path": { "const": "NeoTerra.png" },
+            "width": { "const": 2048 },
+            "height": { "const": 1536 },
+            "sourceWidth": { "const": 2017 },
+            "sourceHeight": { "const": 1512 }
+          }
+        },
+        "locations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/namedLocation" }
+        }
+      }
+    }
+  }
+}

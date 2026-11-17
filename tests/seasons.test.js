@@ -34,6 +34,24 @@ import {
     validateLocations,
 } from '../src/data/locations.js';
 import {
+    CANONICAL_MAP,
+    buildDistrictIndex,
+    buildMapOverrideIndex,
+    clearMapCaches,
+    featureId,
+    getBridgeOverride,
+    getDistrict,
+    getDistrictForRegionLabel,
+    getKeyLocationOverride,
+    isValidMapRef,
+    legacyToCanonical,
+    loadDistricts,
+    scaleMapPoint,
+    loadMapOverrides,
+    validateDistricts,
+    validateMapOverrides,
+} from '../src/data/map.js';
+import {
     PLAYABLE_SEASON_IDS,
     SEASON_DEFINITION_IDS,
     assertPlayableSeason,
@@ -80,9 +98,12 @@ function fileFetch(url) {
 const registry = readJson(join(ROOT, 'data', 'characters', 'index.json'));
 const factions = readJson(join(ROOT, 'data', 'factions.json'));
 const locations = readJson(join(ROOT, 'data', 'locations.json'));
-const context = { registry, factions, locations };
+const districts = readJson(join(ROOT, 'data', 'districts.json'));
+const mapOverrides = readJson(join(ROOT, 'data', 'map', 'overrides.json'));
+const context = { registry, factions, locations, districts };
 const registryIndex = buildRegistryIndex(registry);
 const factionIndex = buildFactionIndex(factions);
+const districtIndex = buildDistrictIndex(districts);
 
 const seasons = Object.fromEntries(
     SEASON_DEFINITION_IDS.map((id) => [id, readSeason(id)]),
@@ -183,7 +204,21 @@ test('season faction, location, threat, and beat references all resolve', () => 
             assert.ok(factionIndex.byId[factionRef.id], `${id} faction ${factionRef.id}`);
             assert.ok(factionRef.influence >= 0 && factionRef.influence <= 100);
         }
-        assert.ok(locations.locations.some((location) => location.id === season.startLocationId), id);
+        const start = locations.locations.find((location) => location.id === season.startLocationId);
+        assert.ok(start, id);
+        assert.equal(
+            start.mapRef !== null || start.virtual === true,
+            true,
+            `${id} start location must be mapped or virtual`,
+        );
+        assert.ok(districtIndex.byId[start.districtId], `${id} start district`);
+        for (const member of season.roster) {
+            if (member.locationId) {
+                const location = locations.locations.find((candidate) => candidate.id === member.locationId);
+                assert.ok(location, `${id} roster location ${member.locationId}`);
+                assert.ok(districtIndex.byId[location.districtId], `${id} ${location.id} district`);
+            }
+        }
 
         const threatIds = new Set(season.threats.map((threat) => threat.id));
         for (const threat of season.threats) {
@@ -255,14 +290,87 @@ test('every non-sandbox season has a beat per act and every beat has a deadline 
     }
 });
 
-test('map nodes stay inside the image and connections are symmetric', () => {
+test('map schema documents the canonical counts and bindings', () => {
+    const schema = readJson(join(ROOT, 'data', 'schemas', 'map.schema.json'));
+    assert.equal(schema.$defs.canvas.properties.width.const, 2048);
+    assert.equal(schema.$defs.canvas.properties.height.const, 1536);
+    assert.equal(schema.$defs.mapManifest.properties.counts.properties.districts.const, 36);
+    assert.equal(schema.$defs.mapManifest.properties.counts.properties.bridges.const, 12);
+    assert.equal(schema.$defs.mapManifest.properties.counts.properties.keyLocations.const, 22);
+    assert.equal(schema.$defs.mapRef.properties.layer.enum.length, 3);
+    assert.equal(schema.$defs.namedLocation.properties.x.maximum, 2048);
+    assert.equal(schema.$defs.namedLocation.properties.districtId.type, 'string');
+});
+
+test('districts and map overrides validate against canonical map bindings', () => {
+    assert.equal(validateDistricts(districts).ok, true);
+    assert.equal(validateMapOverrides(mapOverrides, {
+        districtIds: new Set(Object.keys(districtIndex.byId)),
+        locationIds: new Set(locations.locations.map((location) => location.id)),
+        districts,
+        locations,
+        regionLabels: new Set(
+            districts.districts.flatMap((district) => district.regionLabels),
+        ),
+    }).ok, true);
+
+    assert.equal(districts.districts.length, 10);
+    assert.equal(districtIndex.byId.downtown.name, 'Downtown');
+    assert.equal(getDistrictForRegionLabel(districts, 'Center'), 'downtown');
+    assert.equal(getDistrictForRegionLabel(districts, 'HighriseDistrictD'), 'fashion-row');
+    assert.equal(getDistrict(districts, 'underground').virtual, true);
+
+    const overrideIndex = buildMapOverrideIndex(mapOverrides);
+    assert.equal(Object.keys(overrideIndex.regions).length, 36);
+    assert.equal(Object.keys(overrideIndex.bridges).length, 12);
+    assert.equal(Object.keys(overrideIndex.keyLocations).length, 22);
+    assert.equal(getBridgeOverride(mapOverrides, 'BridgeA').status, 'open');
+    assert.equal(getKeyLocationOverride(mapOverrides, 'CityCore').locationId, 'central-plaza');
+
+    const overrideByKeyId = new Map(
+        Object.entries(overrideIndex.keyLocations)
+            .map(([label, override]) => [featureId('keyLocation', label), override]),
+    );
+    for (const location of locations.locations) {
+        if (!location.mapRef) {
+            assert.equal(location.virtual, true, location.id);
+            continue;
+        }
+        assert.equal(location.mapRef.layer, 'keyLocation', location.id);
+        assert.equal(
+            overrideByKeyId.get(location.mapRef.id)?.locationId,
+            location.id,
+            `${location.id} ${location.mapRef.id}`,
+        );
+    }
+
+    assert.equal(featureId('keyLocation', 'BigOfficeA'), 'key:big-office-a');
+    assert.equal(isValidMapRef({ layer: 'bridge', id: 'bridge:bridge-a' }), true);
+    assert.equal(isValidMapRef({ layer: 'region', id: 'key:wrong' }), false);
+    assert.deepEqual(legacyToCanonical({ x: 2017, y: 1512 }), { x: 2048, y: 1536 });
+    assert.deepEqual(scaleMapPoint({ x: 100, y: 200 }), { x: 100, y: 200 });
+});
+
+test('map nodes stay inside the canonical map and connections are symmetric', () => {
     const image = locations.image;
-    assert.equal(image.width, 2017);
-    assert.equal(image.height, 1512);
+    assert.equal(image.width, CANONICAL_MAP.width);
+    assert.equal(image.height, CANONICAL_MAP.height);
+    assert.equal(image.sourceWidth, CANONICAL_MAP.sourceWidth);
+    assert.equal(image.sourceHeight, CANONICAL_MAP.sourceHeight);
 
     for (const location of locations.locations) {
         assert.equal(isCoordinateInImage(location.x, location.y, image), true, location.id);
         assert.equal(getLocation(locations, location.id).id, location.id);
+        assert.ok(getDistrict(districts, location.districtId), `${location.id} district`);
+        assert.equal(typeof location.virtual, 'boolean', location.id);
+        assert.ok(
+            location.mapRef !== null || location.virtual === true,
+            `${location.id} needs a mapRef or virtual: true`,
+        );
+        if (location.mapRef !== null) {
+            assert.equal(isValidMapRef(location.mapRef), true, location.id);
+            assert.equal(location.virtual, false, location.id);
+        }
         for (const connected of getConnectedLocations(locations, location.id)) {
             assert.equal(
                 connected.connections.includes(location.id),
@@ -333,6 +441,53 @@ test('validators reject broken references, coordinates, and beat deadlines', () 
     badLocationFaction.locations[0].factionId = 'nowhere';
     assert.equal(validateLocations(badLocationFaction, { factionIds }).ok, false);
 
+    const badLocationDistrict = clone(locations);
+    badLocationDistrict.locations[0].districtId = 'nowhere';
+    assert.equal(
+        validateLocations(badLocationDistrict, {
+            factionIds,
+            districtIds: new Set(districts.districts.map((district) => district.id)),
+        }).ok,
+        false,
+    );
+
+    const badLocationMapRef = clone(locations);
+    badLocationMapRef.locations[0].mapRef = { layer: 'region', id: 'key:wrong' };
+    assert.equal(validateLocations(badLocationMapRef).ok, false);
+
+    const badLocationUnbound = clone(locations);
+    badLocationUnbound.locations[0].mapRef = null;
+    badLocationUnbound.locations[0].virtual = false;
+    assert.equal(validateLocations(badLocationUnbound).ok, false);
+
+    const badDistrict = clone(districts);
+    badDistrict.districts[0].regionLabels = ['Center'];
+    badDistrict.districts[1].regionLabels = ['Center'];
+    assert.equal(validateDistricts(badDistrict).ok, false);
+
+    const overrideContext = {
+        districtIds: new Set(districts.districts.map((district) => district.id)),
+        locationIds: new Set(locations.locations.map((location) => location.id)),
+        districts,
+        locations,
+        regionLabels: new Set(districts.districts.flatMap((district) => district.regionLabels)),
+    };
+    const badOverrides = clone(mapOverrides);
+    badOverrides.keyLocations.CityCore.locationId = 'nowhere';
+    assert.equal(validateMapOverrides(badOverrides, overrideContext).ok, false);
+
+    const duplicateLocationOverride = clone(mapOverrides);
+    duplicateLocationOverride.keyLocations.HomeA.locationId = 'central-plaza';
+    assert.equal(validateMapOverrides(duplicateLocationOverride, overrideContext).ok, false);
+
+    const brokenRoundTrip = clone(mapOverrides);
+    brokenRoundTrip.keyLocations.CityCore.locationId = 'petrabyte-tower';
+    assert.equal(validateMapOverrides(brokenRoundTrip, overrideContext).ok, false);
+
+    const missingRegionOverride = clone(mapOverrides);
+    delete missingRegionOverride.regions.Center;
+    assert.equal(validateMapOverrides(missingRegionOverride, overrideContext).ok, false);
+
     const badCrossFileSeason = clone(seasons.s1);
     assert.equal(
         validateSeasonDefinition(badCrossFileSeason, {
@@ -366,18 +521,33 @@ test('loaders fail cleanly on HTTP errors', async () => {
     clearLocationsCache();
     await assert.rejects(() => loadLocations({ fetchImpl: failingFetch }), /HTTP 503/);
     clearLocationsCache();
+
+    clearMapCaches();
+    await assert.rejects(() => loadDistricts({ fetchImpl: failingFetch }), /HTTP 503/);
+    await assert.rejects(() => loadMapOverrides({ fetchImpl: failingFetch }), /HTTP 503/);
+    clearMapCaches();
 });
 
-test('faction and location loaders validate and cache', async () => {
+test('faction, location, district, and map-override loaders validate and cache', async () => {
     clearFactionsCache();
     const loadedFactions = await loadFactions({ fetchImpl: fileFetch });
     assert.equal(loadedFactions.factions.length, factions.factions.length);
     assert.equal(getFaction(loadedFactions, 'petrabyte').name, 'PetraByte');
 
+    clearMapCaches();
+    const loadedDistricts = await loadDistricts({ fetchImpl: fileFetch });
+    assert.equal(loadedDistricts.districts.length, districts.districts.length);
+    const loadedOverrides = await loadMapOverrides({ fetchImpl: fileFetch });
+    assert.equal(Object.keys(loadedOverrides.keyLocations).length, 22);
+
     clearLocationsCache();
-    const loadedLocations = await loadLocations({ fetchImpl: fileFetch });
+    const loadedLocations = await loadLocations({
+        fetchImpl: fileFetch,
+        context: { districtIds: new Set(loadedDistricts.districts.map((district) => district.id)) },
+    });
     assert.equal(loadedLocations.locations.length, locations.locations.length);
     assert.equal(getLocation(loadedLocations, 'central-plaza').district, 'Downtown');
+    assert.equal(getLocation(loadedLocations, 'central-plaza').districtId, 'downtown');
 });
 
 test('beat ledger helpers enforce monotonic status transitions and eligibility', () => {
