@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "rule.s1.aurelia.corrupted",
+      "from": "s1.aurelia.longshot",
+      "to": "s1.redraw.corrupted.longshot",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s1.tindur.corrupted",
+      "from": "s1.tindur.sharkbite",
+      "to": "s1.blood.frenzy.corrupted.sharkbite",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s1.claire.cleansed",
+      "from": "s1.claire.atropos",
+      "to": "s1.claire.lachesis.cleansed.claire.atropos",
+      "trigger": "cleansed",
+      "sourceFaction": null,
+      "reversibleBy": "recorruption",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1.claire.cleansed.reverse",
+      "from": "s1.claire.lachesis.cleansed.claire.atropos",
+      "to": "s1.claire.atropos",
+      "trigger": "cleansed",
+      "sourceFaction": null,
+      "reversibleBy": "recorruption",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1.vaiva.corrupted",
+      "from": "s1.vaiva.colorgarde",
+      "to": "s1.light.shade.corrupted.colorgarde",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s1dark.carol.cleansed",
+      "from": "s1dark.carol.bleeding-heart",
+      "to": "s1dark.carol.cleansed.bleeding.heart",
+      "trigger": "cleansed",
+      "sourceFaction": null,
+      "reversibleBy": "recorruption",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1dark.carol.cleansed.reverse",
+      "from": "s1dark.carol.cleansed.bleeding.heart",
+      "to": "s1dark.carol.bleeding-heart",
+      "trigger": "cleansed",
+      "sourceFaction": null,
+      "reversibleBy": "recorruption",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1dark.carol.infected",
+      "from": "s1dark.carol.bleeding-heart",
+      "to": "s1dark.carol.infected.bleeding.heart",
+      "trigger": "infected",
+      "sourceFaction": null,
+      "reversibleBy": "cure",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1dark.carol.infected.reverse",
+      "from": "s1dark.carol.infected.bleeding.heart",
+      "to": "s1dark.carol.bleeding-heart",
+      "trigger": "infected",
+      "sourceFaction": null,
+      "reversibleBy": "cure",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1dark.carol.poisoned",
+      "from": "s1dark.carol.bleeding-heart",
+      "to": "s1dark.phantom.heart.poisoned.bleeding.heart",
+      "trigger": "poisoned",
+      "sourceFaction": null,
+      "reversibleBy": "antidote",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1dark.carol.poisoned.reverse",
+      "from": "s1dark.phantom.heart.poisoned.bleeding.heart",
+      "to": "s1dark.carol.bleeding-heart",
+      "trigger": "poisoned",
+      "sourceFaction": null,
+      "reversibleBy": "antidote",
+      "permanent": false
+    },
+    {
+      "id": "rule.s1dark.akui.knighted",
+      "from": "s1dark.akui.koden.cyber.sakura",
+      "to": "s1dark.heart.attack.knighted.cyber.sakura",
+      "trigger": "knighted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s1dark.jacqueline.knighted",
+      "from": "s1dark.jacqueline.webb.poisoness",
+      "to": "s1dark.bittersweet.knighted.poisoness",
+      "trigger": "knighted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s1dark.aurelia.knighted",
+      "from": "s1dark.aurelia.season-dark-version",
+      "to": "s1dark.white.rabbit.knighted.longshot",
+      "trigger": "knighted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s2.amy.corrupted",
+      "from": "s2.amy.matic.seasonal.siren",
+      "to": "s2.tribal.temptress.corrupted.seasonal.siren",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s2.annabelle.corrupted",
+      "from": "s2.annabelle.verd.iron.maiden",
+      "to": "s2.wild.maiden.corrupted.iron.maiden",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s2.monika.corrupted",
+      "from": "s2.monika.matic.monochromatic",
+      "to": "s2.blooming.crow.corrupted.monochromatic",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s2.laura.corrupted",
+      "from": "s2.laura.brimael.demon.laura",
+      "to": "s2.savage.succubus.corrupted.demon.laura",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s2.vaiva.corrupted",
+      "from": "s2.vaiva.petrauskait.colorgarde.season.2.ver",
+      "to": "s2.stygian.stalker.corrupted.colorgarde",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s2.leila.alt-version",
+      "from": "s2.leila.renya",
+      "to": "s2.leila.renya.femme.feral",
+      "trigger": "alt-version",
+      "sourceFaction": null,
+      "reversibleBy": "identity",
+      "permanent": false
+    },
+    {
+      "id": "rule.s2.leila.alt-version.reverse",
+      "from": "s2.leila.renya.femme.feral",
+      "to": "s2.leila.renya",
+      "trigger": "alt-version",
+      "sourceFaction": null,
+      "reversibleBy": "identity",
+      "permanent": false
+    },
+    {
+      "id": "rule.s3.umbra.corrupted",
+      "from": "s3.selina.cross.umbra",
+      "to": "s3.blood.bride.corrupted.umbra",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s3.zara.treated",
+      "from": "s3.zara.embarr",
+      "to": "s3.crazy.cupid.treated.zara.embarr",
+      "trigger": "treated",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s3.lucia.treated",
+      "from": "s3.lucia.lulu.illusi.chamisulli",
+      "to": "s3.darkit.treated.lucia.lulu.illusi",
+      "trigger": "treated",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s3.ellie.treated",
+      "from": "s3.elizabeth.ellie.addison",
+      "to": "s3.executaur.treated.elizabeth.ellie.addison",
+      "trigger": "treated",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s3.keira.treated",
+      "from": "s3.keira.cooper",
+      "to": "s3.little.princess.treated.keira.cooper",
+      "trigger": "treated",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s3.vireze.cleansed",
+      "from": "s3.vireze.tylow.midnight.treat",
+      "to": "s3.midnight.gift.cleansed.midnight.treat",
+      "trigger": "cleansed",
+      "sourceFaction": null,
+      "reversibleBy": "recorruption",
+      "permanent": false
+    },
+    {
+      "id": "rule.s3.vireze.cleansed.reverse",
+      "from": "s3.midnight.gift.cleansed.midnight.treat",
+      "to": "s3.vireze.tylow.midnight.treat",
+      "trigger": "cleansed",
+      "sourceFaction": null,
+      "reversibleBy": "recorruption",
+      "permanent": false
+    },
+    {
+      "id": "rule.s3.melissa.treated",
+      "from": "s3.melissa.liz.ashton",
+      "to": "s3.oversight.treated.melissa.liz.ashton",
+      "trigger": "treated",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s3.miracle.treated",
+      "from": "s3.miracle.mira.nillava.vanillamirror",
+      "to": "s3.pink.mirage.treated.miracle.mira.nillava",
+      "trigger": "treated",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s4.anastasia.corrupted",
+      "from": "s4.anastasia.carnaz.gravitasha",
+      "to": "s4.event.horizon.corrupted.gravitasha",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s4.anastasia.coldhearted",
+      "from": "s4.anastasia.carnaz.gravitasha",
+      "to": "s4.o.v.e.n.snowfall.coldhearted.gravitasha",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.anastasia.coldhearted.reverse",
+      "from": "s4.o.v.e.n.snowfall.coldhearted.gravitasha",
+      "to": "s4.anastasia.carnaz.gravitasha",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.brie.corrupted",
+      "from": "s4.brie.anderson.hula.hawk",
+      "to": "s4.bird.cage.corrupted.hula.hawk",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s4.brie.coldhearted",
+      "from": "s4.brie.anderson.hula.hawk",
+      "to": "s4.frost.flight.coldhearted.hula.hawk",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.brie.coldhearted.reverse",
+      "from": "s4.frost.flight.coldhearted.hula.hawk",
+      "to": "s4.brie.anderson.hula.hawk",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.christina.corrupted",
+      "from": "s4.christina.chris.goldclaw.crimson.crush",
+      "to": "s4.dark.dragon.corrupted.crimson.crush",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s4.christina.infected",
+      "from": "s4.christina.chris.goldclaw.crimson.crush",
+      "to": "s4.cyber.dragon.infected.crimson.crush",
+      "trigger": "infected",
+      "sourceFaction": null,
+      "reversibleBy": "cure",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.christina.infected.reverse",
+      "from": "s4.cyber.dragon.infected.crimson.crush",
+      "to": "s4.christina.chris.goldclaw.crimson.crush",
+      "trigger": "infected",
+      "sourceFaction": null,
+      "reversibleBy": "cure",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.claire.coldhearted",
+      "from": "s4.claire.atropos.recorrupted",
+      "to": "s4.ice.queen.coldhearted.claire.atropos",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.claire.coldhearted.reverse",
+      "from": "s4.ice.queen.coldhearted.claire.atropos",
+      "to": "s4.claire.atropos.recorrupted",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.rosy.corrupted",
+      "from": "s4.roseline.rosy.bellington.pink.power",
+      "to": "s4.shattered.shard.corrupted.pink.power",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
+      "id": "rule.s4.rosy.coldhearted",
+      "from": "s4.roseline.rosy.bellington.pink.power",
+      "to": "s4.pink.icicle.coldhearted-pink-power",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.s4.rosy.coldhearted.reverse",
+      "from": "s4.pink.icicle.coldhearted-pink-power",
+      "to": "s4.roseline.rosy.bellington.pink.power",
+      "trigger": "coldhearted",
+      "sourceFaction": null,
+      "reversibleBy": "emotional",
+      "permanent": false
+    },
+    {
+      "id": "rule.others.evelyn.corrupted",
+      "from": "others.evelyn.yukon.silent.whisp",
+      "to": "others.peppermint.phantom.corrupted.silent.whisp",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    }
+  ]
+}

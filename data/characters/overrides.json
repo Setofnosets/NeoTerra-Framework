@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "entries": {
+    "S1/Atropos couple.json": {
+      "displayName": "Atropos Couple",
+      "aliases": [
+        "Atropos Couple",
+        "Claire Atropos",
+        "Noah Atropos"
+      ],
+      "side": "villain",
+      "bundle": true,
+      "actors": [
+        {
+          "name": "Claire Atropos",
+          "aliases": [
+            "Claire Lachesis"
+          ]
+        },
+        {
+          "name": "Noah Atropos",
+          "aliases": [
+            "Phage Clotho"
+          ]
+        }
+      ],
+      "notes": "Multi-actor card. It is one bundle entry, never a single character or a form group."
+    },
+    "S1Dark/Carol-Bleeding Heart.json": {
+      "id": "s1dark.carol.bleeding-heart",
+      "displayName": "Carol Fate",
+      "aliases": [
+        "Bleeding Heart",
+        "Carol Fate",
+        "Her Majesty"
+      ],
+      "side": "villain",
+      "threatLevel": null,
+      "formKind": "base",
+      "notes": "Canonical base form; required by the S1Dark season default."
+    },
+    "S2/Leila Renya.json": {
+      "id": "s2.leila.renya",
+      "displayName": "Leila Renya",
+      "aliases": [
+        "Femme Feral",
+        "Goddess of The Renya Clan",
+        "Princess Renya",
+        "Usurper of The Living Curse",
+        "Wolf Princess"
+      ],
+      "side": "vigilante",
+      "threatLevel": null,
+      "formKind": "base",
+      "notes": "Required stable ID. The card is the former-supervillain-turned-vigilante base form."
+    },
+    "S3/The Sensational Sirens.json": {
+      "displayName": "The Sensational Sirens",
+      "aliases": [
+        "The Sensational Sirens",
+        "Seasonal Siren",
+        "Emerald Allure"
+      ],
+      "side": "hero",
+      "bundle": true,
+      "actors": [
+        {
+          "name": "Amy Matic",
+          "aliases": [
+            "Seasonal Siren",
+            "Mint Mistress",
+            "Pepper Keller",
+            "Princess of Fashion"
+          ]
+        },
+        {
+          "name": "Tessa Ervone",
+          "aliases": [
+            "Emerald Allure"
+          ]
+        }
+      ],
+      "notes": "Multi-actor card. Tessa has no standalone S3 card; this is not a form group."
+    },
+    "S3/Selina Cross-Umbra.json": {
+      "id": "s3.selina.cross.umbra",
+      "displayName": "Selina Cross (Umbra)",
+      "aliases": [
+        "Selina Cross",
+        "Umbra"
+      ],
+      "side": "vigilante",
+      "notes": "Plan-described filename defect (stray closing parenthesis) is not present in this checkout; the override still pins the canonical ID and display name."
+    },
+    "S3/Crazy Cupid (Treat Zara Embarr).json": {
+      "id": "s3.crazy.cupid.treated.zara.embarr",
+      "displayName": "Crazy Cupid",
+      "aliases": [
+        "Crazy Cupid",
+        "Zara Embarr"
+      ],
+      "formKind": "treated",
+      "notes": "Filename says 'Treat' instead of 'Treated'; override fixes the form kind and ID."
+    },
+    "S4/Pink Icicle (Coldhearted Pink Power).json": {
+      "id": "s4.pink.icicle.coldhearted-pink-power",
+      "displayName": "Pink Icicle",
+      "aliases": [
+        "Pink Icicle",
+        "Pink Power",
+        "Rosaline Bellington",
+        "Rosy"
+      ],
+      "notes": "Filename says 'Ping Power' (typo); canonical alias is Pink Power."
+    },
+    "S4/Vaiva Petrauskaite-Colorgarde (Season 4 ver.).json": {
+      "displayName": "Vaiva Petrauskaite",
+      "aliases": [
+        "Vaiva Petrauskaitė",
+        "Colorgarde",
+        "Princess of Color"
+      ],
+      "notes": "S4 spells the surname 'Petrauskaite'; the S2 card uses 'Petrauskait' and the canonical diacritic form is Petrauskaitė."
+    },
+    "S1Dark/Aurelia(Season Dark Version).json": {
+      "id": "s1dark.aurelia.season-dark-version",
+      "displayName": "Aurelia (Dark)",
+      "notes": "Missing space before the parenthetical; override keeps the ID deterministic."
+    }
+  }
+}

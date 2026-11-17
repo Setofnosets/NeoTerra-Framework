@@ -1,0 +1,12 @@
+{
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "name": "Legacy Top Level",
+  "description": "This legacy description must never be read.",
+  "tags": ["Legacy"],
+  "data": {
+    "name": "Data Name",
+    "description": "[{{char}} is Data Name, a superhero.\n\nAliases: Golden Gun (hero name). Data Name (civilian name).\n\nSide: Neo Terra Crisis Coalition\n\nThreat Level: S (A+ without the suit)\n\nAppearance: The rest of this prose is not an alias.",
+    "tags": ["Hero", "Superhero", "Female"]
+  }
+}

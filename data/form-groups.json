@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 1,
+  "groups": [
+    {
+      "id": "s1.aurelia",
+      "seasonId": "s1",
+      "label": "Aurelia / Longshot / Redraw",
+      "base": "S1/Aurelia-Longshot.json",
+      "members": [
+        "S1/Aurelia-Longshot.json",
+        "S1/Redraw (Corrupted Longshot).json"
+      ]
+    },
+    {
+      "id": "s1.tindur",
+      "seasonId": "s1",
+      "label": "Tindur / Sharkbite / Blood Frenzy",
+      "base": "S1/Tindur-Sharkbite.json",
+      "members": [
+        "S1/Tindur-Sharkbite.json",
+        "S1/Blood Frenzy (Corrupted Sharkbite).json"
+      ]
+    },
+    {
+      "id": "s1.claire",
+      "seasonId": "s1",
+      "label": "Claire Atropos / Lachesis",
+      "base": "S1/Claire Atropos.json",
+      "members": [
+        "S1/Claire Atropos.json",
+        "S1/Claire Lachesis (Cleansed Claire Atropos).json"
+      ]
+    },
+    {
+      "id": "s1.carol",
+      "seasonId": "s1",
+      "label": "Carol Fate / Twisting Fate",
+      "base": "S1/Twisting Fate (Corrupted Carol Fate).json",
+      "members": [
+        "S1/Twisting Fate (Corrupted Carol Fate).json"
+      ]
+    },
+    {
+      "id": "s1.vaiva",
+      "seasonId": "s1",
+      "label": "Vaiva / Colorgarde / Light Shade",
+      "base": "S1/Vaiva-Colorgarde.json",
+      "members": [
+        "S1/Vaiva-Colorgarde.json",
+        "S1/Light Shade (Corrupted Colorgarde).json"
+      ]
+    },
+    {
+      "id": "s1dark.carol",
+      "seasonId": "s1dark",
+      "label": "Carol Fate / Bleeding Heart",
+      "base": "S1Dark/Carol-Bleeding Heart.json",
+      "members": [
+        "S1Dark/Carol-Bleeding Heart.json",
+        "S1Dark/Carol (Cleansed Bleeding Heart).json",
+        "S1Dark/Carol (Infected Bleeding Heart).json",
+        "S1Dark/Phantom Heart (Poisoned Bleeding Heart).json"
+      ]
+    },
+    {
+      "id": "s1dark.akui",
+      "seasonId": "s1dark",
+      "label": "Akui Koden / Cyber Sakura / Heart Attack",
+      "base": "S1Dark/Akui Koden-Cyber Sakura.json",
+      "members": [
+        "S1Dark/Akui Koden-Cyber Sakura.json",
+        "S1Dark/Heart Attack (Knighted Cyber Sakura).json"
+      ]
+    },
+    {
+      "id": "s1dark.jacqueline",
+      "seasonId": "s1dark",
+      "label": "Jacqueline Webb / Poisoness / Bittersweet",
+      "base": "S1Dark/Jacqueline Webb-Poisoness.json",
+      "members": [
+        "S1Dark/Jacqueline Webb-Poisoness.json",
+        "S1Dark/Bittersweet (Knighted Poisoness).json"
+      ]
+    },
+    {
+      "id": "s1dark.aurelia",
+      "seasonId": "s1dark",
+      "label": "Aurelia (Dark) / Longshot / White Rabbit",
+      "base": "S1Dark/Aurelia(Season Dark Version).json",
+      "members": [
+        "S1Dark/Aurelia(Season Dark Version).json",
+        "S1Dark/White Rabbit (Knighted Longshot).json"
+      ]
+    },
+    {
+      "id": "s2.amy",
+      "seasonId": "s2",
+      "label": "Amy Matic / Seasonal Siren / Tribal Temptress",
+      "base": "S2/Amy Matic-Seasonal Siren.json",
+      "members": [
+        "S2/Amy Matic-Seasonal Siren.json",
+        "S2/Tribal Temptress (Corrupted Seasonal Siren).json"
+      ]
+    },
+    {
+      "id": "s2.annabelle",
+      "seasonId": "s2",
+      "label": "Annabelle Verd / Iron Maiden / Wild Maiden",
+      "base": "S2/Annabelle Verd-Iron Maiden.json",
+      "members": [
+        "S2/Annabelle Verd-Iron Maiden.json",
+        "S2/Wild Maiden (Corrupted Iron Maiden).json"
+      ]
+    },
+    {
+      "id": "s2.monika",
+      "seasonId": "s2",
+      "label": "Monika Matic / Monochromatic / Blooming Crow",
+      "base": "S2/Monika Matic-Monochromatic.json",
+      "members": [
+        "S2/Monika Matic-Monochromatic.json",
+        "S2/Blooming Crow (Corrupted Monochromatic).json"
+      ]
+    },
+    {
+      "id": "s2.laura",
+      "seasonId": "s2",
+      "label": "Laura Brimael / Demon Laura / Savage Succubus",
+      "base": "S2/Laura Brimael-Demon Laura.json",
+      "members": [
+        "S2/Laura Brimael-Demon Laura.json",
+        "S2/Savage Succubus (Corrupted Demon Laura).json"
+      ]
+    },
+    {
+      "id": "s2.leila",
+      "seasonId": "s2",
+      "label": "Leila Renya / Femme Feral",
+      "base": "S2/Leila Renya.json",
+      "members": [
+        "S2/Leila Renya.json",
+        "S2/Leila Renya-Femme Feral.json"
+      ]
+    },
+    {
+      "id": "s2.vaiva",
+      "seasonId": "s2",
+      "label": "Vaiva Petrauskait / Colorgarde (S2)",
+      "base": "S2/Vaiva Petrauskait-Colorgarde (Season 2 ver.).json",
+      "members": [
+        "S2/Vaiva Petrauskait-Colorgarde (Season 2 ver.).json",
+        "S2/Stygian Stalker (Corrupted Colorgarde).json"
+      ]
+    },
+    {
+      "id": "s3.umbra",
+      "seasonId": "s3",
+      "label": "Selina Cross / Umbra / Blood Bride",
+      "base": "S3/Selina Cross-Umbra.json",
+      "members": [
+        "S3/Selina Cross-Umbra.json",
+        "S3/Blood Bride (Corrupted Umbra).json"
+      ]
+    },
+    {
+      "id": "s3.zara",
+      "seasonId": "s3",
+      "label": "Zara Embarr / Crazy Cupid",
+      "base": "S3/Zara Embarr.json",
+      "members": [
+        "S3/Zara Embarr.json",
+        "S3/Crazy Cupid (Treat Zara Embarr).json"
+      ]
+    },
+    {
+      "id": "s3.lucia",
+      "seasonId": "s3",
+      "label": "Lucia Lulu Illusi / Chamisulli / Darkit",
+      "base": "S3/Lucia-Lulu-Illusi-Chamisulli.json",
+      "members": [
+        "S3/Lucia-Lulu-Illusi-Chamisulli.json",
+        "S3/Darkit (Treated Lucia Lulu Illusi).json"
+      ]
+    },
+    {
+      "id": "s3.ellie",
+      "seasonId": "s3",
+      "label": "Elizabeth Ellie Addison / Executaur",
+      "base": "S3/Elizabeth-Ellie-Addison.json",
+      "members": [
+        "S3/Elizabeth-Ellie-Addison.json",
+        "S3/Executaur (Treated Elizabeth-Ellie-Addison).json"
+      ]
+    },
+    {
+      "id": "s3.keira",
+      "seasonId": "s3",
+      "label": "Keira Cooper / Little Princess",
+      "base": "S3/Keira Cooper.json",
+      "members": [
+        "S3/Keira Cooper.json",
+        "S3/Little Princess (Treated Keira Cooper).json"
+      ]
+    },
+    {
+      "id": "s3.vireze",
+      "seasonId": "s3",
+      "label": "Vireze Tylow / Midnight Treat / Midnight Gift",
+      "base": "S3/Vireze Tylow-Midnight Treat.json",
+      "members": [
+        "S3/Vireze Tylow-Midnight Treat.json",
+        "S3/Midnight Gift (Cleansed Midnight Treat).json"
+      ]
+    },
+    {
+      "id": "s3.melissa",
+      "seasonId": "s3",
+      "label": "Melissa Liz Ashton / Oversight",
+      "base": "S3/Melissa-Liz-Ashton.json",
+      "members": [
+        "S3/Melissa-Liz-Ashton.json",
+        "S3/Oversight (Treated Melissa-Liz-Ashton).json"
+      ]
+    },
+    {
+      "id": "s3.miracle",
+      "seasonId": "s3",
+      "label": "Miracle Mira Nillava / VanillaMirror / Pink Mirage",
+      "base": "S3/Miracle-Mira-Nillava-VanillaMirror.json",
+      "members": [
+        "S3/Miracle-Mira-Nillava-VanillaMirror.json",
+        "S3/Pink Mirage (Treated Miracle-Mira-Nillava).json"
+      ]
+    },
+    {
+      "id": "s3.emerald-allure",
+      "seasonId": "s3",
+      "label": "Tessa Ervone / Emerald Allure / Blood Bound",
+      "base": "S3/Blood Bound (Corrupted Emeral Allure).json",
+      "members": [
+        "S3/Blood Bound (Corrupted Emeral Allure).json"
+      ]
+    },
+    {
+      "id": "s4.anastasia",
+      "seasonId": "s4",
+      "label": "Anastasia Carnaz / Gravitasha / Event Horizon / Snowfall",
+      "base": "S4/Anastasia Carnaz-Gravitasha.json",
+      "members": [
+        "S4/Anastasia Carnaz-Gravitasha.json",
+        "S4/Event Horizon (Corrupted Gravitasha).json",
+        "S4/O.V.E.N.Snowfall (Coldhearted Gravitasha).json"
+      ]
+    },
+    {
+      "id": "s4.brie",
+      "seasonId": "s4",
+      "label": "Brie Anderson / Hula Hawk / Bird Cage / Frost Flight",
+      "base": "S4/Brie Anderson-Hula Hawk.json",
+      "members": [
+        "S4/Brie Anderson-Hula Hawk.json",
+        "S4/Bird Cage (Corrupted Hula Hawk).json",
+        "S4/Frost Flight (Coldhearted Hula Hawk).json"
+      ]
+    },
+    {
+      "id": "s4.christina",
+      "seasonId": "s4",
+      "label": "Christina Goldclaw / Crimson Crush / Dark Dragon / Cyber Dragon",
+      "base": "S4/Christina-Chris-Goldclaw-Crimson Crush.json",
+      "members": [
+        "S4/Christina-Chris-Goldclaw-Crimson Crush.json",
+        "S4/Dark Dragon (Corrupted Crimson Crush).json",
+        "S4/Cyber Dragon (Infected Crimson Crush).json"
+      ]
+    },
+    {
+      "id": "s4.claire",
+      "seasonId": "s4",
+      "label": "Claire Atropos / Recorrupted / Ice Queen",
+      "base": "S4/Claire Atropos (Recorrupted).json",
+      "members": [
+        "S4/Claire Atropos (Recorrupted).json",
+        "S4/Ice Queen (Coldhearted Claire Atropos).json"
+      ]
+    },
+    {
+      "id": "s4.rosy",
+      "seasonId": "s4",
+      "label": "Roseline Bellington / Rosy / Pink Power / Shattered Shard / Pink Icicle",
+      "base": "S4/Roseline-Rosy-Bellington-Pink Power.json",
+      "members": [
+        "S4/Roseline-Rosy-Bellington-Pink Power.json",
+        "S4/Shattered Shard (Corrupted Pink Power).json",
+        "S4/Pink Icicle (Coldhearted Pink Power).json"
+      ]
+    },
+    {
+      "id": "others.evelyn",
+      "seasonId": "others",
+      "label": "Evelyn Yukon / Silent Whisp / Peppermint Phantom",
+      "base": "Others/Evelyn Yukon (Silent Whisp).json",
+      "members": [
+        "Others/Evelyn Yukon (Silent Whisp).json",
+        "Others/Peppermint Phantom (Corrupted Silent Whisp).json"
+      ]
+    }
+  ]
+}
