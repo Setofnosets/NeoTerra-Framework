@@ -17,21 +17,47 @@ import { createLogger } from '../core/logger.js';
 import { createMachine } from '../core/machine.js';
 import {
     MAP_LAYER_ORDER,
+    addChatVirtualNode,
     buildMapFeatureIndex,
     buildMapSubmenu,
     buildMapViewModel,
+    buildWorldOverlay,
     clearGeneratedMapCaches,
+    exportMapOverrides,
+    getChatMapOverrides,
     loadDistricts,
     loadGeneratedMapData,
     loadMapOverrides,
+    parseMapOverrides,
+    removeChatMapOverride,
+    removeChatVirtualNode,
+    resetChatMapOverrides,
+    setChatMapOverride,
+    updateChatVirtualNode,
 } from '../data/map.js';
 import { loadLocations } from '../data/locations.js';
 import { loadWorldStateFromMetadata } from '../state/store.js';
+import {
+    applyEditorPatch,
+    buildEditorSchema,
+    deleteEditorOverride,
+    renderMapEditor,
+    renderVirtualNodeForm,
+    renderWorldOverlayMarkup,
+    resetEditorOverride,
+    validateEditorPatch,
+} from './overlay.js';
 import { mountCityMap, mountFallbackMap } from './map.js';
 
 const logger = createLogger('map-panel');
 
 const STORAGE_KEY = 'neoterra:map:panel';
+/**
+ * Global (authored) override edits made in the browser. Browsers cannot write
+ * `data/map/overrides.json`, so edits are kept here and exported with the
+ * editor's "Export overrides" button for committing to the repo.
+ */
+const OVERRIDES_KEY = 'neoterra:map:overrides';
 const DEFAULT_GEOMETRY = Object.freeze({ x: null, y: null, width: 1080, height: 700 });
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 300;
@@ -258,11 +284,13 @@ export function buildPanelViewModel(sources, state = null) {
  *   root: HTMLElement,
  *   ctx?: object|null,
  *   store?: object|null,
+ *   season?: object|null,
  *   settings?: object,
  *   storage?: object|null,
  *   loadSources?: Function,
  *   leaflet?: object|null,
  *   onTravel?: Function|null,
+ *   onMapStateChange?: Function|null,
  * }} options
  */
 export async function mountMapPanel(options = {}) {
@@ -295,7 +323,13 @@ export async function mountMapPanel(options = {}) {
         loadSources: options.loadSources ?? loadMapSources,
         leaflet: options.leaflet ?? null,
         onTravel,
+        onMapStateChange: options.onMapStateChange ?? null,
+        season: options.season ?? null,
         flow: null,
+        overlay: null,
+        editor: null,
+        editorError: null,
+        globalOverrides: null,
     };
     mounted = state;
 
@@ -383,6 +417,53 @@ export async function mountMapPanel(options = {}) {
         if (event.target.closest?.('[data-neoterra-map-recenter]')) {
             state.cityMap?.fitBounds?.();
         }
+        if (event.target.closest?.('[data-neoterra-intro-dismiss]')) {
+            state.lastIntro = null;
+            paintSide();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-overlay-toggle]')) {
+            state.overlayCollapsed = !state.overlayCollapsed;
+            paintSide();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-editor-save]')) {
+            handleEditorSave(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-editor-reset]')) {
+            handleEditorReset(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-editor-delete]')) {
+            handleEditorDelete(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-editor-export]')) {
+            handleEditorExport(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-editor-import]')) {
+            state.root.querySelector('[data-neoterra-editor-import-input]')?.click?.();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-editor-reset-chat]')) {
+            handleChatMapReset(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-node-add]')) {
+            handleAddVirtualNode(state);
+        }
+    }, { signal: state.controller.signal });
+
+    root.addEventListener('change', (event) => {
+        if (mounted !== state) {
+            return;
+        }
+        const input = event.target.closest?.('[data-neoterra-editor-import-input]');
+        if (input && input.files?.length > 0) {
+            void handleEditorImport(state, input.files[0]);
+        }
     }, { signal: state.controller.signal });
 
     const onTab = (payload) => {
@@ -391,8 +472,23 @@ export async function mountMapPanel(options = {}) {
         }
     };
     bus.on(EVENTS.TAB_CHANGED, onTab);
+    const onMapUpdate = (payload) => {
+        if (mounted !== state) {
+            return;
+        }
+        const result = payload?.travel ?? null;
+        if (result?.ok) {
+            state.lastTravel = result;
+            if (result.intro?.text) {
+                state.lastIntro = result.intro;
+            }
+        }
+        refreshMapPanel();
+    };
+    bus.on(EVENTS.MAP_UPDATED, onMapUpdate);
     state.controller.signal.addEventListener('abort', () => {
         bus.off?.(EVENTS.TAB_CHANGED, onTab);
+        bus.off?.(EVENTS.MAP_UPDATED, onMapUpdate);
     }, { once: true });
 
     state.flow.send('OPEN');
@@ -403,6 +499,8 @@ export async function mountMapPanel(options = {}) {
         getState: () => state.flow?.state ?? 'closed',
         getViewModel: () => state.viewModel,
         getSubmenu: () => state.submenu,
+        getSources: () => state.sources,
+        getOverlay: () => state.overlay,
         select: (selection) => selectFeature(state, selection),
     };
 }
@@ -475,11 +573,22 @@ function persistGeometry(state) {
 function selectFeature(state, selection) {
     if (!selection) {
         state.submenu = null;
+        state.editor = null;
+        state.editorError = null;
         state.cityMap?.setSelection?.(null);
         state.flow.send('CLEAR');
         return;
     }
-    state.submenu = buildMapSubmenu(selection, state.viewModel, { state: readState(state) });
+    const worldState = readState(state);
+    state.submenu = buildMapSubmenu(selection, state.viewModel, { state: worldState });
+    state.editor = state.settings?.editorEnabled === false
+        ? null
+        : buildEditorSchema(state.submenu?.feature, {
+            factions: Object.values(worldState?.factions ?? {}),
+            districts: state.sources?.districts?.districts ?? [],
+            virtual: state.submenu?.feature?.chatOnly === true,
+        });
+    state.editorError = null;
     state.cityMap?.setSelection?.(selection);
     // `location.SELECT` is an internal self-transition, so the machine does not
     // fire `onChange`; repaint here or the side panel keeps the first feature.
@@ -525,6 +634,412 @@ async function openTravel(state) {
     return handled;
 }
 
+/* ------------------------------------------------------------------ *
+ * Editor + per-chat overrides
+ * ------------------------------------------------------------------ */
+
+function collectEditorValues(state) {
+    const values = {};
+    for (const input of state.root?.querySelectorAll?.('[data-neoterra-editor-field]') ?? []) {
+        values[input.dataset.neoterraEditorField] = input.value;
+    }
+    return values;
+}
+
+function persistWorldState(state, next) {
+    if (state.store && typeof state.store.replace === 'function') {
+        state.store.replace(next);
+        return true;
+    }
+    const metadata = state.ctx?.chatMetadata;
+    if (!metadata) {
+        return false;
+    }
+    const slot = metadata.neoterra ?? {};
+    metadata.neoterra = {
+        ...slot,
+        worldState: next,
+        savedAt: Date.now(),
+    };
+    state.ctx?.saveMetadataDebounced?.();
+    return true;
+}
+
+function readStoredGlobalOverrides(storage) {
+    if (!storage) {
+        return null;
+    }
+    try {
+        const raw = storage.getItem(OVERRIDES_KEY);
+        return raw ? parseMapOverrides(raw).document : null;
+    } catch (error) {
+        logger.warn('Could not read stored map overrides', error);
+        return null;
+    }
+}
+
+function writeStoredGlobalOverrides(storage, document) {
+    if (!storage) {
+        return false;
+    }
+    try {
+        storage.setItem(OVERRIDES_KEY, exportMapOverrides(document));
+        return true;
+    } catch (error) {
+        logger.warn('Could not persist map overrides', error);
+        return false;
+    }
+}
+
+function rebuildAfterMapChange(state, worldState) {
+    state.sources = {
+        ...(state.sources ?? {}),
+        overrides: state.globalOverrides ?? state.sources?.overrides ?? null,
+    };
+    state.viewModel = buildPanelViewModel(state.sources, worldState);
+    state.overlay = buildWorldOverlay({
+        state: worldState,
+        season: state.season ?? null,
+        viewModel: state.viewModel,
+        settings: state.settings ?? {},
+    });
+    if (state.submenu?.selection) {
+        state.submenu = buildMapSubmenu(state.submenu.selection, state.viewModel, { state: worldState });
+        state.editor = state.settings?.editorEnabled === false
+            ? null
+            : buildEditorSchema(state.submenu?.feature, {
+                factions: Object.values(worldState?.factions ?? {}),
+                districts: state.sources?.districts?.districts ?? [],
+                virtual: state.submenu?.feature?.chatOnly === true,
+            });
+    }
+    refreshMapLayers(state);
+    paintSide();
+    if (typeof state.onMapStateChange === 'function') {
+        try {
+            state.onMapStateChange({ state: worldState, viewModel: state.viewModel, overlay: state.overlay });
+        } catch (error) {
+            logger.warn('Map state listener failed', error);
+        }
+    }
+}
+
+function refreshMapLayers(state) {
+    const cityMap = state.cityMap;
+    if (!cityMap || !state.viewModel) {
+        return;
+    }
+    for (const style of state.overlay?.regionStyles ?? []) {
+        const layer = cityMap.layersById?.get?.(style.id);
+        if (layer?.setStyle) {
+            layer.setStyle({
+                color: style.color,
+                fillColor: style.color,
+                fillOpacity: style.fillOpacity,
+                weight: style.weight,
+                dashArray: style.dashArray,
+            });
+        }
+    }
+    for (const style of state.overlay?.bridgeStyles ?? []) {
+        const layer = cityMap.layersById?.get?.(style.id);
+        if (layer?.setStyle) {
+            const visual = BRIDGE_VISUALS[style.status] ?? BRIDGE_VISUALS.open;
+            layer.setStyle({ color: visual.color, weight: visual.weight, dashArray: visual.dashArray });
+        }
+    }
+}
+
+const BRIDGE_VISUALS = Object.freeze({
+    open: { color: '#5eead4', dashArray: null, weight: 3 },
+    contested: { color: '#fbbf24', dashArray: '6 4', weight: 3 },
+    blocked: { color: '#fb7185', dashArray: '2 6', weight: 3 },
+    destroyed: { color: '#64748b', dashArray: '1 8', weight: 2 },
+});
+
+function editorScope(state) {
+    const radio = state.root?.querySelector?.('[data-neoterra-editor-scope]:checked');
+    return radio?.value === 'global' ? 'global' : 'chat';
+}
+
+function persistChatEditorPatch(state, schema, values, scope) {
+    const validation = validateEditorPatch(schema, values);
+    if (!validation.ok) {
+        state.editorError = validation.errors.map((error) => `${error.field}: ${error.message}`).join('; ');
+        paintSide();
+        return false;
+    }
+    const worldState = readState(state);
+    const chatLayer = schema.chatLayer ?? 'namedLocations';
+    const chatKey = schema.chatKey ?? schema.key;
+    let next = worldState;
+    try {
+        // Timeline facts are per chat for every feature kind: a destroyed
+        // bridge or captured district changes this world only.
+        const chatPatch = {};
+        for (const field of ['status', 'x', 'y', 'name', 'description', 'factionId', 'connections']) {
+            if (Object.hasOwn(validation.patch, field)) {
+                chatPatch[field] = validation.patch[field];
+            }
+        }
+        if (Object.keys(chatPatch).length > 0) {
+            next = setChatMapOverride(next, { layer: chatLayer, key: chatKey, patch: chatPatch });
+        }
+
+        if (chatLayer === 'namedLocations' && next.locations?.[chatKey]) {
+            const isVirtual = next.locations[chatKey].tags?.includes?.('virtual-node');
+            if (isVirtual && Object.hasOwn(chatPatch, 'connections')) {
+                next = updateChatVirtualNode(next, chatKey, {
+                    connections: chatPatch.connections,
+                });
+            }
+            next = structuredClone(next);
+            const location = next.locations[chatKey];
+            if (Object.hasOwn(chatPatch, 'status')) {
+                location.status = chatPatch.status;
+            }
+            if (Object.hasOwn(chatPatch, 'factionId')) {
+                location.factionId = chatPatch.factionId;
+            }
+        }
+    } catch (error) {
+        state.editorError = error?.message ?? String(error);
+        paintSide();
+        return false;
+    }
+    if (!persistWorldState(state, next)) {
+        state.editorError = 'No chat world is available to store this override.';
+        paintSide();
+        return false;
+    }
+    state.editorError = null;
+    rebuildAfterMapChange(state, next);
+    return true;
+}
+
+function handleEditorSave(state) {
+    const schema = state.editor;
+    if (!schema) {
+        return;
+    }
+    const values = collectEditorValues(state);
+    const scope = schema.scope === 'chat' ? 'chat' : editorScope(state);
+    if (scope === 'chat') {
+        persistChatEditorPatch(state, schema, values, scope);
+        return;
+    }
+
+    const base = state.globalOverrides ?? state.sources?.overrides ?? null;
+    const applied = applyEditorPatch(base, schema, values);
+    if (!applied.ok) {
+        state.editorError = applied.errors.map((error) => `${error.field}: ${error.message}`).join('; ');
+        paintSide();
+        return;
+    }
+    if (!writeStoredGlobalOverrides(state.storage, applied.document)) {
+        state.editorError = 'Could not store the override. Copy the exported JSON instead.';
+        paintSide();
+        return;
+    }
+    state.globalOverrides = applied.document;
+    state.editorError = null;
+    rebuildAfterMapChange(state, readState(state));
+}
+
+function handleEditorReset(state) {
+    const schema = state.editor;
+    if (!schema) {
+        return;
+    }
+    const scope = schema.scope === 'chat' ? 'chat' : editorScope(state);
+    if (scope === 'chat') {
+        const worldState = readState(state);
+        const chatLayer = schema.chatLayer ?? 'namedLocations';
+        const chatKey = schema.chatKey ?? schema.key;
+        let next;
+        try {
+            next = removeChatMapOverride(worldState, { layer: chatLayer, key: chatKey });
+            // Named locations also carry live status/control; restore the
+            // authored default so a reset is a real reset.
+            if (chatLayer === 'namedLocations' && next.locations?.[chatKey]) {
+                const authored = (state.sources?.locations?.locations ?? [])
+                    .find((entry) => entry.id === chatKey) ?? null;
+                next = structuredClone(next);
+                next.locations[chatKey].status = authored?.defaultStatus ?? 'unknown';
+                next.locations[chatKey].factionId = authored?.factionId ?? null;
+            }
+        } catch (error) {
+            state.editorError = error?.message ?? String(error);
+            paintSide();
+            return;
+        }
+        if (!persistWorldState(state, next)) {
+            state.editorError = 'No chat world is available.';
+            paintSide();
+            return;
+        }
+        state.editorError = null;
+        rebuildAfterMapChange(state, next);
+        return;
+    }
+    const base = state.globalOverrides ?? state.sources?.overrides ?? null;
+    const result = resetEditorOverride(base, schema);
+    if (!result.ok) {
+        state.editorError = result.error ?? 'Could not reset this override.';
+        paintSide();
+        return;
+    }
+    writeStoredGlobalOverrides(state.storage, result.document);
+    state.globalOverrides = result.document;
+    state.editorError = null;
+    rebuildAfterMapChange(state, readState(state));
+}
+
+function handleEditorDelete(state) {
+    const schema = state.editor;
+    if (!schema) {
+        return;
+    }
+    const scope = schema.scope === 'chat' ? 'chat' : editorScope(state);
+    if (scope === 'chat') {
+        const worldState = readState(state);
+        const chatLayer = schema.chatLayer ?? 'namedLocations';
+        const chatKey = schema.chatKey ?? schema.key;
+        let next;
+        try {
+            if (chatLayer === 'namedLocations' && worldState.locations?.[chatKey]?.tags?.includes?.('virtual-node')) {
+                // A chat-only node is deleted entirely, not just un-overridden.
+                next = removeChatVirtualNode(worldState, chatKey);
+            } else {
+                next = removeChatMapOverride(worldState, { layer: chatLayer, key: chatKey });
+            }
+        } catch (error) {
+            state.editorError = error?.message ?? String(error);
+            paintSide();
+            return;
+        }
+        if (persistWorldState(state, next)) {
+            state.editorError = null;
+            state.submenu = null;
+            state.editor = null;
+            rebuildAfterMapChange(state, next);
+        }
+        return;
+    }
+    const base = state.globalOverrides ?? state.sources?.overrides ?? null;
+    const result = deleteEditorOverride(base, schema);
+    if (!result.ok) {
+        state.editorError = result.error ?? 'Could not delete this override.';
+        paintSide();
+        return;
+    }
+    writeStoredGlobalOverrides(state.storage, result.document);
+    state.globalOverrides = result.document;
+    state.editorError = null;
+    rebuildAfterMapChange(state, readState(state));
+}
+
+function handleEditorExport(state) {
+    const overridesDocument = state.globalOverrides ?? state.sources?.overrides ?? null;
+    if (!overridesDocument) {
+        return null;
+    }
+    const text = exportMapOverrides(overridesDocument);
+    if (typeof document === 'undefined' || typeof Blob === 'undefined') {
+        return text;
+    }
+    try {
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = window.document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'neoterra-map-overrides.json';
+        anchor.click?.();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        logger.warn('Could not download the overrides file', error);
+    }
+    return text;
+}
+
+async function handleEditorImport(state, file) {
+    try {
+        const text = typeof file?.text === 'function' ? await file.text() : String(file ?? '');
+        const parsed = parseMapOverrides(text);
+        if (!parsed.ok) {
+            state.editorError = parsed.errors.map((error) => `${error.path}: ${error.message}`).join('; ');
+            paintSide();
+            return;
+        }
+        writeStoredGlobalOverrides(state.storage, parsed.document);
+        state.globalOverrides = parsed.document;
+        state.editorError = null;
+        rebuildAfterMapChange(state, readState(state));
+    } catch (error) {
+        state.editorError = error?.message ?? String(error);
+        paintSide();
+    }
+}
+
+function handleChatMapReset(state) {
+    const worldState = readState(state);
+    let next;
+    try {
+        next = resetChatMapOverrides(worldState);
+    } catch (error) {
+        state.editorError = error?.message ?? String(error);
+        paintSide();
+        return;
+    }
+    if (!persistWorldState(state, next)) {
+        state.editorError = 'No chat world is available.';
+        paintSide();
+        return;
+    }
+    state.submenu = null;
+    state.editor = null;
+    state.editorError = null;
+    rebuildAfterMapChange(state, next);
+}
+
+function handleAddVirtualNode(state) {
+    const values = {};
+    for (const input of state.root?.querySelectorAll?.('[data-neoterra-node-field]') ?? []) {
+        values[input.dataset.neoterraNodeField] = input.value;
+    }
+    const worldState = readState(state);
+    let next;
+    try {
+        const connections = String(values.connections ?? '')
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean);
+        const x = Number(values.x);
+        const y = Number(values.y);
+        if (String(values.x ?? '').trim() === '' || String(values.y ?? '').trim() === ''
+            || !Number.isFinite(x) || !Number.isFinite(y)) {
+            throw new Error('A virtual node requires numeric X and Y coordinates.');
+        }
+        next = addChatVirtualNode(worldState, {
+            name: values.name,
+            x,
+            y,
+            connections,
+        });
+    } catch (error) {
+        state.editorError = error?.message ?? String(error);
+        paintSide();
+        return;
+    }
+    if (!persistWorldState(state, next)) {
+        state.editorError = 'No chat world is available.';
+        paintSide();
+        return;
+    }
+    state.editorError = null;
+    rebuildAfterMapChange(state, next);
+}
+
 function readState(state) {
     if (state.store && typeof state.store.get === 'function') {
         return state.store.get();
@@ -556,7 +1071,39 @@ function paintSide() {
                 <span>${state.viewModel.counts.keyLocations} key locations</span>
            </footer>`
         : '';
-    side.innerHTML = `${error}${renderSubmenuMarkup(state.submenu)}${counts}`;
+    const worldState = readState(state);
+    const overlayEnabled = state.settings?.showOverlay !== false;
+    const overlay = overlayEnabled && state.viewModel
+        ? renderWorldOverlayMarkup(
+            state.overlay ?? buildWorldOverlay({
+                state: worldState,
+                season: state.season ?? null,
+                viewModel: state.viewModel,
+                settings: state.settings ?? {},
+            }),
+            { collapsed: state.overlayCollapsed === true },
+        )
+        : '';
+    const editorEnabled = state.settings?.editorEnabled !== false;
+    const editor = editorEnabled && state.editor
+        ? `${state.editorError ? `<p class="neoterra-error" role="alert">${escapeHtml(state.editorError)}</p>` : ''}
+           ${renderMapEditor(state.editor, {
+                globalOverrides: state.globalOverrides,
+                chat: getChatMapOverrides(worldState),
+            })}`
+        : '';
+    const addNode = editorEnabled ? renderVirtualNodeForm() : '';
+    const intro = state.lastIntro?.text
+        ? `<section class="neoterra-map-intro" data-neoterra-map-intro>
+                <header>
+                    <h5>Arrival</h5>
+                    <button type="button" class="neoterra-icon-button" data-neoterra-intro-dismiss
+                        aria-label="Dismiss arrival">&times;</button>
+                </header>
+                <p>${escapeHtml(state.lastIntro.text).replaceAll('\n', '<br>')}</p>
+           </section>`
+        : '';
+    side.innerHTML = `${error}${intro}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
 }
 
 async function loadAndMount(state) {
@@ -566,7 +1113,19 @@ async function loadAndMount(state) {
             return;
         }
         state.sources = sources;
-        state.viewModel = buildPanelViewModel(sources, readState(state));
+        // Global edits made in this browser layer over the shipped file; the
+        // export button produces the file to commit.
+        state.globalOverrides = readStoredGlobalOverrides(state.storage) ?? sources.overrides ?? null;
+        if (state.globalOverrides && state.globalOverrides !== sources.overrides) {
+            state.sources = { ...sources, overrides: state.globalOverrides };
+        }
+        state.viewModel = buildPanelViewModel(state.sources, readState(state));
+        state.overlay = buildWorldOverlay({
+            state: readState(state),
+            season: state.season ?? null,
+            viewModel: state.viewModel,
+            settings: state.settings ?? {},
+        });
         state.generated = Boolean(sources.generated);
         state.loading = false;
         paintSide();
@@ -673,6 +1232,13 @@ export function refreshMapPanel() {
     }
     const worldState = readState(state);
     state.viewModel = buildPanelViewModel(state.sources, worldState);
+    state.overlay = buildWorldOverlay({
+        state: worldState,
+        season: state.season ?? null,
+        viewModel: state.viewModel,
+        settings: state.settings ?? {},
+    });
+    refreshMapLayers(state);
     if (state.submenu?.selection) {
         state.submenu = buildMapSubmenu(state.submenu.selection, state.viewModel, { state: worldState });
     }

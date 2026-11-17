@@ -57,6 +57,7 @@
     "BridgeK": { "name": "Highland Crossing", "status": "open" },
     "BridgeL": { "name": "Forest Road Bridge", "status": "open" }
   },
+  "namedLocations": {},
   "keyLocations": {
     "BigOfficeA": {
       "locationId": null,

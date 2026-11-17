@@ -144,6 +144,105 @@ export function describeScene(state) {
     };
 }
 
+/**
+ * Deterministic arrival text for a location change (Step 14).
+ *
+ * The narrator may elaborate on this, but the frame is canonical: it names the
+ * location and parent district, how the player got there, the bridges used, and
+ * who is present. It never invents characters the cast does not contain.
+ *
+ * @param {{
+ *   state: object,
+ *   season?: object|null,
+ *   from?: { id: string, name?: string }|null,
+ *   travel?: { path?: string[], bridges?: string[], bridgeNames?: string[], turns?: number, ability?: string|null },
+ * }} options
+ */
+export function buildLocationIntro({ state, season = null, from = null, travel = null } = {}) {
+    if (!isObject(state)) {
+        throw new TypeError('buildLocationIntro requires a WorldState');
+    }
+    const locationId = state.scene?.locationId ?? null;
+    const location = locationId ? state.locations?.[locationId] ?? null : null;
+    const name = location?.name ?? locationId ?? 'an unknown location';
+    const district = location?.district ?? null;
+    const factionId = location?.factionId ?? null;
+    const factionName = factionId ? state.factions?.[factionId]?.name ?? factionId : null;
+    const status = location?.status ?? null;
+    const castNames = getSceneCastNames(state);
+    const playerName = getPlayerDisplayName(state);
+    const bridges = Array.isArray(travel?.bridgeNames) && travel.bridgeNames.length > 0
+        ? travel.bridgeNames
+        : Array.isArray(travel?.bridges)
+            ? travel.bridges
+            : [];
+    const turns = Number.isFinite(travel?.turns) ? travel.turns : 0;
+    const ability = typeof travel?.ability === 'string' ? travel.ability : null;
+    // `arrival` is a move; `description` is the same text used for a first
+    // look at a place (no origin).
+    const reason = from?.id ? 'arrival' : 'description';
+
+    const lines = [];
+    const heading = district ? `${name}, ${district}` : name;
+    const fromName = from?.name ?? (from?.id ? state.locations?.[from.id]?.name ?? from.id : null);
+    if (fromName && fromName !== name) {
+        const how = ability === 'teleport'
+            ? 'by teleport'
+            : ability === 'flight'
+                ? 'by air'
+                : ability === 'swim'
+                    ? 'by water'
+                    : bridges.length > 0
+                        ? `across ${bridges.join(' and ')}`
+                        : 'on foot';
+        lines.push(`${playerName} arrives at ${heading} ${how} from ${fromName}.`);
+    } else {
+        lines.push(`${playerName} arrives at ${heading}.`);
+    }
+    if (turns > 0) {
+        lines.push(`The trip takes ${turns} turn${turns === 1 ? '' : 's'}${bridges.length > 0 ? ` (via ${bridges.join(', ')})` : ''}.`);
+    }
+    if (status && status !== 'unknown') {
+        lines.push(`The area is ${status}${factionName ? ` and controlled by ${factionName}` : ''}.`);
+    } else if (factionName) {
+        lines.push(`${factionName} holds this place.`);
+    }
+    if (castNames.length > 0) {
+        lines.push(`Present: ${castNames.join(', ')}.`);
+    } else {
+        lines.push('Present: nobody you recognise.');
+    }
+    const framing = state.scene?.framing;
+    if (typeof framing === 'string' && framing.trim().length > 0) {
+        lines.push('');
+        lines.push(framing.trim());
+    }
+    const seasonTitle = season?.title ?? state.seasonId ?? null;
+    if (seasonTitle) {
+        lines.push('');
+        lines.push(`— ${seasonTitle}`);
+    }
+
+    return {
+        text: lines.join('\n').trim(),
+        reason,
+        locationId,
+        locationName: location?.name ?? null,
+        district,
+        factionId,
+        factionName,
+        status,
+        castNames,
+        playerName,
+        from: from?.id ?? travel?.from ?? null,
+        fromName,
+        path: Array.isArray(travel?.path) ? travel.path.slice() : [],
+        bridges: bridges.slice(),
+        turns,
+        ability,
+    };
+}
+
 /* ------------------------------------------------------------------ */
 /* Scene transitions and cast direction                                */
 /* ------------------------------------------------------------------ */

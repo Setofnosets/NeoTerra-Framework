@@ -14,6 +14,14 @@
  * Browser-safe: `fetch` is injectable for Node tests; no DOM access.
  */
 
+import {
+    getBeatStatus,
+    getCurrentAct,
+    getUpcomingBeats,
+    isFinalDeadlinePassed,
+    summarizeBeatLedger,
+} from './beats.js';
+
 export const CANONICAL_MAP = Object.freeze({
     path: 'NeoTerra.png',
     width: 2048,
@@ -368,6 +376,11 @@ export function validateMapOverrides(document, context = {}) {
             add(errors, layer, 'must be an object keyed by SVG label');
         }
     }
+    // `namedLocations` is the named-location override layer (keyed by location
+    // id). It is optional so existing authored documents stay valid.
+    if (document.namedLocations !== undefined && !isObject(document.namedLocations)) {
+        add(errors, 'namedLocations', 'must be an object keyed by location id');
+    }
 
     // Region overrides must cover exactly the labels authored on districts
     // (and, when Step 13 supplies them, exactly the labels extracted from SVG).
@@ -435,6 +448,31 @@ export function validateMapOverrides(document, context = {}) {
         }
         if (override.status !== undefined && !BRIDGE_STATUSES.includes(override.status)) {
             add(errors, `${path}.status`, `must be one of ${BRIDGE_STATUSES.join(', ')}`);
+        }
+    }
+
+    for (const [locationId, override] of Object.entries(document.namedLocations ?? {})) {
+        const path = `namedLocations.${locationId}`;
+        if (!isObject(override)) {
+            add(errors, path, 'must be an object');
+            continue;
+        }
+        if (context.locationIds && !context.locationIds.has(locationId)) {
+            add(errors, path, `unresolved location "${locationId}"`);
+        }
+        if (override.status !== undefined && !MAP_LOCATION_STATUSES.includes(override.status)) {
+            add(errors, `${path}.status`, `must be one of ${MAP_LOCATION_STATUSES.join(', ')}`);
+        }
+        if (override.x !== undefined && override.x !== null && !Number.isFinite(override.x)) {
+            add(errors, `${path}.x`, 'must be a number');
+        }
+        if (override.y !== undefined && override.y !== null && !Number.isFinite(override.y)) {
+            add(errors, `${path}.y`, 'must be a number');
+        }
+        for (const field of ['name', 'description', 'factionId']) {
+            if (override[field] !== undefined && override[field] !== null && typeof override[field] !== 'string') {
+                add(errors, `${path}.${field}`, 'must be a string when present');
+            }
         }
     }
 
@@ -1116,9 +1154,15 @@ export function buildMapViewModel({
 
     const stateLocations = state?.locations ?? {};
     const stateFactions = state?.factions ?? {};
+    // Per-chat overrides win over the authored/global document: a district
+    // captured or a bridge destroyed in this timeline never changes another.
+    const chat = getChatMapOverrides(state);
 
     const regionViews = featureIndex.regions.map((region) => {
-        const override = featureIndex.overrideIndex.regions?.[region.label] ?? null;
+        const override = {
+            ...(featureIndex.overrideIndex.regions?.[region.label] ?? null),
+            ...(chat.regions[region.label] ?? {}),
+        };
         const districtId = override?.districtId ?? region.districtId ?? null;
         const district = districtId ? featureIndex.districtIndex?.byId?.[districtId] ?? null : null;
         // Live control comes from WorldState location entries whose named
@@ -1133,11 +1177,15 @@ export function buildMapViewModel({
         const liveStatuses = namedInRegion
             .map((location) => stateLocations[location.id]?.status)
             .filter(Boolean);
-        const status = liveStatuses.includes('hostile')
-            ? 'hostile'
-            : liveStatuses.includes('contested')
-                ? 'contested'
-                : null;
+        // An explicit district-status override (chat or authored) wins over
+        // the worst live status among the district's named locations.
+        const status = typeof override?.status === 'string' && override.status.length > 0
+            ? override.status
+            : liveStatuses.includes('hostile')
+                ? 'hostile'
+                : liveStatuses.includes('contested')
+                    ? 'contested'
+                    : null;
         return {
             id: region.id,
             kind: 'region',
@@ -1163,7 +1211,10 @@ export function buildMapViewModel({
     const regionViewById = new Map(regionViews.map((view) => [view.id, view]));
 
     const bridgeViews = featureIndex.bridges.map((bridge) => {
-        const override = featureIndex.overrideIndex.bridges?.[bridge.label] ?? null;
+        const override = {
+            ...(featureIndex.overrideIndex.bridges?.[bridge.label] ?? null),
+            ...(chat.bridges[bridge.label] ?? {}),
+        };
         const [a, b] = bridge.connects ?? [];
         return {
             id: bridge.id,
@@ -1185,7 +1236,10 @@ export function buildMapViewModel({
     const bridgeViewById = new Map(bridgeViews.map((view) => [view.id, view]));
 
     const keyViews = featureIndex.keyLocations.map((key) => {
-        const override = featureIndex.overrideIndex.keyLocations?.[key.label] ?? null;
+        const override = {
+            ...(featureIndex.overrideIndex.keyLocations?.[key.label] ?? null),
+            ...(chat.keyLocations[key.label] ?? {}),
+        };
         const namedLocation = key.locationId ? featureIndex.locationById.get(key.locationId) ?? null : null;
         const districtId = override?.districtId ?? key.districtId ?? null;
         return {
@@ -1196,8 +1250,8 @@ export function buildMapViewModel({
             locationId: key.locationId ?? null,
             named: Boolean(namedLocation),
             locationKind: key.kind,
-            x: key.x,
-            y: key.y,
+            x: Number.isFinite(override?.x) ? override.x : key.x,
+            y: Number.isFinite(override?.y) ? override.y : key.y,
             regionId: key.regionId,
             regionName: key.regionId ? regionViewById.get(key.regionId)?.name ?? null : null,
             districtId,
@@ -1210,17 +1264,18 @@ export function buildMapViewModel({
 
     const locationViews = (locations?.locations ?? []).map((location) => {
         const live = stateLocations[location.id] ?? null;
+        const override = chat.namedLocations[location.id] ?? null;
         const key = location.mapRef?.layer === 'keyLocation'
             ? featureIndex.get(location.mapRef.id)
             : null;
         return {
             id: location.id,
             kind: 'namedLocation',
-            name: location.name,
-            description: location.description,
+            name: override?.name ?? live?.name ?? location.name,
+            description: override?.description ?? location.description,
             locationKind: location.kind,
-            x: location.x,
-            y: location.y,
+            x: Number.isFinite(override?.x) ? override.x : location.x,
+            y: Number.isFinite(override?.y) ? override.y : location.y,
             districtId: location.districtId ?? null,
             regionId: location.regionId ?? key?.regionId ?? null,
             regionName: (location.regionId ?? key?.regionId)
@@ -1230,14 +1285,49 @@ export function buildMapViewModel({
             keyLocationId: key?.id ?? null,
             virtual: location.virtual === true,
             travel: Array.isArray(location.travel) ? location.travel.slice() : [],
-            factionId: live?.factionId ?? location.factionId ?? null,
-            status: live?.status ?? location.defaultStatus ?? 'unknown',
+            // Live `LocationState` is the authority for status/control (it is
+            // already per chat and the storyline writes it); the presentation
+            // override is only a fallback.
+            factionId: live?.factionId ?? override?.factionId ?? location.factionId ?? null,
+            status: live?.status ?? override?.status ?? location.defaultStatus ?? 'unknown',
             present: Array.isArray(live?.present) ? live.present.slice() : [],
             visited: live?.visited === true,
             connections: Array.isArray(location.connections) ? location.connections.slice() : [],
             labelHidden: false,
         };
     });
+
+    // Chat-only virtual nodes exist in `WorldState.locations` but not in the
+    // authored registry; the overlay/editor still renders them.
+    for (const node of chat.virtualNodes) {
+        if (!isObject(node) || typeof node.id !== 'string') {
+            continue;
+        }
+        const live = stateLocations[node.id] ?? null;
+        locationViews.push({
+            id: node.id,
+            kind: 'namedLocation',
+            name: node.name ?? node.id,
+            description: node.description ?? '',
+            locationKind: 'venue',
+            x: node.x,
+            y: node.y,
+            districtId: node.districtId ?? null,
+            regionId: node.regionId ?? null,
+            regionName: node.regionId ? regionViewById.get(node.regionId)?.name ?? null : null,
+            mapRef: null,
+            keyLocationId: null,
+            virtual: true,
+            travel: Array.isArray(node.travel) ? node.travel.slice() : ['walk'],
+            factionId: live?.factionId ?? null,
+            status: live?.status ?? 'unknown',
+            present: Array.isArray(live?.present) ? live.present.slice() : [],
+            visited: live?.visited === true,
+            connections: Array.isArray(node.connections) ? node.connections.slice() : [],
+            chatOnly: true,
+            labelHidden: false,
+        });
+    }
 
     return {
         canvas: { width: CANONICAL_MAP.width, height: CANONICAL_MAP.height },
@@ -1334,4 +1424,1286 @@ export function buildMapSubmenu(selection, viewModel, options = {}) {
             connections: connected,
         },
     };
+}
+
+/* ------------------------------------------------------------------ *
+ * Per-chat map layer (WorldState.flags.map) and overlay helpers (Step 15)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Named-location, region, and bridge overrides come from two places:
+ * the authored/global document (`data/map/overrides.json`, or its exported
+ * replacement) and a per-chat layer stored in `WorldState.flags.map`.
+ *
+ * `WorldState.locations` keeps live per-chat status/control/presence. Bridges
+ * and districts have no `LocationState` of their own, so the per-chat bridge
+ * status and district override live in `flags.map`; everything stays inside
+ * the chat's `WorldState`, so one timeline can never leak into another.
+ */
+export const MAP_OVERRIDE_LAYERS = Object.freeze(['regions', 'bridges', 'keyLocations', 'namedLocations']);
+
+/**
+ * Travel modes accepted by authored locations. Mirrored here (not imported)
+ * because `locations.js` imports this module; the two lists are asserted equal
+ * in `tests/travel.test.js`.
+ */
+export const MAP_TRAVEL_MODES = Object.freeze(['walk', 'bridge', 'flight', 'secret']);
+
+/**
+ * Named-location statuses accepted by an override. Mirrored from
+ * `src/data/locations.js` (which imports this module) and asserted equal in
+ * `tests/overlay.test.js`.
+ */
+export const MAP_LOCATION_STATUSES = Object.freeze([
+    'peaceful',
+    'patrolled',
+    'contested',
+    'hostile',
+    'locked',
+    'unknown',
+]);
+
+export const OVERLAY_SIDE_COLORS = Object.freeze({
+    villain: '#f43f5e',
+    hero: '#38bdf8',
+    vigilante: '#a78bfa',
+    civilian: '#94a3b8',
+    neutral: '#fbbf24',
+});
+
+export const OVERLAY_DEFAULT_SETTINGS = Object.freeze({
+    showThreats: true,
+    showFactions: true,
+    showRumors: true,
+    showHeadlines: true,
+    showFactionTint: true,
+    maxHeadlines: 5,
+    editorEnabled: true,
+});
+
+/** Canvas units travelled per in-game turn, and the clamp for one trip. */
+export const TRAVEL_TUNING = Object.freeze({
+    unitsPerTurn: 400,
+    minEdgeWeight: 60,
+    maxTurns: 8,
+    sameRegionTurns: 1,
+});
+
+/** Travel journal entries kept in `flags.travel.history` (newest last). */
+export const MAX_TRAVEL_HISTORY = 20;
+
+const BYPASS_COST = Object.freeze({ teleport: 1, flight: 2, swim: 3 });
+
+const TRAVEL_ABILITY_PATTERNS = Object.freeze([
+    ['teleport', /teleport|portal|blink|warp|phase/i],
+    ['flight', /flight|flying|fly\b|wing|aerial|hover|flight-capable/i],
+    ['swim', /swim|aquatic|amphib|water.?breath|submersible/i],
+]);
+
+function clampNumber(value, min, max, fallback = min) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return fallback;
+    }
+    return Math.min(max, Math.max(min, number));
+}
+
+/** Empty per-chat map layer. */
+export function emptyChatMapOverrides() {
+    return {
+        regions: {},
+        bridges: {},
+        keyLocations: {},
+        namedLocations: {},
+        virtualNodes: [],
+        updatedAt: null,
+    };
+}
+
+/** Read (and normalize) the per-chat map layer from a `WorldState`. */
+export function getChatMapOverrides(state) {
+    const raw = isObject(state?.flags?.map) ? state.flags.map : null;
+    if (!raw) {
+        return emptyChatMapOverrides();
+    }
+    const readLayer = (layer) => (isObject(raw[layer]) ? { ...raw[layer] } : {});
+    return {
+        regions: readLayer('regions'),
+        bridges: readLayer('bridges'),
+        keyLocations: readLayer('keyLocations'),
+        namedLocations: readLayer('namedLocations'),
+        virtualNodes: Array.isArray(raw.virtualNodes) ? raw.virtualNodes.filter(isObject).map((node) => ({ ...node })) : [],
+        updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : null,
+    };
+}
+
+function withChatMap(state, mutate) {
+    if (!isObject(state)) {
+        throw new TypeError('A map override requires a WorldState object');
+    }
+    const next = structuredClone(state);
+    const current = getChatMapOverrides(next);
+    const map = {
+        ...(isObject(next.flags?.map) ? next.flags.map : {}),
+        regions: { ...current.regions },
+        bridges: { ...current.bridges },
+        keyLocations: { ...current.keyLocations },
+        namedLocations: { ...current.namedLocations },
+        virtualNodes: current.virtualNodes.map((node) => ({ ...node })),
+    };
+    mutate(map);
+    map.updatedAt = Date.now();
+    next.flags = { ...(next.flags ?? {}), map };
+    return next;
+}
+
+/**
+ * Write one per-chat override. Returns a new `WorldState`; the caller persists
+ * it through the store (`store.replace`).
+ *
+ * @param {object} state
+ * @param {{ layer: string, key: string, patch: object }} override
+ */
+export function setChatMapOverride(state, { layer, key, patch } = {}) {
+    if (!MAP_OVERRIDE_LAYERS.includes(layer)) {
+        throw new Error(`Unknown map override layer "${String(layer)}"`);
+    }
+    if (typeof key !== 'string' || key.length === 0) {
+        throw new Error('setChatMapOverride requires a non-empty key');
+    }
+    if (!isObject(patch)) {
+        throw new Error('setChatMapOverride requires a patch object');
+    }
+    return withChatMap(state, (map) => {
+        map[layer][key] = { ...(map[layer][key] ?? {}), ...patch };
+    });
+}
+
+/** Remove one per-chat override (a reset back to the generated/global value). */
+export function removeChatMapOverride(state, { layer, key } = {}) {
+    if (!MAP_OVERRIDE_LAYERS.includes(layer)) {
+        throw new Error(`Unknown map override layer "${String(layer)}"`);
+    }
+    return withChatMap(state, (map) => {
+        delete map[layer][key];
+    });
+}
+
+/** Drop every per-chat map override and every chat-only virtual node. */
+export function resetChatMapOverrides(state) {
+    if (!isObject(state)) {
+        throw new TypeError('resetChatMapOverrides requires a WorldState object');
+    }
+    const next = structuredClone(state);
+    const map = isObject(next.flags?.map) ? { ...next.flags.map } : null;
+    if (map) {
+        delete map.regions;
+        delete map.bridges;
+        delete map.keyLocations;
+        delete map.namedLocations;
+        delete map.virtualNodes;
+        delete map.updatedAt;
+    }
+    next.flags = { ...(next.flags ?? {}) };
+    if (map && Object.keys(map).length > 0) {
+        next.flags.map = map;
+    } else {
+        delete next.flags.map;
+    }
+    for (const [locationId, location] of Object.entries(next.locations ?? {})) {
+        if (Array.isArray(location?.tags) && location.tags.includes('virtual-node')) {
+            delete next.locations[locationId];
+        }
+    }
+    return next;
+}
+
+function virtualNodeId(name) {
+    const slug = slugifyMapLabel(name);
+    return slug.length > 0 ? `chat:${slug}` : '';
+}
+
+/**
+ * Add a chat-only virtual travel node. It becomes a real `LocationState` (so
+ * the player can travel to it and it survives export/import) plus a marker in
+ * `flags.map.virtualNodes`.
+ */
+export function addChatVirtualNode(state, {
+    id = null,
+    name,
+    x,
+    y,
+    regionId = null,
+    districtId = 'outskirts',
+    district = null,
+    description = '',
+    connections = [],
+    travel = ['walk'],
+    now = null,
+} = {}) {
+    if (typeof name !== 'string' || name.trim().length === 0) {
+        throw new Error('addChatVirtualNode requires a name');
+    }
+    const point = { x: Number(x), y: Number(y) };
+    if (!isInCanvas(point)) {
+        throw new Error('addChatVirtualNode requires a point inside the 2048x1536 canvas');
+    }
+    const locationId = typeof id === 'string' && id.length > 0 ? id : virtualNodeId(name);
+    if (!locationId) {
+        throw new Error('addChatVirtualNode could not derive an id');
+    }
+    if (state?.locations?.[locationId]) {
+        throw new Error(`A location with id "${locationId}" already exists`);
+    }
+    // Unresolved ids are kept: the authored registry supplies most nodes and
+    // the travel graph resolves the edge at build time (an unknown id is
+    // simply ignored there).
+    const linked = [...new Set(
+        (Array.isArray(connections) ? connections : []).filter((id) => typeof id === 'string' && id.length > 0),
+    )];
+    const modes = (Array.isArray(travel) ? travel : ['walk']).filter((mode) => MAP_TRAVEL_MODES.includes(mode));
+    const timestamp = Number.isFinite(now) ? now : Date.now();
+
+    const next = withChatMap(state, (map) => {
+        map.virtualNodes.push({
+            id: locationId,
+            name: name.trim(),
+            x: point.x,
+            y: point.y,
+            regionId,
+            districtId,
+            description: typeof description === 'string' ? description : '',
+            connections: linked.slice(),
+            travel: modes.length > 0 ? modes : ['walk'],
+            createdAt: timestamp,
+        });
+    });
+    // A virtual node is a real location for travel, presence, and validation.
+    next.locations[locationId] = {
+        id: locationId,
+        name: name.trim(),
+        district: typeof district === 'string' && district.length > 0
+            ? district
+            : districtId === 'outskirts' ? 'Outskirts' : String(districtId),
+        districtId,
+        kind: 'venue',
+        factionId: null,
+        status: 'unknown',
+        capacity: 10,
+        present: [],
+        tags: ['virtual-node'],
+        visited: false,
+        notes: typeof description === 'string' ? description : '',
+        regionId,
+        mapRef: null,
+        virtual: true,
+        x: point.x,
+        y: point.y,
+        travel: modes.length > 0 ? modes : ['walk'],
+        connections: linked.slice(),
+    };
+    return next;
+}
+
+/** Patch a chat-only virtual node (marker record and `LocationState`). */
+export function updateChatVirtualNode(state, locationId, patch = {}) {
+    if (!isObject(state) || typeof locationId !== 'string') {
+        throw new Error('updateChatVirtualNode requires a WorldState and a node id');
+    }
+    if (!isObject(patch)) {
+        throw new Error('updateChatVirtualNode requires a patch object');
+    }
+    if (Object.hasOwn(patch, 'x') || Object.hasOwn(patch, 'y')) {
+        const node = getChatMapOverrides(state).virtualNodes.find((entry) => entry.id === locationId) ?? null;
+        const point = {
+            x: Object.hasOwn(patch, 'x') ? Number(patch.x) : Number(node?.x),
+            y: Object.hasOwn(patch, 'y') ? Number(patch.y) : Number(node?.y),
+        };
+        if (!isInCanvas(point)) {
+            throw new Error('updateChatVirtualNode requires a point inside the 2048x1536 canvas');
+        }
+    }
+    let found = false;
+    const next = withChatMap(state, (map) => {
+        map.virtualNodes = map.virtualNodes.map((node) => {
+            if (node.id !== locationId) {
+                return node;
+            }
+            found = true;
+            return { ...node, ...patch };
+        });
+    });
+    if (!found) {
+        throw new Error(`No chat virtual node "${locationId}"`);
+    }
+    const location = next.locations?.[locationId];
+    if (location) {
+        for (const field of ['name', 'x', 'y', 'regionId', 'districtId', 'description', 'connections', 'travel']) {
+            if (Object.hasOwn(patch, field) && patch[field] !== null && patch[field] !== undefined) {
+                location[field] = patch[field];
+            }
+        }
+    }
+    return next;
+}
+
+/** Remove a chat-only virtual node and its `LocationState` entry. */
+export function removeChatVirtualNode(state, locationId) {
+    if (!isObject(state) || typeof locationId !== 'string') {
+        return state;
+    }
+    const next = withChatMap(state, (map) => {
+        map.virtualNodes = map.virtualNodes.filter((node) => node.id !== locationId);
+    });
+    delete next.locations[locationId];
+    return next;
+}
+
+/** Serialize every per-chat map override for export. */
+export function exportChatMapOverrides(state) {
+    return JSON.stringify(getChatMapOverrides(state), null, 2);
+}
+
+/* -------------------------- overlay view model -------------------------- */
+
+/** Faction id -> deterministic overlay colour (by side, stable per id). */
+export function factionOverlayColor(faction = null) {
+    if (!faction) {
+        return OVERLAY_SIDE_COLORS.neutral;
+    }
+    return OVERLAY_SIDE_COLORS[faction.side] ?? OVERLAY_SIDE_COLORS.neutral;
+}
+
+function overlaySettings(settings = {}) {
+    return { ...OVERLAY_DEFAULT_SETTINGS, ...(isObject(settings) ? settings : {}) };
+}
+
+/** Threat cards for the overlay: stage labels plus a numeric bar (2+ threats supported). */
+export function buildThreatViews(state) {
+    return (Array.isArray(state?.threats) ? state.threats : [])
+        .filter(isObject)
+        .map((threat) => {
+            const stages = Array.isArray(threat.stages) ? threat.stages.filter((stage) => typeof stage === 'string') : [];
+            const stageIndex = Math.round(clampNumber(threat.stage, 0, Math.max(0, stages.length - 1), 0));
+            const progress = Math.round(clampNumber(threat.progress, 0, 100, 0));
+            return {
+                id: threat.id,
+                name: threat.name ?? threat.id,
+                rank: threat.rank ?? 'secondary',
+                status: threat.status ?? 'active',
+                progress,
+                stage: stageIndex,
+                stageCount: Math.max(1, stages.length),
+                stageLabel: stages[stageIndex] ?? `Stage ${stageIndex + 1}`,
+                agenda: threat.agenda ?? '',
+                locationId: threat.locationId ?? null,
+                sourceFactionId: threat.sourceFactionId ?? null,
+                sourceFactionName: threat.sourceFactionId
+                    ? state?.factions?.[threat.sourceFactionId]?.name ?? threat.sourceFactionId
+                    : null,
+                defeated: threat.status === 'defeated' || threat.status === 'contained',
+            };
+        })
+        .sort((a, b) => {
+            if (a.rank !== b.rank) {
+                return a.rank === 'main' ? -1 : 1;
+            }
+            return b.progress - a.progress;
+        });
+}
+
+/** Faction cards with goals/influence; disbanded factions are hidden by default. */
+export function buildFactionViews(state, { includeDisbanded = false } = {}) {
+    return Object.values(state?.factions ?? {})
+        .filter((faction) => isObject(faction))
+        .filter((faction) => includeDisbanded || faction.status !== 'disbanded')
+        .map((faction) => ({
+            id: faction.id,
+            name: faction.name ?? faction.id,
+            side: faction.side ?? 'neutral',
+            status: faction.status ?? 'active',
+            influence: Math.round(clampNumber(faction.influence, 0, 100, 0)),
+            goals: Array.isArray(faction.goals) ? faction.goals.slice(0, 5) : [],
+            description: faction.description ?? '',
+            headquartersLocationId: faction.headquartersLocationId ?? null,
+            color: factionOverlayColor(faction),
+            dominant: faction.status === 'dominant' || Number(faction.influence) >= 80,
+        }))
+        .sort((a, b) => b.influence - a.influence);
+}
+
+/**
+ * Canon-beat display: current act, next 1-2 beats as rumours, and a divergence
+ * indicator covering adapted, short-circuited, and deferred beats.
+ */
+export function buildBeatViews(state, season = null) {
+    const records = Object.entries(state?.beats ?? {}).map(([beatId, record]) => ({
+        id: beatId,
+        status: record?.status ?? 'open',
+        reason: record?.reason ?? null,
+        adaptedFrom: record?.adaptedFrom ?? null,
+        adaptedTo: record?.adaptedTo ?? null,
+        resolvedTurn: record?.resolvedTurn ?? null,
+    }));
+    const byStatus = (statuses) => records.filter((record) => statuses.includes(record.status)).map((record) => record.id);
+    const adapted = byStatus(['adapted']);
+    const shortCircuited = byStatus(['short-circuited']);
+    const deferred = byStatus(['deferred']);
+    const divergence = {
+        adapted,
+        shortCircuited,
+        deferred,
+        hasDivergence: adapted.length + shortCircuited.length + deferred.length > 0,
+        label: adapted.length + shortCircuited.length + deferred.length === 0
+            ? 'On the canon track'
+            : `${adapted.length} adapted · ${shortCircuited.length} short-circuited · ${deferred.length} deferred`,
+    };
+
+    if (!season) {
+        return {
+            act: null,
+            rumors: [],
+            ledger: null,
+            divergence,
+            records,
+            finalDeadlinePassed: false,
+        };
+    }
+    const rumors = getUpcomingBeats(state, season, 2).map((beat) => ({
+        id: beat.id,
+        title: beat.title ?? beat.id,
+        act: beat.act ?? null,
+        status: getBeatStatus(state, beat.id),
+        deadlineConsequence: beat.deadlineConsequence ?? null,
+    }));
+    return {
+        act: getCurrentAct(state, season),
+        rumors,
+        ledger: summarizeBeatLedger(state, season),
+        divergence,
+        records,
+        finalDeadlinePassed: isFinalDeadlinePassed(season, state),
+    };
+}
+
+/** Latest events, newest first, with a newspaper-style headline fallback. */
+export function buildHeadlineViews(state, { limit = 5 } = {}) {
+    const events = Array.isArray(state?.recentEvents) ? state.recentEvents : [];
+    return events
+        .slice(-Math.max(0, limit))
+        .reverse()
+        .map((event) => ({
+            turn: event?.turn ?? 0,
+            date: event?.date ?? null,
+            summary: event?.summary ?? '',
+            headline: typeof event?.headline === 'string' && event.headline.length > 0
+                ? event.headline
+                : event?.summary ?? '',
+            locationId: event?.locationId ?? null,
+            tags: Array.isArray(event?.tags) ? event.tags.slice() : [],
+            beatId: event?.beatId ?? null,
+        }));
+}
+
+function latestEventByLocation(state) {
+    const latest = new Map();
+    for (const event of Array.isArray(state?.recentEvents) ? state.recentEvents : []) {
+        const locationId = event?.locationId;
+        if (typeof locationId === 'string' && !latest.has(locationId)) {
+            latest.set(locationId, event);
+        }
+    }
+    return latest;
+}
+
+/**
+ * Region styling for the Leaflet layer: faction tint, status outline, and the
+ * chat override precedence (chat > global > generated > lore district).
+ */
+export function buildRegionOverlayStyles(viewModel, state = null, settings = {}, factionViews = null) {
+    const config = overlaySettings(settings);
+    const factions = factionViews ?? buildFactionViews(state);
+    const factionById = new Map(factions.map((faction) => [faction.id, faction]));
+    return (viewModel?.regions ?? []).map((region) => {
+        const faction = region.factionId ? factionById.get(region.factionId) ?? null : null;
+        const baseColor = faction?.color ?? region.color ?? region.sourceColor ?? '#5eead4';
+        const status = region.status ?? null;
+        return {
+            id: region.id,
+            factionId: region.factionId ?? null,
+            factionName: faction?.name ?? region.factionName ?? null,
+            status,
+            color: config.showFactionTint ? baseColor : region.color ?? '#5eead4',
+            fillOpacity: config.showFactionTint && faction ? 0.22 : 0.12,
+            dashArray: status === 'hostile' ? '4 4' : status === 'contested' ? '8 4' : null,
+            weight: status ? 2 : 1,
+        };
+    });
+}
+
+/** Bridge styling for the overlay (per-chat status wins). */
+export function buildBridgeOverlayStyles(viewModel) {
+    return (viewModel?.bridges ?? []).map((bridge) => ({
+        id: bridge.id,
+        label: bridge.label,
+        name: bridge.name,
+        status: bridge.status ?? 'open',
+        connects: Array.isArray(bridge.connects) ? bridge.connects.slice() : [],
+        connectsNames: Array.isArray(bridge.connectsNames) ? bridge.connectsNames.slice() : [],
+        length: Number(bridge.length) || 0,
+    }));
+}
+
+/**
+ * The whole "where am I in the story" model. Pure and renderer-agnostic; the
+ * overlay UI and the map panel both consume it.
+ */
+export function buildWorldOverlay({
+    state = null,
+    season = null,
+    viewModel = null,
+    settings = {},
+} = {}) {
+    const config = overlaySettings(settings);
+    const factions = config.showFactions ? buildFactionViews(state) : [];
+    const threats = config.showThreats ? buildThreatViews(state) : [];
+    const beats = buildBeatViews(state, season);
+    if (!config.showRumors) {
+        // The divergence indicator survives: it is a fact about the ledger,
+        // not a spoiler.
+        beats.rumors = [];
+    }
+    const headlines = config.showHeadlines ? buildHeadlineViews(state, { limit: config.maxHeadlines }) : [];
+    const latestByLocation = latestEventByLocation(state);
+    const keyActivity = (viewModel?.keyLocations ?? []).map((key) => {
+        const event = key.locationId ? latestByLocation.get(key.locationId) ?? null : null;
+        return {
+            id: key.id,
+            name: key.name,
+            locationId: key.locationId ?? null,
+            headline: event?.headline ?? event?.summary ?? null,
+            turn: event?.turn ?? null,
+        };
+    });
+    const namedActivity = (viewModel?.namedLocations ?? []).map((location) => {
+        const event = latestByLocation.get(location.id) ?? null;
+        return {
+            id: location.id,
+            name: location.name,
+            headline: event?.headline ?? event?.summary ?? null,
+            turn: event?.turn ?? null,
+        };
+    });
+    return {
+        hasWorld: isObject(state),
+        act: beats.act,
+        threats,
+        factions,
+        beats,
+        headlines,
+        regionStyles: buildRegionOverlayStyles(viewModel, state, config, factions),
+        bridgeStyles: buildBridgeOverlayStyles(viewModel),
+        keyActivity,
+        namedActivity,
+        counts: {
+            factions: factions.length,
+            threats: threats.length,
+            rumors: beats.rumors.length,
+            headlines: headlines.length,
+        },
+    };
+}
+
+/* --------------------- global override editing (authored) --------------------- */
+
+function cloneMapOverrideDocument(document) {
+    const next = isObject(document) ? structuredClone(document) : {};
+    next.schemaVersion = 1;
+    next.canvas = next.canvas ?? { width: CANONICAL_MAP.width, height: CANONICAL_MAP.height };
+    for (const layer of MAP_OVERRIDE_LAYERS) {
+        if (!isObject(next[layer])) {
+            next[layer] = {};
+        }
+    }
+    return next;
+}
+
+/**
+ * Apply a global (authored) override to a copy of the overrides document.
+ * Layer keys follow the file: region/bridge/key-location overrides are keyed by
+ * SVG label; named-location overrides are keyed by location id.
+ */
+export function applyMapOverride(document, { layer, label, patch } = {}) {
+    if (!MAP_OVERRIDE_LAYERS.includes(layer)) {
+        throw new Error(`Unknown map override layer "${String(layer)}"`);
+    }
+    if (typeof label !== 'string' || label.length === 0) {
+        throw new Error('applyMapOverride requires a non-empty label');
+    }
+    if (!isObject(patch)) {
+        throw new Error('applyMapOverride requires a patch object');
+    }
+    const next = cloneMapOverrideDocument(document);
+    next[layer][label] = { ...(next[layer][label] ?? {}), ...patch };
+    return next;
+}
+
+/**
+ * Reset one override to its generated default. Structural bindings are kept
+ * (a region keeps its `districtId`, a key location keeps its `locationId`);
+ * only authored presentation/assignment fields are dropped.
+ */
+export function resetMapOverride(document, { layer, label } = {}) {
+    if (!MAP_OVERRIDE_LAYERS.includes(layer)) {
+        throw new Error(`Unknown map override layer "${String(layer)}"`);
+    }
+    if (typeof label !== 'string' || label.length === 0) {
+        throw new Error('resetMapOverride requires a non-empty label');
+    }
+    const next = cloneMapOverrideDocument(document);
+    const current = next[layer][label] ?? null;
+    if (!current) {
+        return next;
+    }
+    if (layer === 'regions') {
+        next[layer][label] = current.districtId ? { districtId: current.districtId } : {};
+        if (!next[layer][label].districtId) {
+            delete next[layer][label];
+        }
+        return next;
+    }
+    if (layer === 'keyLocations') {
+        next[layer][label] = current.locationId ? { locationId: current.locationId } : {};
+        if (!next[layer][label].locationId) {
+            delete next[layer][label];
+        }
+        return next;
+    }
+    delete next[layer][label];
+    return next;
+}
+
+/** Remove one override entirely (including structural bindings). */
+export function deleteMapOverride(document, { layer, label } = {}) {
+    if (!MAP_OVERRIDE_LAYERS.includes(layer)) {
+        throw new Error(`Unknown map override layer "${String(layer)}"`);
+    }
+    if (typeof label !== 'string' || label.length === 0) {
+        throw new Error('deleteMapOverride requires a non-empty label');
+    }
+    const next = cloneMapOverrideDocument(document);
+    delete next[layer][label];
+    return next;
+}
+
+/** Pretty-print an overrides document for download/commit. */
+export function exportMapOverrides(document) {
+    return `${JSON.stringify(cloneMapOverrideDocument(document), null, 2)}\n`;
+}
+
+/** Parse an imported overrides document (plain JSON, fences tolerated). */
+export function parseMapOverrides(text) {
+    const source = String(text ?? '').trim();
+    if (source.length === 0) {
+        return { ok: false, document: null, errors: [{ path: '$', message: 'empty document' }] };
+    }
+    const fenced = source.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    let parsed;
+    try {
+        parsed = JSON.parse(fenced);
+    } catch (error) {
+        return { ok: false, document: null, errors: [{ path: '$', message: error?.message ?? 'invalid JSON' }] };
+    }
+    const validation = validateMapOverrides(parsed);
+    if (!validation.ok) {
+        return { ok: false, document: null, errors: validation.errors };
+    }
+    return { ok: true, document: cloneMapOverrideDocument(parsed), errors: [] };
+}
+
+/* ------------------------------ travel graph ------------------------------ */
+
+/** Abilities that can bypass a blocked ground route. */
+export function detectTravelAbilities(source) {
+    const texts = [];
+    if (typeof source === 'string') {
+        texts.push(source);
+    } else if (Array.isArray(source)) {
+        texts.push(...source.filter((entry) => typeof entry === 'string'));
+    } else if (isObject(source)) {
+        for (const field of ['abilities', 'skills', 'traits', 'powers']) {
+            if (Array.isArray(source[field])) {
+                texts.push(...source[field].filter((entry) => typeof entry === 'string'));
+            }
+        }
+    }
+    const found = [];
+    for (const [ability, pattern] of TRAVEL_ABILITY_PATTERNS) {
+        if (texts.some((text) => pattern.test(text))) {
+            found.push(ability);
+        }
+    }
+    return found;
+}
+
+/** Bridge status with chat > global > generated precedence. */
+export function resolveBridgeStatus(bridge, { overrides = null, chat = null } = {}) {
+    const label = bridge?.label;
+    const id = bridge?.id;
+    const chatStatus = (label ? chat?.bridges?.[label]?.status : null)
+        ?? (id ? chat?.bridges?.[id]?.status : null);
+    if (BRIDGE_STATUSES.includes(chatStatus)) {
+        return chatStatus;
+    }
+    const globalStatus = label ? overrides?.bridges?.[label]?.status : null;
+    if (BRIDGE_STATUSES.includes(globalStatus)) {
+        return globalStatus;
+    }
+    return BRIDGE_STATUSES.includes(bridge?.status) ? bridge.status : 'open';
+}
+
+function nodeFromLocation(location, override = null, { preferOverrideConnections = false } = {}) {
+    const x = Number.isFinite(override?.x) ? Number(override.x) : Number(location.x);
+    const y = Number.isFinite(override?.y) ? Number(override.y) : Number(location.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return null;
+    }
+    const overrideConnections = Array.isArray(override?.connections) ? override.connections : null;
+    return {
+        id: location.id,
+        name: override?.name ?? location.name ?? location.id,
+        x,
+        y,
+        regionId: override?.regionId ?? location.regionId ?? null,
+        districtId: override?.districtId ?? location.districtId ?? null,
+        district: override?.district ?? location.district ?? null,
+        virtual: override?.virtual ?? location.virtual === true,
+        travel: Array.isArray(location.travel) ? location.travel.slice() : ['walk'],
+        connections: preferOverrideConnections && overrideConnections
+            ? overrideConnections.filter((id) => typeof id === 'string')
+            : Array.isArray(location.connections)
+                ? location.connections.slice()
+                : [],
+        factionId: override?.factionId ?? location.factionId ?? null,
+        status: override?.status ?? location.status ?? location.defaultStatus ?? 'unknown',
+        source: location.tags?.includes?.('virtual-node') ? 'chat' : 'registry',
+    };
+}
+
+function distanceBetweenPoints(a, b) {
+    return Math.hypot(Number(a.x) - Number(b.x), Number(a.y) - Number(b.y));
+}
+
+function pickEdgeMode(a, b) {
+    const modes = new Set([...(a.travel ?? []), ...(b.travel ?? [])]);
+    if (modes.has('secret')) {
+        return 'secret';
+    }
+    if (modes.has('bridge')) {
+        return 'bridge';
+    }
+    return 'walk';
+}
+
+/**
+ * Build the travel graph: named locations (plus chat virtual nodes) as nodes;
+ * same-region short hops, authored `connections` edges, and bridge edges as
+ * network edges. Bridge edges carry their status so pathfinding can avoid
+ * blocked and destroyed spans.
+ */
+export function buildTravelGraph({
+    locations = null,
+    bridges = null,
+    regions = null,
+    overrides = null,
+    state = null,
+} = {}) {
+    const chat = getChatMapOverrides(state);
+    const nodes = new Map();
+
+    for (const location of locations?.locations ?? []) {
+        if (!isObject(location) || typeof location.id !== 'string') {
+            continue;
+        }
+        const node = nodeFromLocation(location, chat.namedLocations[location.id] ?? null);
+        if (node) {
+            nodes.set(node.id, node);
+        }
+    }
+    // Chat virtual nodes are `LocationState` entries plus a marker record in
+    // `flags.map.virtualNodes`; the marker carries the graph edges, so it is
+    // the authority for coordinates/connections.
+    const virtualById = new Map(chat.virtualNodes.map((node) => [node.id, node]));
+    for (const location of Object.values(state?.locations ?? {})) {
+        if (!isObject(location) || typeof location.id !== 'string' || nodes.has(location.id)) {
+            continue;
+        }
+        const virtual = virtualById.get(location.id) ?? null;
+        const namedOverride = chat.namedLocations[location.id] ?? null;
+        const node = nodeFromLocation(
+            virtual
+                ? {
+                    ...location,
+                    ...virtual,
+                    connections: (virtual.connections ?? []).length > 0
+                        ? virtual.connections
+                        : location.connections ?? [],
+                    travel: (virtual.travel ?? []).length > 0 ? virtual.travel : location.travel ?? ['walk'],
+                }
+                : location,
+            namedOverride,
+            { preferOverrideConnections: Boolean(virtual) },
+        );
+        if (node) {
+            node.source = 'chat';
+            nodes.set(node.id, node);
+        }
+    }
+    for (const virtual of chat.virtualNodes) {
+        if (typeof virtual.id !== 'string' || nodes.has(virtual.id)) {
+            continue;
+        }
+        const node = nodeFromLocation({ ...virtual, connections: virtual.connections ?? [], travel: virtual.travel ?? ['walk'] });
+        if (node) {
+            node.source = 'chat';
+            node.virtual = true;
+            nodes.set(node.id, node);
+        }
+    }
+
+    const regionDistrict = new Map();
+    for (const region of (Array.isArray(regions) ? regions : regions?.features) ?? []) {
+        if (isObject(region) && typeof region.id === 'string') {
+            const districtId = region.districtId
+                ?? overrides?.regions?.[region.label]?.districtId
+                ?? null;
+            if (districtId) {
+                regionDistrict.set(region.id, districtId);
+            }
+        }
+    }
+    const pairKey = (a, b) => [a, b].filter(Boolean).sort().join('::');
+    const districtOf = (node) => node.districtId ?? (node.regionId ? regionDistrict.get(node.regionId) ?? null : null);
+
+    const edges = [];
+    const edgeKeys = new Set();
+    const addEdge = (from, to, mode, weight, extra = {}) => {
+        if (!from || !to || from.id === to.id) {
+            return;
+        }
+        const key = [from.id, to.id].sort().join('|') + `|${mode}|${extra.bridgeId ?? ''}`;
+        if (edgeKeys.has(key)) {
+            return;
+        }
+        edgeKeys.add(key);
+        edges.push({
+            from: from.id,
+            to: to.id,
+            mode,
+            weight: Math.max(TRAVEL_TUNING.minEdgeWeight, Math.round(weight)),
+            distance: Math.round(distanceBetweenPoints(from, to)),
+            bridgeId: extra.bridgeId ?? null,
+            bridgeLabel: extra.bridgeLabel ?? null,
+            bridgeStatus: extra.bridgeStatus ?? null,
+        });
+    };
+
+    const byRegion = new Map();
+    const byDistrict = new Map();
+    for (const node of nodes.values()) {
+        if (node.regionId) {
+            if (!byRegion.has(node.regionId)) {
+                byRegion.set(node.regionId, []);
+            }
+            byRegion.get(node.regionId).push(node);
+        }
+        // A node with no region has no ground footprint: it is only reachable
+        // through its authored connections (a virtual bunker, a subway spur).
+        const districtKey = node.regionId ? districtOf(node) : null;
+        if (districtKey) {
+            if (!byDistrict.has(districtKey)) {
+                byDistrict.set(districtKey, []);
+            }
+            byDistrict.get(districtKey).push(node);
+        }
+    }
+    // Local mesh: two sites in the same district are a short walk apart. This
+    // is deliberately district-scoped, not region-scoped: a site whose SVG
+    // marker sits across a river must still cross a bridge to reach the other
+    // side.
+    for (const group of byDistrict.values()) {
+        for (let i = 0; i < group.length; i += 1) {
+            for (let j = i + 1; j < group.length; j += 1) {
+                addEdge(group[i], group[j], 'walk', distanceBetweenPoints(group[i], group[j]));
+            }
+        }
+    }
+
+    const bridgeList = Array.isArray(bridges)
+        ? bridges
+        : Array.isArray(bridges?.features)
+            ? bridges.features
+            : [];
+    const bridgeNodes = [];
+    // Bridges are the gate between districts. Every cross-district edge must
+    // name an open bridge (or a declared secret/flight mode); a blocked span
+    // removes the edge, so pathfinding must detour or reject.
+    const bridgesByRegionPair = new Map();
+    for (const bridge of bridgeList) {
+        if (!isObject(bridge) || !Array.isArray(bridge.connects)) {
+            continue;
+        }
+        const [regionA, regionB] = bridge.connects;
+        const status = resolveBridgeStatus(bridge, { overrides, chat });
+        const entry = {
+            id: bridge.id,
+            label: bridge.label,
+            name: overrides?.bridges?.[bridge.label]?.name
+                ?? chat.bridges[bridge.label]?.name
+                ?? bridge.label
+                ?? bridge.id,
+            connects: [regionA, regionB],
+            districts: [regionDistrict.get(regionA) ?? null, regionDistrict.get(regionB) ?? null],
+            length: Number(bridge.length) || 0,
+            status,
+            blocked: status === 'blocked' || status === 'destroyed',
+        };
+        bridgeNodes.push(entry);
+        const key = pairKey(entry.districts[0], entry.districts[1]);
+        if (!bridgesByRegionPair.has(key)) {
+            bridgesByRegionPair.set(key, []);
+        }
+        bridgesByRegionPair.get(key).push(entry);
+    }
+
+    const usableBridgeFor = (a, b) => {
+        const candidates = bridgesByRegionPair.get(pairKey(districtOf(a), districtOf(b))) ?? [];
+        return candidates.find((bridge) => !bridge.blocked) ?? null;
+    };
+    const anyBridgeFor = (a, b) => (bridgesByRegionPair.get(pairKey(districtOf(a), districtOf(b))) ?? []);
+    const allBridgesBlockedFor = (a, b) => {
+        const candidates = anyBridgeFor(a, b);
+        return candidates.length > 0 && candidates.every((bridge) => bridge.blocked);
+    };
+
+    for (const node of nodes.values()) {
+        for (const connectionId of node.connections) {
+            const other = nodes.get(connectionId);
+            if (!other) {
+                continue;
+            }
+            // An authored connection on or to a chat-only virtual node is an
+            // explicit edge: the user drew it on purpose, so the district and
+            // bridge rules do not apply. Registry-defined virtual sites still
+            // obey the bridge graph.
+            if (node.source === 'chat' || other.source === 'chat') {
+                addEdge(node, other, pickEdgeMode(node, other), distanceBetweenPoints(node, other));
+                continue;
+            }
+            const sameDistrict = districtOf(node) !== null && districtOf(node) === districtOf(other);
+            const sameRegion = Boolean(node.regionId) && node.regionId === other.regionId;
+            const declared = new Set([...(node.travel ?? []), ...(other.travel ?? [])]);
+            const mutualSecret = (node.travel ?? []).includes('secret')
+                && (other.travel ?? []).includes('secret');
+            // Same district or same SVG region: the two sites share ground, so
+            // the connection is a plain walk (no bridge needed).
+            if (sameDistrict || sameRegion) {
+                addEdge(node, other, pickEdgeMode(node, other), distanceBetweenPoints(node, other));
+                continue;
+            }
+            // A secret back channel crosses districts only when both ends
+            // declare it. One-sided "secret" describes the site's own exits,
+            // not a bypass between districts.
+            if (mutualSecret) {
+                addEdge(node, other, 'secret', distanceBetweenPoints(node, other));
+                continue;
+            }
+            if (allBridgesBlockedFor(node, other)) {
+                // The only spans between these districts are down: no edge.
+                continue;
+            }
+            const bridge = usableBridgeFor(node, other);
+            if (bridge) {
+                addEdge(node, other, 'bridge', distanceBetweenPoints(node, other), {
+                    bridgeId: bridge.id,
+                    bridgeLabel: bridge.label,
+                    bridgeStatus: bridge.status,
+                });
+                continue;
+            }
+            // No bridge joins these districts and no secret route is declared.
+            // Flight-capable locations may still cross (checked at planning).
+            if (declared.has('flight')) {
+                addEdge(node, other, 'flight', distanceBetweenPoints(node, other));
+            }
+        }
+    }
+
+    for (const bridge of bridgeNodes) {
+        const [districtA, districtB] = bridge.districts ?? [];
+        const groupA = byDistrict.get(districtA) ?? [];
+        const groupB = byDistrict.get(districtB) ?? [];
+        if (groupA.length === 0 || groupB.length === 0) {
+            continue;
+        }
+        for (const from of groupA) {
+            for (const to of groupB) {
+                addEdge(from, to, 'bridge', distanceBetweenPoints(from, to) + bridge.length, {
+                    bridgeId: bridge.id,
+                    bridgeLabel: bridge.label,
+                    bridgeStatus: bridge.status,
+                });
+            }
+        }
+    }
+
+    const adjacency = new Map();
+    for (const node of nodes.keys()) {
+        adjacency.set(node, []);
+    }
+    for (const edge of edges) {
+        adjacency.get(edge.from)?.push({ ...edge, from: edge.from, to: edge.to });
+        adjacency.get(edge.to)?.push({ ...edge, from: edge.to, to: edge.from });
+    }
+
+    const bridgeById = new Map(bridgeNodes.map((bridge) => [bridge.id, bridge]));
+    const regionById = new Map((Array.isArray(regions) ? regions : regions?.features ?? [])
+        .filter(isObject)
+        .map((region) => [region.id, region]));
+
+    return {
+        nodes,
+        nodeList: [...nodes.values()],
+        edges,
+        adjacency,
+        bridges: bridgeNodes,
+        bridgeById,
+        regionById,
+        byRegion,
+        chat,
+        overrides,
+        getNode: (id) => nodes.get(id) ?? null,
+        blockedBridges: bridgeNodes.filter((bridge) => bridge.blocked),
+    };
+}
+
+/** Turns needed for a path; same-region hops are a single short turn. */
+export function travelTurnsForDistance(distance, { sameRegion = false, bypass = null } = {}) {
+    if (bypass && Number.isFinite(BYPASS_COST[bypass])) {
+        return BYPASS_COST[bypass];
+    }
+    if (sameRegion) {
+        return TRAVEL_TUNING.sameRegionTurns;
+    }
+    const number = Number(distance);
+    if (!Number.isFinite(number) || number <= 0) {
+        return TRAVEL_TUNING.sameRegionTurns;
+    }
+    return Math.min(
+        TRAVEL_TUNING.maxTurns,
+        Math.max(1, Math.ceil(number / TRAVEL_TUNING.unitsPerTurn)),
+    );
+}
+
+function shortestPath(graph, fromId, toId, { ignoreBridgeStatus = false } = {}) {
+    const start = graph.getNode(fromId);
+    const goal = graph.getNode(toId);
+    if (!start || !goal) {
+        return null;
+    }
+    if (fromId === toId) {
+        return { path: [fromId], edges: [], distance: 0 };
+    }
+    const dist = new Map([[fromId, 0]]);
+    const previous = new Map();
+    const visited = new Set();
+    const queue = [{ id: fromId, cost: 0 }];
+
+    while (queue.length > 0) {
+        queue.sort((a, b) => a.cost - b.cost);
+        const current = queue.shift();
+        if (visited.has(current.id)) {
+            continue;
+        }
+        visited.add(current.id);
+        if (current.id === toId) {
+            break;
+        }
+        for (const edge of graph.adjacency.get(current.id) ?? []) {
+            if (!ignoreBridgeStatus && edge.bridgeId) {
+                const bridge = graph.bridgeById.get(edge.bridgeId);
+                if (bridge?.blocked || edge.bridgeStatus === 'blocked' || edge.bridgeStatus === 'destroyed') {
+                    continue;
+                }
+            }
+            const cost = current.cost + edge.weight;
+            if (cost < (dist.get(edge.to) ?? Infinity)) {
+                dist.set(edge.to, cost);
+                previous.set(edge.to, { id: current.id, edge });
+                queue.push({ id: edge.to, cost });
+            }
+        }
+    }
+
+    if (!dist.has(toId)) {
+        return null;
+    }
+    const path = [toId];
+    const usedEdges = [];
+    let cursor = toId;
+    while (cursor !== fromId) {
+        const step = previous.get(cursor);
+        if (!step) {
+            return null;
+        }
+        usedEdges.unshift(step.edge);
+        cursor = step.id;
+        path.unshift(cursor);
+    }
+    return {
+        path,
+        edges: usedEdges,
+        distance: usedEdges.reduce((sum, edge) => sum + edge.distance, 0),
+        cost: dist.get(toId),
+    };
+}
+
+/**
+ * Shortest travel path over the bridge/location graph. Never straight-line:
+ * the result lists the bridges used and the route nodes.
+ *
+ * @param {object} graph from {@link buildTravelGraph}
+ * @param {string} fromId
+ * @param {string} toId
+ * @param {{ abilities?: string[], allowBypass?: boolean }} [options]
+ */
+export function findTravelPath(graph, fromId, toId, { abilities = [], allowBypass = true } = {}) {
+    const from = graph?.getNode?.(fromId) ?? null;
+    const to = graph?.getNode?.(toId) ?? null;
+    if (!graph) {
+        return { ok: false, reason: 'no-graph', path: [], bridges: [], distance: 0, turns: 0 };
+    }
+    if (!from) {
+        return { ok: false, reason: 'unknown-origin', path: [], bridges: [], distance: 0, turns: 0 };
+    }
+    if (!to) {
+        return { ok: false, reason: 'unknown-destination', path: [], bridges: [], distance: 0, turns: 0 };
+    }
+    if (fromId === toId) {
+        return {
+            ok: true,
+            reason: 'already-there',
+            alreadyThere: true,
+            path: [fromId],
+            bridges: [],
+            distance: 0,
+            turns: 0,
+            sameRegion: true,
+            modes: [],
+            ability: null,
+        };
+    }
+
+    const direct = shortestPath(graph, fromId, toId);
+    if (direct) {
+        const bridges = [...new Set(direct.edges.map((edge) => edge.bridgeId).filter(Boolean))];
+        const sameRegion = from.regionId !== null && from.regionId === to.regionId && bridges.length === 0;
+        const modes = [...new Set(direct.edges.map((edge) => edge.mode))];
+        return {
+            ok: true,
+            reason: null,
+            alreadyThere: false,
+            path: direct.path,
+            bridges,
+            bridgeNames: bridges.map((bridgeId) => graph.bridgeById.get(bridgeId)?.name ?? bridgeId),
+            distance: Math.round(direct.distance),
+            turns: travelTurnsForDistance(direct.distance, { sameRegion }),
+            sameRegion,
+            modes,
+            ability: null,
+            bypass: null,
+        };
+    }
+
+    // No ground route. Distinguish "blocked" (a route exists if bridges were
+    // open) from "disconnected".
+    const ignored = shortestPath(graph, fromId, toId, { ignoreBridgeStatus: true });
+    const blockedBridges = graph.blockedBridges.map((bridge) => ({
+        id: bridge.id,
+        label: bridge.label,
+        name: bridge.name,
+        status: bridge.status,
+    }));
+    const onlyBlocked = Boolean(ignored);
+    const blockedReason = onlyBlocked ? 'blocked' : 'no-route';
+
+    const bypassCandidates = Array.isArray(abilities)
+        ? abilities.filter((ability) => NUMBERED_ABILITIES.includes(ability))
+        : [];
+    if (allowBypass && bypassCandidates.length > 0) {
+        const ability = bypassCandidates.sort(
+            (a, b) => (BYPASS_COST[a] ?? 99) - (BYPASS_COST[b] ?? 99),
+        )[0];
+        const distance = Math.round(distanceBetweenPoints(from, to));
+        return {
+            ok: true,
+            reason: null,
+            alreadyThere: false,
+            path: [fromId, toId],
+            bridges: [],
+            bridgeNames: [],
+            distance,
+            turns: travelTurnsForDistance(distance, { bypass: ability }),
+            sameRegion: false,
+            modes: [ability],
+            ability,
+            bypass: { ability, cost: BYPASS_COST[ability], distance },
+            groundReason: blockedReason,
+            blockedBridges,
+        };
+    }
+
+    return {
+        ok: false,
+        reason: blockedReason,
+        path: [],
+        bridges: [],
+        bridgeNames: [],
+        distance: 0,
+        turns: 0,
+        sameRegion: false,
+        modes: [],
+        ability: null,
+        bypass: null,
+        blockedBridges,
+        ignoredPath: ignored?.path ?? [],
+    };
+}
+
+const NUMBERED_ABILITIES = Object.freeze(Object.keys(BYPASS_COST));
+
+/** Nodes reachable from one node without crossing a blocked bridge. */
+export function reachableNodes(graph, fromId) {
+    const start = graph?.getNode?.(fromId) ?? null;
+    if (!start) {
+        return [];
+    }
+    const seen = new Set([fromId]);
+    const queue = [fromId];
+    while (queue.length > 0) {
+        const current = queue.shift();
+        for (const edge of graph.adjacency.get(current) ?? []) {
+            if (edge.bridgeId) {
+                const bridge = graph.bridgeById.get(edge.bridgeId);
+                if (bridge?.blocked) {
+                    continue;
+                }
+            }
+            if (!seen.has(edge.to)) {
+                seen.add(edge.to);
+                queue.push(edge.to);
+            }
+        }
+    }
+    return [...seen];
 }

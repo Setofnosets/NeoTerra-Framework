@@ -187,6 +187,47 @@
                 </label>
             </div>
 
+            <h4 class="neoterra-section-title">Map overlay and editor</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showOverlay">
+                    <span>Show the world overlay on the map tab</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showThreats">
+                    <span>Threat meters</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showFactions">
+                    <span>Factions and goals</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showRumors">
+                    <span>Canon-beat rumours</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showHeadlines">
+                    <span>Headlines</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showFactionTint">
+                    <span>Tint districts by controlling faction</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.editorEnabled">
+                    <span>Enable the map override editor</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Headlines shown</span>
+                    <input type="number" min="1" max="20" step="1" data-neoterra-path="map.maxHeadlines">
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                The editor changes overrides, never the SVG art. Global edits export to
+                <code>data/map/overrides.json</code>; per-chat edits (destroyed bridges, captured
+                districts, virtual nodes) stay inside this chat's world state.
+            </p>
+
             <div class="neoterra-settings-actions">
                 <button type="button" class="menu_button" data-neoterra-reset>Reset Neo Terra settings</button>
             </div>

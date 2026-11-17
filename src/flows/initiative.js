@@ -218,6 +218,7 @@ export function createInitiative({
         force = false,
         signal = null,
         recentProse = '',
+        travel = null,
     } = {}) {
         if (!storyline || typeof storyline.run !== 'function') {
             return { ran: false, reason: 'no-storyline', events: [] };
@@ -245,6 +246,7 @@ export function createInitiative({
                 formRules,
                 pressure: settingsNow?.beatDeadlinePressure ?? 'standard',
                 recentProse,
+                travel,
                 settings: settingsNow,
                 signal,
             });
@@ -325,7 +327,13 @@ export function createInitiative({
         return runStoryline({ trigger: 'turn', signal, recentProse });
     }
 
-    async function afterLocationChange({ from = null, to = null, path = [], signal = null } = {}) {
+    async function afterLocationChange({
+        from = null,
+        to = null,
+        path = [],
+        travel = null,
+        signal = null,
+    } = {}) {
         const current = state();
         if (to && current?.scene?.locationId !== to) {
             return {
@@ -337,7 +345,7 @@ export function createInitiative({
                 path,
             };
         }
-        return runStoryline({ trigger: 'location', signal });
+        return runStoryline({ trigger: 'location', signal, travel });
     }
 
     return {

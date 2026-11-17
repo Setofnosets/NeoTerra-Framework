@@ -526,3 +526,280 @@
         transition: none;
     }
 }
+
+/* ---------- World overlay ---------- */
+
+.neoterra-overlay {
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-bg-panel);
+    padding: 0.4rem 0.5rem;
+}
+
+.neoterra-overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    border-bottom: 1px solid var(--nt-border);
+    padding-bottom: 0.25rem;
+}
+
+.neoterra-overlay-header h4 {
+    margin: 0;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nt-accent);
+}
+
+.neoterra-overlay.is-collapsed .neoterra-overlay-body {
+    display: none;
+}
+
+.neoterra-overlay-section {
+    margin-top: 0.45rem;
+}
+
+.neoterra-overlay-section h5 {
+    margin: 0 0 0.2rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-overlay-factions,
+.neoterra-overlay-threats,
+.neoterra-overlay-rumors,
+.neoterra-overlay-headlines,
+.neoterra-overlay-goals,
+.neoterra-overlay-divergence-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.neoterra-overlay-faction-head,
+.neoterra-overlay-threat-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+}
+
+.neoterra-overlay-swatch {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+.neoterra-overlay-chip {
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.05rem 0.3rem;
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-overlay-chip.is-dominant,
+.neoterra-overlay-chip.is-stage {
+    color: var(--nt-accent);
+    border-color: var(--nt-border-strong);
+}
+
+.neoterra-overlay-bar {
+    height: 0.35rem;
+    margin: 0.2rem 0;
+    border-radius: 999px;
+    background: var(--nt-bg-hover);
+    overflow: hidden;
+}
+
+.neoterra-overlay-bar-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--nt-accent), var(--nt-accent-strong));
+}
+
+.neoterra-overlay-threat.is-defeated {
+    opacity: 0.6;
+}
+
+.neoterra-overlay-threat-meta,
+.neoterra-overlay-agenda {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-overlay-goals {
+    font-size: 0.7rem;
+    padding-left: 0.7rem;
+    list-style: disc;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-overlay-rumors li {
+    display: flex;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+}
+
+.neoterra-overlay-rumors em {
+    color: var(--nt-accent);
+    font-style: normal;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+}
+
+.neoterra-overlay-divergence {
+    margin: 0.3rem 0 0;
+    font-size: 0.7rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-overlay-divergence.is-divergent {
+    color: var(--nt-warning, var(--nt-accent-strong));
+}
+
+.neoterra-overlay-divergence-list {
+    font-size: 0.68rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-overlay-headlines li {
+    display: flex;
+    gap: 0.35rem;
+    font-size: 0.74rem;
+    line-height: 1.25;
+}
+
+.neoterra-overlay-dateline {
+    color: var(--nt-accent);
+    font-size: 0.66rem;
+    flex: 0 0 auto;
+}
+
+/* ---------- Travel arrival ---------- */
+
+.neoterra-map-intro {
+    border: 1px solid var(--nt-border-strong);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-bg-hover);
+    padding: 0.4rem 0.5rem;
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.neoterra-map-intro header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.neoterra-map-intro h5 {
+    margin: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nt-accent);
+}
+
+.neoterra-map-intro p {
+    margin: 0.25rem 0 0;
+}
+
+/* ---------- Map editor ---------- */
+
+.neoterra-map-editor,
+.neoterra-map-add-node {
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    padding: 0.4rem 0.5rem;
+    background: var(--nt-bg-elevated);
+}
+
+.neoterra-map-editor header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.neoterra-map-editor h5 {
+    margin: 0;
+    font-size: 0.78rem;
+}
+
+.neoterra-editor-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 0.4rem;
+    margin-top: 0.35rem;
+}
+
+.neoterra-map-editor .neoterra-editor-field,
+.neoterra-map-add-node .neoterra-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.7rem;
+}
+
+.neoterra-editor-field textarea,
+.neoterra-editor-field input,
+.neoterra-editor-field select {
+    width: 100%;
+    font-size: 0.75rem;
+}
+
+.neoterra-editor-field:has(textarea) {
+    grid-column: 1 / -1;
+}
+
+.neoterra-editor-scope {
+    margin: 0.4rem 0 0;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    font-size: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.neoterra-editor-scope legend {
+    padding: 0 0.25rem;
+    color: var(--nt-text-muted);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.neoterra-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+}
+
+.neoterra-editor-advanced {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+}
+
+@media (max-width: 760px) {
+    .neoterra-editor-fields {
+        grid-template-columns: 1fr;
+    }
+}

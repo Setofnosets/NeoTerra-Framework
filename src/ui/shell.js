@@ -18,6 +18,13 @@ import { getSettings, resetSettings } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
 import { disposeSettingsPanel, mountSettingsPanel, refreshSettingsPanel } from './settings.js';
 import { disposeMapPanel, mountMapPanel } from './map-panel.js';
+import { createWorldStateStore } from '../state/store.js';
+import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
+import { createSceneFlow } from '../flows/scene.js';
+import { createInitiative } from '../flows/initiative.js';
+import { createStorylineTracker } from '../agents/storyline.js';
+import { createAgentClient } from '../agents/client.js';
+import { createAgentRunner } from '../agents/runner.js';
 
 const logger = createLogger('shell');
 
@@ -65,11 +72,15 @@ function getContext() {
     if (ctx) {
         return ctx;
     }
+    return refreshContext();
+}
+
+/** Re-read the live context; chat switches change `chatId`/`chatMetadata`. */
+function refreshContext() {
     try {
-        ctx = globalThis.SillyTavern?.getContext?.() ?? null;
+        ctx = globalThis.SillyTavern?.getContext?.() ?? ctx;
     } catch (error) {
         logger.warn('Could not read SillyTavern context', error);
-        ctx = null;
     }
     return ctx;
 }
@@ -204,6 +215,157 @@ async function mountSeasonPanel(context) {
     }
 }
 
+/**
+ * Cached per-chat store. SillyTavern does not reload extension scripts when the
+ * chat changes, so the cache is keyed by chat id: a switch invalidates the
+ * store instead of leaking one chat's world into another.
+ */
+let mapRuntime = null;
+let mountedMapChatId = null;
+
+function currentChatId(context) {
+    // `ctx.chatId` lags during `CHAT_CHANGED`; the world state carries the chat
+    // it belongs to, so prefer it and fall back to the context id.
+    return context?.chatMetadata?.neoterra?.worldState?.chatId ?? context?.chatId ?? null;
+}
+
+function readLocalStorage() {
+    try {
+        return globalThis.localStorage ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function buildStorylineInitiative(context, store, season) {
+    let runner = null;
+    try {
+        const client = createAgentClient({ ctx: context });
+        runner = createAgentRunner({ client });
+    } catch (error) {
+        logger.debug('Agent runner unavailable; travel uses the deterministic tracker', error);
+    }
+    const storyline = createStorylineTracker({
+        runner,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
+    return createInitiative({
+        store,
+        season,
+        storyline,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
+}
+
+function buildMapRuntime(context, panelRef) {
+    const chatId = currentChatId(context);
+    const metadata = context?.chatMetadata;
+    if (!chatId || !metadata) {
+        return null;
+    }
+    if (mapRuntime && mapRuntime.chatId === chatId) {
+        mapRuntime.panelRef = panelRef;
+        return mapRuntime;
+    }
+    let store;
+    try {
+        store = createWorldStateStore({
+            metadata,
+            saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
+            storage: readLocalStorage(),
+            chatId,
+        });
+    } catch (error) {
+        logger.warn('Could not open the chat world state', error);
+        return null;
+    }
+    if (!store.get()) {
+        return { chatId, store, panelRef, travel: null };
+    }
+    const season = metadata.neoterra?.seasonDefinition ?? null;
+    const scene = createSceneFlow({
+        store,
+        season,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
+    const initiative = buildStorylineInitiative(context, store, season);
+    const travel = createTravelFlow({
+        store,
+        season,
+        scene,
+        initiative,
+        // Read through the live runtime so a panel remount (same chat) still
+        // supplies the current overrides.
+        loadSources: () => mapRuntime?.panelRef?.getSources?.() ?? panelRef?.getSources?.() ?? null,
+        now: Date.now,
+        log: (message, error) => logger.warn(message, error),
+    });
+    mapRuntime = { chatId, store, panelRef, scene, initiative, travel };
+    return mapRuntime;
+}
+
+function recordTravelOnMessage(context, result) {
+    const messages = Array.isArray(context?.chat) ? context.chat : null;
+    if (!messages || !result?.messageExtra) {
+        return false;
+    }
+    // Prefer the latest assistant message: the travel record describes the
+    // scene the narrator last presented, not the player's own prompt.
+    const message = [...messages].reverse().find((entry) => entry && entry.is_user !== true) ?? null;
+    if (!message) {
+        return false;
+    }
+    try {
+        attachTravelToMessage(message, result.messageExtra);
+        context?.saveChat?.();
+        return true;
+    } catch (error) {
+        logger.warn('Could not record the travel on the message', error);
+        return false;
+    }
+}
+
+function buildMapTravelHandler(context, runtime, panelRef) {
+    const travel = runtime?.travel ?? null;
+    if (!travel) {
+        return null;
+    }
+    return async (request) => {
+        if (!request?.to) {
+            return false;
+        }
+        // The user may have switched chats with the map open. Never write into
+        // the previous chat's timeline (or onto the new chat's message).
+        const live = refreshContext();
+        const liveChatId = currentChatId(live ?? context);
+        if (liveChatId && liveChatId !== runtime.chatId) {
+            logger.info('Chat changed; remounting the map before travel');
+            disposeMapPanel();
+            mountedMapChatId = null;
+            await mountMapPanelForActiveChat();
+            return false;
+        }
+        const result = await travel.travel({ to: request.to });
+        if (!result.ok) {
+            logger.info('Travel rejected', { reason: result.reason, message: result.message });
+            bus.emit(EVENTS.MAP_UPDATED, { travel: result });
+            return false;
+        }
+        recordTravelOnMessage(context, result);
+        panelRef?.refresh?.();
+        bus.emit(EVENTS.MAP_UPDATED, { travel: result, intro: result.intro ?? null });
+        return true;
+    };
+}
+
+/** Re-read the live context so a chat switch is visible, then mount the map. */
+async function mountMapPanelForActiveChat() {
+    return mountMapPanelComponent(refreshContext());
+}
+
 async function mountMapPanelComponent(context) {
     if (!hasDom()) {
         return null;
@@ -213,12 +375,32 @@ async function mountMapPanelComponent(context) {
         return null;
     }
     try {
-        return await mountMapPanel({
+        // A chat switch keeps this module loaded: drop the old panel/store so
+        // nothing is written into the previous chat's metadata.
+        const chatId = currentChatId(context);
+        if (chatId && mountedMapChatId && mountedMapChatId !== chatId) {
+            disposeMapPanel();
+        }
+        mountedMapChatId = chatId;
+        const ref = { panel: null };
+        const runtime = buildMapRuntime(context, {
+            getSources: () => ref.panel?.getSources?.() ?? null,
+            refresh: () => ref.panel?.refresh?.(),
+        });
+        const onTravel = buildMapTravelHandler(context, runtime, {
+            getSources: () => ref.panel?.getSources?.() ?? null,
+            refresh: () => ref.panel?.refresh?.(),
+        });
+        const panel = await mountMapPanel({
             root: host,
             ctx: context,
+            season: context?.chatMetadata?.neoterra?.seasonDefinition ?? null,
             settings: getSettings(context).map ?? {},
-            store: null,
+            store: runtime?.store ?? null,
+            onTravel,
         });
+        ref.panel = panel;
+        return panel;
     } catch (error) {
         logger.warn('Could not mount the city map', error);
         host.innerHTML = '<p class="neoterra-error" role="alert">The city map could not be mounted.</p>';
@@ -269,9 +451,9 @@ export function setActiveTab(tabId) {
     for (const panel of root.querySelectorAll('[data-neoterra-panel]')) {
         panel.hidden = panel.dataset.neoterraPanel !== tabId;
     }
-    if (tabId === 'map' && !mapMounted) {
+    if (tabId === 'map') {
         mapMounted = true;
-        void mountMapPanelComponent(getContext());
+        void mountMapPanelForActiveChat();
     }
     bus.emit(EVENTS.TAB_CHANGED, { tab: tabId });
     return true;
@@ -424,6 +606,7 @@ export async function initialize(options = {}) {
         mountShell();
         void mountSeasonPanel(ctx);
         registerSlashCommand(ctx);
+        subscribeChatChanges(ctx);
         exposeDebugApi(ctx);
         await mountSettingsPanel(ctx, { signal: abort.signal });
 
@@ -454,6 +637,49 @@ export async function initialize(options = {}) {
     }
 }
 
+/**
+ * SillyTavern keeps the module loaded across chats. Drop the chat-bound map
+ * runtime as soon as the chat changes so the next map activation rebuilds it.
+ */
+let chatChangeSubscription = null;
+
+function subscribeChatChanges(context) {
+    unsubscribeChatChanges();
+    const eventSource = context?.eventSource ?? context?.eventTypes;
+    const on = typeof eventSource?.on === 'function' ? eventSource.on.bind(eventSource) : null;
+    if (!on) {
+        return;
+    }
+    const handler = () => {
+        mapRuntime = null;
+        mountedMapChatId = null;
+        disposeMapPanel();
+        if (isShellOpen() && getActiveTab() === 'map') {
+            void mountMapPanelForActiveChat();
+        }
+    };
+    try {
+        on('chat_changed', handler);
+        chatChangeSubscription = { eventSource, handler };
+    } catch (error) {
+        logger.debug('chat_changed subscription unavailable', error);
+    }
+}
+
+function unsubscribeChatChanges() {
+    const subscription = chatChangeSubscription;
+    chatChangeSubscription = null;
+    if (!subscription) {
+        return;
+    }
+    try {
+        const off = subscription.eventSource?.removeListener ?? subscription.eventSource?.off;
+        off?.call?.(subscription.eventSource, 'chat_changed', subscription.handler);
+    } catch (error) {
+        logger.debug('Could not remove the chat_changed listener', error);
+    }
+}
+
 /** Unmount the extension. Called by the manifest `disable`/`delete` hooks. */
 export function dispose() {
     mounted = false;
@@ -462,6 +688,9 @@ export function dispose() {
     mapMounted = false;
 
     unregisterSlashCommand(ctx);
+    unsubscribeChatChanges();
+    mapRuntime = null;
+    mountedMapChatId = null;
     disposeSeasonMenu();
     disposeMapPanel();
     disposeSettingsPanel();

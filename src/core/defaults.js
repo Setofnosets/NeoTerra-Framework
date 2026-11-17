@@ -198,6 +198,16 @@ export const DEFAULT_SETTINGS = freezeDeep({
 
     map: {
         showFogOfWar: false,
+        // World overlay ("where am I in the story") on the map tab.
+        showOverlay: true,
+        showThreats: true,
+        showFactions: true,
+        showRumors: true,
+        showHeadlines: true,
+        showFactionTint: true,
+        maxHeadlines: 5,
+        // Override editor (never touches the SVGs).
+        editorEnabled: true,
     },
 
     debug: false,

@@ -10,6 +10,7 @@ export const EVENTS = Object.freeze({
     SHELL_CLOSED: 'shell:closed',
     TAB_CHANGED: 'shell:tab-changed',
     SETTINGS_CHANGED: 'settings:changed',
+    MAP_UPDATED: 'map:updated',
 });
 
 export function createEventBus() {

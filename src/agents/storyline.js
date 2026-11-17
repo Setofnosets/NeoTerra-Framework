@@ -254,6 +254,7 @@ export function buildStorylinePrompt({
     season,
     pressure = 'standard',
     recentProse = '',
+    travel = null,
 } = {}) {
     const locationId = state?.scene?.locationId ?? null;
     const location = locationId ? state?.locations?.[locationId] ?? null : null;
@@ -276,6 +277,22 @@ export function buildStorylinePrompt({
     lines.push(`Deadline pressure: ${pressure}`);
     lines.push(`Player role: ${state?.playerRole ?? 'neutral'}`);
     lines.push('');
+    if (travel && typeof travel === 'object') {
+        const route = Array.isArray(travel.path) ? travel.path.filter((id) => typeof id === 'string') : [];
+        const bridges = Array.isArray(travel.bridges) ? travel.bridges.filter((id) => typeof id === 'string') : [];
+        lines.push('## Travel');
+        lines.push(`From: ${travel.from ?? 'unknown'} -> To: ${travel.to ?? 'unknown'}`);
+        lines.push(`Route: ${route.length > 0 ? route.join(' -> ') : '(unknown)'}`);
+        lines.push(`Bridges: ${bridges.length > 0 ? bridges.join(', ') : '(none)'}`);
+        if (travel.ability) {
+            lines.push(`Bypass ability: ${travel.ability}`);
+        }
+        if (Number.isFinite(travel.turns)) {
+            lines.push(`Turns spent: ${travel.turns}`);
+        }
+        lines.push('A travel event just happened. React to the arrival: ambushes, blockades, faction response, or a quiet arrival are all valid.');
+        lines.push('');
+    }
 
     lines.push('## Factions');
     for (const faction of Object.values(state?.factions ?? {}).filter(isObject)) {
@@ -737,11 +754,13 @@ export function createStorylineTracker({
             formRules: request.formRules ?? null,
             pressure,
             recentProse: request.recentProse ?? '',
+            travel: request.travel ?? null,
             prompt: buildStorylinePrompt({
                 state,
                 season,
                 pressure,
                 recentProse: request.recentProse ?? '',
+                travel: request.travel ?? null,
             }),
         };
     }

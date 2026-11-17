@@ -227,6 +227,18 @@ export function normalizeSettings(settings) {
         map: {
             ...(isPlainObject(settings.map) ? settings.map : {}),
             showFogOfWar: asBoolean(settings.map?.showFogOfWar, defaults.map.showFogOfWar),
+            showOverlay: asBoolean(settings.map?.showOverlay, defaults.map.showOverlay),
+            showThreats: asBoolean(settings.map?.showThreats, defaults.map.showThreats),
+            showFactions: asBoolean(settings.map?.showFactions, defaults.map.showFactions),
+            showRumors: asBoolean(settings.map?.showRumors, defaults.map.showRumors),
+            showHeadlines: asBoolean(settings.map?.showHeadlines, defaults.map.showHeadlines),
+            showFactionTint: asBoolean(settings.map?.showFactionTint, defaults.map.showFactionTint),
+            maxHeadlines: asNumber(settings.map?.maxHeadlines, defaults.map.maxHeadlines, {
+                min: 1,
+                max: 20,
+                integer: true,
+            }),
+            editorEnabled: asBoolean(settings.map?.editorEnabled, defaults.map.editorEnabled),
         },
         debug: asBoolean(settings.debug, defaults.debug),
     };
