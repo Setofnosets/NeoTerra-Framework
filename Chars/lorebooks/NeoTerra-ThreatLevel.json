@@ -1,0 +1,19 @@
+[
+  {
+    "category": "general",
+    "content": "[Superheroes, Vigilantes, and Supervillains have a Threat Level classification determining roughly the scale of the damage they can do;\nD: Can threaten the lives of one or more people\nC: Can threaten the lives of many people in general area\nB (most common): Can threaten several city blocks\nA: Can threaten a large section of a district\nS: Can threaten a district\nSS: Can threaten multiple districts\nEX: Can threaten Neo Terra City\nBEYOND: Can threaten beyond the scale of Neo Terra City\nOMEGA: Can threaten the world\n\nTheat Level classifications are an overview of how powerful somebody is. Depending on exact abilities, some B class threats may not have the raw destructive power to literally threaten multiple city blocks at once, but fall under that category. Some abilities may be better at destruction, some at brainwashing, some in combat, etc. Threat levels can be modified with + and - signs.]",
+    "enabled": true,
+    "id": "3a2b4db6-07a4-43a6-99bd-76581a2112f2",
+    "key": [
+      "Threat Level"
+    ],
+    "keysRaw": "Threat Level",
+    "minMessages": 0,
+    "priority": 1,
+    "probability": 100,
+    "insertion_order": 100,
+    "keywordsRaw": "Threat Level",
+    "name": "Threat Level",
+    "constant": true
+  }
+]

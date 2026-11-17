@@ -1,0 +1,55 @@
+[
+  {
+    "category": "general",
+    "content": "[Key Events in Canon:\nNeo Terra has faced multiple significant events in its lifetime. Some notable turning points include;\n1. Colorgarde defeats Clarity Incorporated (early 2040).\n2. Pepper Keller takes over Neo Terra (December 1st, 2041).\n3. To rally the Coalition against Pepper Keller behind their resources, PetraByte CEO Gintvilas and heir Vaiva publicly reveal their superhero identities (December 4th, 2041).\n4. Pepper Keller is defeated but escapes (December 15th, 2041).\n5. Pepper Keller returns quietly as Amy Matic (February 14th, 2042), the daughter of fashionista/superhero Monika Matic (AKA Monochromatic). Amy/Pepper's truly identity is disclosured to the public (February 21st, 2042). Amy became a superhero (Seasonal Siren) (March 1st, 2042).\n6. Exploiting the fact Vaiva's identity was exposed thanks to Amy's actions, the tribalist cult princess Leila Renya brainwashes Gintvilas and takes over PetraByte after months of plotting to enslave Vaiva's loved ones and break them (May 4th, 2042).\n7. Monika offers Vaiva and their allies refuge at the Matic Estate. Amy helps as atonement. (May 5th, 2042).\n8. Vaiva defeats Leila Renya and reclaims their legacy (June 10th, 2042).]\n\n[Multiverse: The multiverse exists, and thus, this timeline may contradict the roleplay or include events that haven't chronologically happened yet. This is not a problem. Just think of it as the main canon that can be diverged from for \"what-if\" scenarios.]",
+    "enabled": true,
+    "id": "f1caefe4-a8de-4b4c-b45c-4827c194f2e5",
+    "key": [
+      "Multiverse"
+    ],
+    "keysRaw": "Multiverse",
+    "minMessages": 0,
+    "priority": 1,
+    "probability": 100,
+    "insertion_order": 100,
+    "keywordsRaw": "Multiverse",
+    "name": "Key Event",
+    "tags": [
+      "history"
+    ],
+    "constant": true
+  },
+  {
+    "activationMode": "standard",
+    "activationScript": "",
+    "case_sensitive": false,
+    "category": "other",
+    "comment": "",
+    "constant": true,
+    "content": "[Metafictional Information about the Neo Terra-verse: The Neo Terra-verse's tone is unrealistic, chaotic, and whimsical, inspired by femdom-based hentai JRPGs, action anime, superhero comic books, and cyberpunk. Being the cyberpunk genre, megacorporations tend to have more power than the government. Superheroes and supervillains constantly fight, often erotically. Major threats to Neo Terra City are common, often caused by lewd, sexy villainesses with hypnotic powers and seductive personalities who corrupt others to their side. Despite dark storylines giving villainesses the advantage, the story is erotic and absurd rather than taken overly seriously. Female characters are usually lewd, flirty, and weaponize their femininity. Villainesses raping heroes they defeat/seduce is normal and expected. Rape from a villainess breaks even the most moral of heroes, even if it's ridiculous and doesn't make sense.].",
+    "enabled": true,
+    "extensions": {},
+    "groupWeight": 100,
+    "id": "d0410b6c-2cf0-4852-8381-a32f324fbfc3",
+    "inclusionGroupRaw": "",
+    "insertion_order": 200,
+    "key": [
+      "Neo Terra"
+    ],
+    "keyMatchPriority": false,
+    "keysecondary": [],
+    "keysecondaryRaw": "",
+    "keysRaw": "Neo Terra",
+    "matchWholeWords": true,
+    "minMessages": 0,
+    "name": "Neo Terra-verse",
+    "placement": "default",
+    "placementPosition": "after",
+    "prioritizeInclusion": false,
+    "priority": 2,
+    "probability": 100,
+    "selectiveLogic": 0,
+    "tags": [],
+    "keywordsRaw": "Neo Terra"
+  }
+]

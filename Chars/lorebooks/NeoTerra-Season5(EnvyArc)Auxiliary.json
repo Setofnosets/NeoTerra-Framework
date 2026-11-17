@@ -1,0 +1,109 @@
+[
+  {
+    "category": "general",
+    "content": "[Alongside PetraByte, Corvus Corp is a cornerstone of the superhero community. Monika Matic, a mature fashionista & Neo Terra's #1 superhero (Monochromatic) has control over the supernatural mineral 'Monicium'. Monicium can be shaped into almost anything and is the main material used in most superhero suits. Corvus Corp create superhero suits for free to the specifications of superheroes who lack a functional Monicium suit, with modification and alternative suit request being low priority. The non-superhero side of Corvus Corp is a for-profit business, not using Monicium. Corvus Corp funds city repairs & villain rehabilitation programs.]",
+    "enabled": true,
+    "id": "8b75a324-838b-4ca5-a5ae-5e87098ecd72",
+    "key": [
+      "Corvus Corp",
+      "Monicium",
+      "Monika Matic"
+    ],
+    "keysRaw": "Corvus Corp, Monicium, Monika Matic",
+    "minMessages": 0,
+    "priority": 1,
+    "probability": 100,
+    "insertion_order": 100,
+    "keywordsRaw": "Corvus Corp, Monicium, Monika Matic",
+    "tags": [
+      "faction"
+    ]
+  },
+  {
+    "activationMode": "standard",
+    "activationScript": "",
+    "case_sensitive": false,
+    "category": "other",
+    "comment": "",
+    "constant": false,
+    "content": "[Amy Matic, a young fashionista & arguably Neo Terra's strongest superhero (Seasonal Siren) is CEO of Siren's Styles. Siren's Styles specializes in designing, making, and modifying superhero suits. Normally superheroes can get a suit for free from Corvus Corp, the company ran by Monika Matic (Amy's mom), but they prioritize suits for heroes without a functional suit. That's where Siren's Styles comes in, designing superhero suits for fashion reasons as a paid service.\n\nDifferent girls in Siren's Styles specialize in different types of orders. Examples include;\n1. Amy Matic/Seasonal Siren is all about being flashy and over the top with her designs. Fully commit to a theme, no holding back on the ridiculousness.\n2. Tessa Ervone/Emerald Allure'w designs are simpler/minimalist by comparison to Amy's, but still flashy. Bright and shiny.\n3. Alrica Schneider/Lady Lash's designs are dark and militaristic feeling.]",
+    "enabled": true,
+    "extensions": {},
+    "groupWeight": 100,
+    "id": "02e189df-5fcd-4874-8aa4-cd7b458d49c7",
+    "inclusionGroupRaw": "",
+    "insertion_order": 200,
+    "key": [
+      "Siren's Styles",
+      "Seasonal Siren",
+      "Amy",
+      "Amy Matic"
+    ],
+    "keyMatchPriority": false,
+    "keysecondary": [],
+    "keysecondaryRaw": "",
+    "keysRaw": "Siren's Styles, Seasonal Siren, Amy, Amy Matic",
+    "matchWholeWords": true,
+    "minMessages": 0,
+    "name": "Siren's Styles",
+    "placement": "default",
+    "placementPosition": "after",
+    "prioritizeInclusion": false,
+    "priority": 2,
+    "probability": 100,
+    "selectiveLogic": 0,
+    "tags": [
+      "faction"
+    ],
+    "keywordsRaw": "Siren's Styles, Seasonal Siren, Amy, Amy Matic"
+  },
+  {
+    "activationMode": "standard",
+    "activationScript": "",
+    "case_sensitive": false,
+    "category": "other",
+    "comment": "",
+    "constant": false,
+    "content": "[The Sensational Sirens are a superhero team of fashionable women with questionable morals. They include;\n1. Amy Matic/Seasonal Siren. A former villainess with a massive ego and love for holidays, Amy is the \"Princess of Fashion\", one of the strongest superheroes, team leader & founder, and CEO of Siren's Styles. The other Sirens submit to Amy's will, referring to her primarily as \"Lady Amy\" (expect for Claire).\n2. Tessa Ervone/Emerald Allure. One of Amy's apprentices at Siren's Styles. Formerly an anxious but talented costume designer in Hollywood. A smug bully, she is the 2nd-in-command of the team. She is the most plain looking of the team, gaining confidence after designing a suit that makes even an average girl like irresistible and powerful.\n3, Alrica Schneider/Lady Lash. One of Amy's apprentices at Siren's Styles. A German dominatrix who sees torture as a showcase of creativity, she is ruthless and militaristic like a lewd drill sergeant.\n4. Claire Lachesis. A former villainess who was the defacto \"Queen of Neo Terra\" in a darker era ended by Colorgarde. Claire is a sociopath brainwashed by her own Beast Conversion Program and given angel genes. She is insane and views herself as a goddess, gently guiding and protecting people like a shepherd does lambs.\n5. Mira Shard/Crystal Cat. A former villainess and sadistically curious living weapon, Mira was made by Claire back in Clarity Incorporated's era as a perfect counter to Colorgarde. She is a modified clone of Claire's 19-year-old self, given cat genes and a body made of light reflective crystals. Disappeared to discover her own identity after Clarity Incorporated fell and eventually reunited with Claire as a teammate, not pet.\n6. Aurelia Selwind/Longshot. A flirtatious, greedy, and opportunistic thief with a homeless background who targets corrupt companies with a bow and lucked manipulations skills as a rabbit themed superhero. In civilian life she is a bunny waitress as Gold Paradise Casino, getting \"friendly\" with shady guests for info... while stealing wallets and hearts for fun.\n7. Carol Fate/Fairy Dust. A former villainess. Aurelia's childhood orphan friend, helping each other survive. When Aurelia fell into a coma from the incident that gave her superpowers, Carol got deep into crime to pay the medical bills. She stole demonic tombs from Clarity Incorporated and was enslaved by the BCP. Secretly selling her soul to a demon behind Claire's back to break free of Clairity Incorporated's control, Carol eventually became Aurelia's archnemesis, determined to erase every part of her past and live alone. Clarity, the demon, and even Aurelia. She wanted it all dead. Eventually Aurelia rehabilitated Carol and helped get rid of the demon.]",
+    "enabled": true,
+    "extensions": {},
+    "groupWeight": 100,
+    "id": "856bc60e-a2b9-4009-9adf-c03ec64180bf",
+    "inclusionGroupRaw": "",
+    "insertion_order": 300,
+    "key": [
+      "Amy",
+      "Tessa",
+      "Alrica",
+      "Carol",
+      "Aurelia",
+      "Mira",
+      "Claire",
+      "Seasonal Siren",
+      "Emerald Allure",
+      "Lady Lash",
+      "Fairy Dust",
+      "Longshot",
+      "Crystal Cat",
+      "Midnight Gift",
+      "Sensational Sirens"
+    ],
+    "keyMatchPriority": false,
+    "keysecondary": [],
+    "keysecondaryRaw": "",
+    "keysRaw": "Amy, Tessa, Alrica, Carol, Aurelia, Mira, Claire, Seasonal Siren, Emerald Allure, Lady Lash, Fairy Dust, Longshot, Crystal Cat, Midnight Gift, Sensational Sirens",
+    "matchWholeWords": true,
+    "minMessages": 0,
+    "name": "Sensational Sirens",
+    "placement": "default",
+    "placementPosition": "after",
+    "prioritizeInclusion": false,
+    "priority": 3,
+    "probability": 100,
+    "selectiveLogic": 0,
+    "tags": [
+      "faction"
+    ],
+    "keywordsRaw": "Amy, Tessa, Alrica, Carol, Aurelia, Mira, Claire, Seasonal Siren, Emerald Allure, Lady Lash, Fairy Dust, Longshot, Crystal Cat, Midnight Gift, Sensational Sirens"
+  }
+]
