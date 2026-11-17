@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–10 complete / Step 11 next
+- **Status:** in progress — Steps 1–11 complete / Step 12 next
 - **Date:** 2026-11-17
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -29,7 +29,7 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–10 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction), Step 8 (cast director/world book/form exclusivity), Step 9 (Architect, Storyline Tracker, Continuity Auditor, initiative hook, Canon Beat Ledger helpers), and Step 10 (player state tracker + modular player sheet) are complete; Step 11 is next.
+- As of this update, Steps 1–11 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. Step 7 (season menu/world construction), Step 8 (cast director/world book/form exclusivity), Step 9 (Architect, Storyline Tracker, Continuity Auditor, initiative hook, Canon Beat Ledger helpers), Step 10 (player state tracker + modular player sheet), and Step 11 (opt-in bad-end detector, record/epilogue flow, continuation choices, settings, and panel view model) are complete; Step 12 (Lore Agent, relationships, and lorebook writes) is next.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -491,7 +491,7 @@ NeoTerra-Framework/
 - [x] Step 8 — Cast Director, world-book materialization, and form exclusivity — `2a5aaa8`
 - [x] Step 9 — Storyline Tracker agent and Canon Beat Ledger — `f28dea8`
 - [x] Step 10 — Player State Tracker and player panel — `4c52f27`
-- [ ] Step 11 — Bad-end states and continuation (opt-in)
+- [x] Step 11 — Bad-end states and continuation (opt-in) — `b9e83ba`
 - [ ] Step 12 — Lore Agent, relationships, and lorebook writes
 - [ ] Step 13 — SVG map pipeline and city map component
 - [ ] Step 14 — Travel flow and location intro
