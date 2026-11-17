@@ -5,7 +5,7 @@
  * shared state. `cloneDefaults()` returns a fresh, mutable copy.
  */
 
-import { SCHEMA_VERSION } from './constants.js';
+import { DEFAULT_CONTEXT_DEPTH, SCHEMA_VERSION } from './constants.js';
 
 export const DEFAULT_BAD_END_PROMPT = `You are the Neo Terra Bad End Detector. Decide only whether a character has reached a terminal state.
 
@@ -171,6 +171,21 @@ export const DEFAULT_SETTINGS = freezeDeep({
         continuity: 500,
         lore: 900,
         characterProfile: 1200,
+    },
+
+    // Prompt blocks are injected by the manifest generate_interceptor.
+    // Each block can be toggled off; depth is measured from the end of chat.
+    context: {
+        enabled: true,
+        depth: DEFAULT_CONTEXT_DEPTH,
+        blocks: {
+            scene: true,
+            cast: true,
+            player: true,
+            world: true,
+            continuity: true,
+            lore: true,
+        },
     },
 
     contentLimits: {

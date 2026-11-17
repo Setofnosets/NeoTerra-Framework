@@ -11,6 +11,7 @@
     "minimum_client_version": "1.19.0",
     "homePage": "https://github.com/Setofnosets/NeoTerra-Framework",
     "auto_update": false,
+    "generate_interceptor": "neoTerraGenerateInterceptor",
     "hooks": {
         "activate": "initialize",
         "enable": "initialize",

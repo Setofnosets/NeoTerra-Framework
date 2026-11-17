@@ -176,6 +176,20 @@ function normalizeTokenBudget(budget, defaults) {
     return out;
 }
 
+function normalizeContext(context, defaults) {
+    const blocks = isPlainObject(context.blocks) ? context.blocks : {};
+    const outBlocks = { ...blocks };
+    for (const [key, defaultValue] of Object.entries(defaults.blocks)) {
+        outBlocks[key] = asBoolean(blocks[key], defaultValue);
+    }
+    return {
+        ...context,
+        enabled: asBoolean(context.enabled, defaults.enabled),
+        depth: asNumber(context.depth, defaults.depth, { min: 0, max: 100, integer: true }),
+        blocks: outBlocks,
+    };
+}
+
 /** Normalize known settings fields after defaults and migrations are applied. */
 export function normalizeSettings(settings) {
     const defaults = DEFAULT_SETTINGS;
@@ -194,6 +208,10 @@ export function normalizeSettings(settings) {
         tokenBudget: normalizeTokenBudget(
             isPlainObject(settings.tokenBudget) ? settings.tokenBudget : {},
             defaults.tokenBudget,
+        ),
+        context: normalizeContext(
+            isPlainObject(settings.context) ? settings.context : {},
+            defaults.context,
         ),
         contentLimits: {
             ...(isPlainObject(settings.contentLimits) ? settings.contentLimits : {}),
