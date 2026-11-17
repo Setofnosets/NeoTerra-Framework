@@ -14,12 +14,15 @@ import {
 import { DEFAULT_AGENT_PROMPTS } from '../agents/prompts.js';
 import { loadRegistry } from '../data/registry.js';
 import { bus, EVENTS } from '../core/events.js';
+import { readLiveContext, resolveActiveChatId } from '../core/live-context.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings, saveSettings, setByPath } from '../core/settings.js';
+import { downloadJson } from './download.js';
 import { createWorldStateStore } from '../state/store.js';
 import { migrateWorldState } from '../state/migrations.js';
 import { cloneWorldState, validateWorldState } from '../state/world-state.js';
 import { seasonWorldBookName } from '../flows/season-start.js';
+import { directorCardStatus, downloadDirectorCard } from './director-card.js';
 
 const logger = createLogger('settings-ui');
 
@@ -497,12 +500,22 @@ function ensureAgentConfig(root) {
     host.dataset.built = 'true';
 }
 
+/**
+ * Resolve the context used for chat-scoped settings actions (world export,
+ * import, character limits). Always prefer the live SillyTavern context: the
+ * object captured at mount time can point at a previous chat's metadata.
+ */
+export function resolveWorldContext(ctx = null) {
+    return readLiveContext(ctx) ?? ctx;
+}
+
 export async function ensureCharacterLimits(ctx, root, signal = null) {
     const host = root.querySelector('[data-neoterra-character-limits]');
     if (!host) {
         return;
     }
-    const metadata = ctx?.chatMetadata?.neoterra ?? null;
+    const live = resolveWorldContext(ctx);
+    const metadata = live?.chatMetadata?.neoterra ?? null;
     const season = metadata?.seasonDefinition ?? null;
     const roster = Array.isArray(season?.roster) ? season.roster : [];
     const sandbox = season?.sandbox === true || season?.allowAnyCharacter === true;
@@ -542,24 +555,56 @@ export async function ensureCharacterLimits(ctx, root, signal = null) {
     if (signal?.aborted) {
         return;
     }
-    host.innerHTML = buildCharacterLimitMarkup(list, getSettings(ctx));
+    host.innerHTML = buildCharacterLimitMarkup(list, getSettings(live));
     host.dataset.builtKey = builtKey;
-    paintSettingsPanel(ctx, root);
+    paintSettingsPanel(live, root);
 }
 
-function downloadJson(filename, payload) {
-    if (typeof document === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') {
-        return false;
+function refreshNarratorStatus(root, ctx = null) {
+    if (!root) {
+        return;
     }
-    const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
-    const blob = new Blob([text], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    return true;
+    const statusHost = root.querySelector('[data-neoterra-narrator-status]');
+    if (!statusHost) {
+        return;
+    }
+    const status = directorCardStatus(resolveWorldContext(ctx));
+    statusHost.textContent = status.installed
+        ? `Installed: ${status.name}`
+        : 'Not installed. Download it, then import it via Characters → Import character.';
+    const button = root.querySelector('[data-neoterra-download-director]');
+    if (button) {
+        button.disabled = status.installed;
+    }
+}
+
+async function handleDirectorDownload(root) {
+    const statusHost = root.querySelector('[data-neoterra-narrator-status]');
+    const button = root.querySelector('[data-neoterra-download-director]');
+    if (button?.disabled) {
+        return;
+    }
+    if (button) {
+        button.disabled = true;
+    }
+    if (statusHost) {
+        statusHost.textContent = 'Preparing the Director card…';
+    }
+    try {
+        await downloadDirectorCard();
+        if (statusHost) {
+            statusHost.textContent = 'Downloaded. Import it via Characters → Import character.';
+        }
+    } catch (error) {
+        logger.warn('Could not download the Director card', error);
+        if (statusHost) {
+            statusHost.textContent = `Download failed: ${error?.message ?? error}`;
+        }
+    } finally {
+        if (button) {
+            button.disabled = directorCardStatus(resolveWorldContext()).installed;
+        }
+    }
 }
 
 function exportSettings(ctx) {
@@ -568,8 +613,9 @@ function exportSettings(ctx) {
 
 function exportWorld(ctx) {
     try {
-        const bundle = buildWorldBundle(ctx?.chatMetadata);
-        const chatId = String(ctx?.chatId ?? bundle.worldState.chatId ?? 'world')
+        const live = resolveWorldContext(ctx);
+        const bundle = buildWorldBundle(live?.chatMetadata);
+        const chatId = String(resolveActiveChatId(live) ?? live?.chatId ?? bundle.worldState.chatId ?? 'world')
             .replace(/[^a-zA-Z0-9_-]+/g, '-')
             .slice(0, 60);
         downloadJson(`neoterra-world-${chatId || 'world'}.json`, bundle);
@@ -584,7 +630,8 @@ function exportWorld(ctx) {
 }
 
 async function importWorld(ctx, root, file) {
-    if (!file || !ctx?.chatMetadata) {
+    const live = resolveWorldContext(ctx);
+    if (!file || !live?.chatMetadata) {
         return false;
     }
     let parsed;
@@ -599,7 +646,7 @@ async function importWorld(ctx, root, file) {
     }
     let bundle;
     try {
-        bundle = normalizeWorldBundle(parsed, { chatId: ctx.chatId ?? null });
+        bundle = normalizeWorldBundle(parsed, { chatId: resolveActiveChatId(live) ?? live.chatId ?? null });
     } catch (error) {
         logger.warn('Rejected world bundle', error);
         if (typeof window !== 'undefined' && typeof window.alert === 'function') {
@@ -607,7 +654,7 @@ async function importWorld(ctx, root, file) {
         }
         return false;
     }
-    const hasWorld = Boolean(ctx.chatMetadata.neoterra?.worldState);
+    const hasWorld = Boolean(live.chatMetadata.neoterra?.worldState);
     if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
         const message = hasWorld
             ? 'Replace this chat\'s Neo Terra world with the imported world? The current world state will be overwritten.'
@@ -617,14 +664,14 @@ async function importWorld(ctx, root, file) {
         }
     }
     try {
-        writeWorldBundleToMetadata(ctx.chatMetadata, bundle, { chatId: ctx.chatId ?? null });
+        writeWorldBundleToMetadata(live.chatMetadata, bundle, { chatId: resolveActiveChatId(live) ?? live.chatId ?? null });
         const store = createWorldStateStore({
-            metadata: ctx.chatMetadata,
-            saveMetadataDebounced: () => ctx?.saveMetadataDebounced?.(),
+            metadata: live.chatMetadata,
+            saveMetadataDebounced: () => live?.saveMetadataDebounced?.(),
         });
-        store.replace(ctx.chatMetadata.neoterra.worldState);
+        store.replace(live.chatMetadata.neoterra.worldState);
         store.flush();
-        ctx?.saveMetadataDebounced?.();
+        live?.saveMetadataDebounced?.();
     } catch (error) {
         logger.warn('Could not write the imported world', error);
         return false;
@@ -634,7 +681,7 @@ async function importWorld(ctx, root, file) {
     } else {
         bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-import' });
     }
-    void ensureCharacterLimits(ctx, root, panelAbort?.signal);
+    void ensureCharacterLimits(live, root, panelAbort?.signal);
     return true;
 }
 
@@ -907,6 +954,7 @@ export async function mountSettingsPanel(ctx, {
         mountedCtx = ctx;
         ensureAgentConfig(existing);
         paintSettingsPanel(ctx, existing);
+        refreshNarratorStatus(existing, ctx);
         void ensureCharacterLimits(ctx, existing, externalSignal);
         void ensureCardSeasonOptions(existing, externalSignal);
         return existing;
@@ -987,6 +1035,10 @@ export async function mountSettingsPanel(ctx, {
             root.querySelector('[data-neoterra-card-import-file]')?.click?.();
             return;
         }
+        if (event.target.closest?.('[data-neoterra-download-director]')) {
+            void handleDirectorDownload(root);
+            return;
+        }
         if (event.target.closest?.('[data-neoterra-reset-world]')) {
             void resetChatWorld(ctx, onResetWorld);
             return;
@@ -1027,6 +1079,7 @@ export async function mountSettingsPanel(ctx, {
     ensureAgentConfig(root);
     paintSettingsPanel(ctx, root);
     syncDependentFields(root, getSettings(ctx));
+    refreshNarratorStatus(root, ctx);
     void ensureCharacterLimits(ctx, root, signal);
     void ensureCardSeasonOptions(root, signal);
     return root;
@@ -1052,6 +1105,7 @@ export function refreshSettingsPanel() {
     if (root) {
         const settings = paintSettingsPanel(mountedCtx, root);
         syncDependentFields(root, settings);
+        refreshNarratorStatus(root, mountedCtx);
         void ensureCharacterLimits(mountedCtx, root, panelAbort?.signal);
         void ensureCardSeasonOptions(root, panelAbort?.signal);
     }

@@ -26,6 +26,7 @@ import { loadFactions } from '../data/factions.js';
 import { loadLocations } from '../data/locations.js';
 import { validateFormGroups, validateFormRules } from '../data/schema.js';
 import { createWorldStateStore } from '../state/store.js';
+import { resolveActiveChatId } from '../core/live-context.js';
 
 const logger = createLogger('season-start');
 
@@ -673,7 +674,8 @@ export function startSeason(options = {}) {
     };
 }
 
-function findStCharacter(ctx, name) {
+/** Find an installed SillyTavern character by display name. */
+export function findStCharacter(ctx, name) {
     const characters = Array.isArray(ctx?.characters) ? ctx.characters : [];
     const target = String(name ?? '').toLowerCase();
     const match = characters.find((character) => (
@@ -683,8 +685,11 @@ function findStCharacter(ctx, name) {
 }
 
 /**
- * Best-effort narrator-card selection. Step 7 does not create ST cards: a
- * missing Director card is reported, never fabricated.
+ * Detect the intended narrator card for this season. This is read-only: the
+ * extension never switches characters as part of season start. Switching cards
+ * would make SillyTavern clear and reload the chat, discarding the world state we
+ * just seeded. The caller reports availability so the UI can offer the Director
+ * card download.
  */
 export function selectNarratorCard(ctx, options = {}) {
     const { season, identity, mode, registry } = options;
@@ -704,26 +709,12 @@ export function selectNarratorCard(ctx, options = {}) {
         };
     }
 
-    const avatar = character.avatar ?? character.id ?? null;
-    try {
-        if (typeof ctx?.selectCharacterById === 'function' && avatar) {
-            ctx.selectCharacterById(avatar);
-        }
-        return {
-            role: solo ? 'canon' : 'director',
-            name,
-            characterId: avatar,
-            status: 'selected',
-        };
-    } catch (error) {
-        logger.warn('Could not select the narrator card', error);
-        return {
-            role: solo ? 'canon' : 'director',
-            name,
-            characterId: avatar,
-            status: 'failed',
-        };
-    }
+    return {
+        role: solo ? 'canon' : 'director',
+        name,
+        characterId: character.avatar ?? character.id ?? null,
+        status: 'available',
+    };
 }
 
 /**
@@ -743,6 +734,11 @@ export function selectNarratorCard(ctx, options = {}) {
  *   worldBook?: { ensure?: Function, sync?: Function } | null,
  *   metadata?: object|null,
  * }} options
+ *
+ * When `ctx` is provided, the active chat is resolved again after the static
+ * data loads. An explicit `chatId` must still match the live chat in that case;
+ * otherwise the flow throws `CHAT_CHANGED` rather than writing into a detached
+ * metadata object.
  */
 export async function enterSeason(options = {}) {
     const {
@@ -757,10 +753,15 @@ export async function enterSeason(options = {}) {
         metadata: metadataOption = null,
     } = options;
 
-    const requestedChatId = typeof options.chatId === 'string' ? options.chatId : null;
-    const initialChatId = requestedChatId ?? ctx?.chatId ?? null;
-    if (typeof initialChatId !== 'string' || initialChatId.length === 0) {
-        throw new SeasonStartError('INVALID_CHAT', 'enterSeason requires an active chat');
+    const requestedChatId = typeof options.chatId === 'string' && options.chatId.trim().length > 0
+        ? options.chatId.trim()
+        : null;
+    const initialChatId = requestedChatId ?? resolveActiveChatId(ctx);
+    if (!initialChatId) {
+        throw new SeasonStartError(
+            'INVALID_CHAT',
+            'Open a character or group chat before starting a season.',
+        );
     }
 
     const [season, registry, factions, locations, formData] = await Promise.all([
@@ -774,13 +775,14 @@ export async function enterSeason(options = {}) {
 
     // Loading static data can take long enough for the user to switch chats.
     // Never seed the world of chat A into chat B's metadata.
-    const chatId = requestedChatId ?? ctx?.chatId ?? initialChatId;
-    if (!requestedChatId && ctx && chatId !== initialChatId) {
+    const liveChatId = resolveActiveChatId(ctx);
+    if (ctx && liveChatId !== initialChatId) {
         throw new SeasonStartError(
             'CHAT_CHANGED',
             'The active chat changed while the season data was loading. Try again.',
         );
     }
+    const chatId = requestedChatId ?? liveChatId ?? initialChatId;
 
     const metadata = metadataOption ?? ctx?.chatMetadata ?? null;
     let store = options.store ?? null;

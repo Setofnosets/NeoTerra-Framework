@@ -8,7 +8,9 @@
  */
 
 import { createLogger } from '../core/logger.js';
+import { resolveActiveChatId } from '../core/live-context.js';
 import { loadRegistry } from '../data/registry.js';
+import { directorCardStatus, downloadDirectorCard } from './director-card.js';
 import {
     SeasonStartError,
     applyCharacterFocus,
@@ -147,6 +149,80 @@ function renderConfirmStep({ entry, identity, error }) {
     </section>`;
 }
 
+function hostLabelFor(ctx) {
+    if (!ctx || typeof ctx !== 'object') {
+        return null;
+    }
+    const name2 = typeof ctx.name2 === 'string' ? ctx.name2.trim() : '';
+    if (name2.length > 0) {
+        return name2;
+    }
+    const characters = Array.isArray(ctx.characters) ? ctx.characters : [];
+    const characterId = ctx.characterId;
+    if (characterId !== undefined && characterId !== null) {
+        const character = characters.find((candidate) => candidate && (
+            candidate.id === characterId
+            || candidate.avatar === characterId
+            || String(candidate.id) === String(characterId)
+        ));
+        if (typeof character?.name === 'string' && character.name.length > 0) {
+            return character.name;
+        }
+    }
+    const groups = Array.isArray(ctx.groups) ? ctx.groups : [];
+    const group = groups.find((candidate) => String(candidate?.id) === String(ctx.groupId));
+    return typeof group?.name === 'string' && group.name.length > 0 ? group.name : null;
+}
+
+function renderSetupStrip(setup) {    if (!setup) {
+        return '';
+    }
+    const modeLabels = {
+        director: 'Director / narrator',
+        group: 'Group chat',
+        solo: 'Solo hot-swap',
+    };
+    const modeLabel = modeLabels[setup.mode] ?? setup.mode ?? 'Director / narrator';
+    const hostLabel = setup.hostName
+        || (setup.chatId ? 'Current chat' : null)
+        || 'No chat open — open a character or group chat first';
+    const narratorLabel = setup.mode === 'solo'
+        ? `Canon card${setup.hostName ? ` — ${setup.hostName}` : ''}`
+        : setup.directorInstalled
+            ? 'Director card — installed'
+            : 'Director card — not installed';
+    const download = setup.directorInstalled
+        ? ''
+        : `<button type="button" class="menu_button" data-neoterra-download-director>Download Director card</button>`;
+    const instructions = setup.directorInstalled
+        ? ''
+        : `<p class="neoterra-setup-hint">Import it in SillyTavern: <strong>Characters → Import character → select the downloaded file</strong>. Then select the card, start a new chat, and enter a season. Solo mode uses the canon card instead.</p>`;
+    const notice = setup.notice
+        ? `<p class="neoterra-setup-notice" role="status">${escapeHtml(setup.notice)}</p>`
+        : '';
+
+    return `
+    <section class="neoterra-setup" data-neoterra-setup>
+        <div class="neoterra-setup-row">
+            <div class="neoterra-setup-fact">
+                <span>Host chat</span>
+                <strong>${escapeHtml(hostLabel)}</strong>
+            </div>
+            <div class="neoterra-setup-fact">
+                <span>Narrator</span>
+                <strong>${escapeHtml(narratorLabel)}</strong>
+            </div>
+            <div class="neoterra-setup-fact">
+                <span>Mode</span>
+                <strong>${escapeHtml(modeLabel)}</strong>
+            </div>
+            ${download}
+        </div>
+        ${instructions}
+        ${notice}
+    </section>`;
+}
+
 export function renderSeasonMenuMarkup(entries, options = {}) {
     const {
         view = VIEW.LIST,
@@ -156,6 +232,7 @@ export function renderSeasonMenuMarkup(entries, options = {}) {
         error = null,
         characterFilter = '',
         loading = false,
+        setup = null,
     } = options;
 
     if (view === VIEW.IDENTITY && selectedEntry && identityChoices) {
@@ -168,6 +245,7 @@ export function renderSeasonMenuMarkup(entries, options = {}) {
     const cards = entries.map(renderSeasonCard).join('');
     return `
     <div class="neoterra-season-menu" data-neoterra-season-menu>
+        ${renderSetupStrip(setup)}
         <div class="neoterra-season-toolbar">
             <label class="neoterra-field neoterra-character-first">
                 <span>Character-first</span>
@@ -214,6 +292,9 @@ export async function mountSeasonMenu(options = {}) {
     disposeSeasonMenu();
 
     const ctx = options.ctx ?? getContext();
+    const resolveContext = typeof options.getContext === 'function'
+        ? options.getContext
+        : getContext;
     const controller = new AbortController();
     const state = {
         entries: [],
@@ -226,7 +307,10 @@ export async function mountSeasonMenu(options = {}) {
         characterFilter: '',
         error: null,
         busy: false,
+        setupNotice: null,
+        directorDownloading: false,
         ctx,
+        getContext: resolveContext,
         controller,
         root,
         onStart: typeof options.onStart === 'function' ? options.onStart : null,
@@ -238,6 +322,7 @@ export async function mountSeasonMenu(options = {}) {
         if (mounted !== state || !root.isConnected) {
             return;
         }
+        const liveCtx = state.getContext?.() ?? state.ctx ?? getContext();
         const entries = state.characterFilter
             ? filterSeasonEntriesByCharacter(state.entries, state.characterFilter, {
                 registry: state.registry,
@@ -252,6 +337,15 @@ export async function mountSeasonMenu(options = {}) {
             error: state.error,
             characterFilter: state.characterFilter,
             loading: state.busy,
+            setup: state.view === VIEW.LIST
+                ? {
+                    mode: liveCtx?.extensionSettings?.neoterra?.castMode ?? 'director',
+                    hostName: hostLabelFor(liveCtx),
+                    chatId: resolveActiveChatId(liveCtx),
+                    ...directorCardStatus(liveCtx),
+                    notice: state.setupNotice,
+                }
+                : null,
         });
     };
 
@@ -284,6 +378,27 @@ export async function mountSeasonMenu(options = {}) {
         'input[name="neoterra-identity"]:checked',
     );
 
+    const handleDirectorDownload = async () => {
+        if (state.directorDownloading) {
+            return;
+        }
+        state.directorDownloading = true;
+        state.error = null;
+        state.setupNotice = 'Preparing the Director card…';
+        paint();
+        try {
+            await downloadDirectorCard();
+            state.setupNotice = 'Director card downloaded. Import it via Characters → Import character.';
+        } catch (error) {
+            state.error = error?.message ?? String(error);
+            state.setupNotice = null;
+            logger.warn('Could not download the Director card', error);
+        } finally {
+            state.directorDownloading = false;
+            paint();
+        }
+    };
+
     const beginSeason = async (confirmReplace) => {
         const entry = state.selectedEntry;
         const radio = selectedRadio();
@@ -307,12 +422,14 @@ export async function mountSeasonMenu(options = {}) {
         state.identity = identity;
         paint();
         try {
+            const liveCtx = state.getContext?.() ?? state.ctx ?? getContext();
             const start = state.onStart ?? enterSeason;
             const result = await start({
                 id: entry.id,
                 identity,
-                mode: ctx?.extensionSettings?.neoterra?.castMode ?? 'director',
-                ctx,
+                mode: liveCtx?.extensionSettings?.neoterra?.castMode ?? 'director',
+                ctx: liveCtx,
+                chatId: resolveActiveChatId(liveCtx),
                 confirmReplace,
             });
             state.busy = false;
@@ -338,6 +455,10 @@ export async function mountSeasonMenu(options = {}) {
         const target = event.target;
         if (target.closest?.('[data-neoterra-season-refresh]')) {
             load();
+            return;
+        }
+        if (target.closest?.('[data-neoterra-download-director]')) {
+            void handleDirectorDownload();
             return;
         }
         const seasonId = target.closest?.('[data-neoterra-season-select]')?.dataset.neoterraSeasonSelect;

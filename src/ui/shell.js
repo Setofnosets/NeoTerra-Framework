@@ -123,7 +123,7 @@ function shellMarkup() {
     }).join('');
 
     return `
-    <div id="${UI_IDS.ROOT}" class="neoterra-root" hidden>
+    <div id="${UI_IDS.ROOT}" class="neoterra-root" data-active-tab="${activeTab}" hidden>
         <div class="neoterra-backdrop" data-neoterra-close></div>
         <section id="${UI_IDS.SHELL}" class="neoterra-shell" role="dialog" aria-modal="true"
             aria-labelledby="neoterra-shell-title">
@@ -223,7 +223,7 @@ async function mountSeasonPanel(context) {
     }
     const host = panel.querySelector('[data-neoterra-season-host]') ?? panel;
     try {
-        return await mountSeasonMenu({ root: host, ctx: context });
+        return await mountSeasonMenu({ root: host, ctx: context, getContext: refreshContext });
     } catch (error) {
         logger.warn('Could not mount the season menu', error);
         return null;
@@ -778,6 +778,7 @@ export function setActiveTab(tabId) {
     if (!root) {
         return true;
     }
+    root.dataset.activeTab = tabId;
     for (const tab of root.querySelectorAll('[role="tab"]')) {
         const selected = tab.dataset.neoterraTab === tabId;
         tab.setAttribute('aria-selected', selected ? 'true' : 'false');

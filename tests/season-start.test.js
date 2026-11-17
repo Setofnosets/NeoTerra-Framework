@@ -51,6 +51,25 @@ const seasonDocuments = Object.fromEntries(
 
 const CONTEXT = { registry, factions, locations, formGroups, formRules };
 
+function testFetchImpl() {
+    const documents = {
+        's1.json': seasonDocuments.s1,
+        'index.json': registry,
+        'factions.json': factions,
+        'locations.json': locations,
+        'form-groups.json': formGroups,
+        'form-rules.json': formRules,
+        'districts.json': districts,
+    };
+    return async (url) => {
+        const key = Object.keys(documents).find((name) => String(url).endsWith(name));
+        if (!key) {
+            return { ok: false, status: 404, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => documents[key] };
+    };
+}
+
 function makeStore(metadata = {}, chatId = 'test-chat') {
     return createWorldStateStore({
         metadata,
@@ -301,7 +320,7 @@ test('character-first filtering narrows seasons by roster and keeps Sandbox', ()
     assert.ok(!ids.includes('s2'));
 });
 
-test('narrator card selection is best-effort and never fabricates a card', () => {
+test('narrator card detection is read-only and never switches cards', () => {
     const called = [];
     const ctx = {
         characters: [{ name: DIRECTOR_CARD_NAME, avatar: 'director.png' }],
@@ -313,9 +332,10 @@ test('narrator card selection is best-effort and never fabricates a card', () =>
         mode: 'director',
         registry,
     });
-    assert.equal(result.status, 'selected');
+    assert.equal(result.status, 'available');
     assert.equal(result.role, 'director');
-    assert.deepEqual(called, ['director.png']);
+    assert.equal(result.characterId, 'director.png');
+    assert.deepEqual(called, []);
 
     const missing = selectNarratorCard({ characters: [] }, {
         season: seasonDocuments.s1,
@@ -327,7 +347,7 @@ test('narrator card selection is best-effort and never fabricates a card', () =>
     assert.equal(missing.characterId, null);
 });
 
-test('solo mode selects the played canon card instead of the Director', () => {
+test('solo mode reports the played canon card instead of the Director', () => {
     const ctx = {
         characters: [{ name: 'Carol', avatar: 'carol.png' }],
         selectCharacterById() {},
@@ -340,6 +360,7 @@ test('solo mode selects the played canon card instead of the Director', () => {
     });
     assert.equal(result.role, 'canon');
     assert.equal(result.name, 'Carol');
+    assert.equal(result.status, 'available');
     assert.equal(result.characterId, 'carol.png');
 });
 
@@ -510,6 +531,61 @@ test('enterSeason refuses to seed when the chat changed during loading', async (
         (error) => error instanceof SeasonStartError && error.code === 'CHAT_CHANGED',
     );
     assert.deepEqual(ctx.chatMetadata, {});
+});
+
+test('enterSeason resolves the live chat id through getCurrentChatId', async () => {
+    clearFormDataCache();
+    const metadata = {};
+    let currentChatId = 'chat-live';
+    const ctx = {
+        // Deliberately stale/empty snapshot value.
+        chatId: '',
+        getCurrentChatId: () => currentChatId,
+        chatMetadata: metadata,
+        saveMetadataDebounced: () => {},
+        characters: [],
+    };
+    const result = await enterSeason({
+        id: 's1',
+        identity: { identity: 'custom', displayName: 'Tester' },
+        ctx,
+        fetchImpl: testFetchImpl(),
+        now: 1700000000000,
+    });
+    assert.equal(result.state.chatId, 'chat-live');
+    assert.equal(metadata.neoterra.worldState.chatId, 'chat-live');
+});
+
+test('enterSeason prefers getCurrentChatId over a stale chatId snapshot', async () => {
+    clearFormDataCache();
+    const metadata = {};
+    const ctx = {
+        chatId: 'chat-stale',
+        getCurrentChatId: () => 'chat-current',
+        chatMetadata: metadata,
+        saveMetadataDebounced: () => {},
+        characters: [],
+    };
+    const result = await enterSeason({
+        id: 's1',
+        identity: { identity: 'custom' },
+        ctx,
+        fetchImpl: testFetchImpl(),
+        now: 1700000000000,
+    });
+    assert.equal(result.state.chatId, 'chat-current');
+    assert.equal(metadata.neoterra.worldState.chatId, 'chat-current');
+});
+
+test('enterSeason explains how to fix a missing chat', async () => {
+    clearFormDataCache();
+    const ctx = { chatMetadata: {}, characters: [] };
+    await assert.rejects(
+        enterSeason({ id: 's1', identity: { identity: 'custom' }, ctx, fetchImpl: testFetchImpl() }),
+        (error) => error instanceof SeasonStartError
+            && error.code === 'INVALID_CHAT'
+            && /open a character or group chat/i.test(error.message),
+    );
 });
 
 test('loadFormData validates the authored form documents', async () => {

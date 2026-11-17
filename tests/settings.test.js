@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { SCHEMA_VERSION, SETTINGS_KEY } from '../src/core/constants.js';
 import { DEFAULT_SETTINGS, cloneDefaults } from '../src/core/defaults.js';
 import { migrateSettings, needsMigration } from '../src/core/migrations.js';
+import { resolveWorldContext } from '../src/ui/settings.js';
 import {
     getByPath,
     getSettings,
@@ -27,6 +28,26 @@ function mockContext(initial = undefined) {
     }
     return { ctx, calls };
 }
+
+test('world actions resolve the live context instead of a mount snapshot', () => {
+    const previous = globalThis.SillyTavern;
+    const live = { chatId: 'live-chat', chatMetadata: { neoterra: {} } };
+    const stale = { chatId: 'stale-chat', chatMetadata: { neoterra: {} } };
+    try {
+        globalThis.SillyTavern = { getContext: () => live };
+        assert.equal(resolveWorldContext(stale), live);
+
+        delete globalThis.SillyTavern;
+        assert.equal(resolveWorldContext(stale), stale);
+        assert.equal(resolveWorldContext(undefined), null);
+    } finally {
+        if (previous === undefined) {
+            delete globalThis.SillyTavern;
+        } else {
+            globalThis.SillyTavern = previous;
+        }
+    }
+});
 
 test('defaults match the plan and are frozen', () => {
     assert.equal(DEFAULT_SETTINGS.schemaVersion, SCHEMA_VERSION);

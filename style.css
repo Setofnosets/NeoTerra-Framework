@@ -76,6 +76,12 @@
     overflow: hidden;
 }
 
+/* The map needs a wider, taller canvas than the reading panes. */
+.neoterra-root[data-active-tab='map'] .neoterra-shell {
+    width: min(1360px, 96vw);
+    max-height: 92vh;
+}
+
 .neoterra-shell-header {
     display: flex;
     align-items: center;
@@ -151,9 +157,20 @@
 }
 
 .neoterra-tabpanels {
+    display: flex;
     flex: 1;
+    flex-direction: column;
+    min-height: 0;
     padding: 1.5rem;
     overflow: auto;
+}
+
+.neoterra-panel {
+    min-height: 0;
+}
+
+.neoterra-panel[hidden] {
+    display: none !important;
 }
 
 .neoterra-panel-title {
@@ -256,10 +273,60 @@
     }
 }
 
+/* ---------- Season setup strip ---------- */
+
+.neoterra-setup {
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.9rem;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+}
+
+.neoterra-setup-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1.5rem;
+}
+
+.neoterra-setup-fact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 10rem;
+}
+
+.neoterra-setup-fact span {
+    color: var(--nt-text-faint);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.neoterra-setup-fact strong {
+    color: var(--nt-text);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.neoterra-setup-hint,
+.neoterra-setup-notice {
+    margin: 0.6rem 0 0;
+    color: var(--nt-text-muted);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.neoterra-setup-notice {
+    color: var(--nt-accent);
+}
+
 /* ---------- Map tab (Step 13) ---------- */
 
 .neoterra-panel.is-live {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 0.5rem;
     min-height: 0;
