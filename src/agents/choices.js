@@ -585,10 +585,13 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
         const mode = request.mode === 'combat' ? 'combat' : 'exploration';
         const state = request.state ?? null;
         const config = settingsForMode(settings, mode);
+        const recentMessages = asArray(request.recentMessages);
+        const lastMessage = request.lastMessage
+            ?? (recentMessages.length > 0 ? recentMessages[recentMessages.length - 1] : null);
         const guard = shouldGenerateChoices({
             state,
             settings,
-            lastMessage: request.lastMessage ?? null,
+            lastMessage,
             mode,
             generationActive: request.generationActive === true,
             afterChoice: request.afterChoice === true,
