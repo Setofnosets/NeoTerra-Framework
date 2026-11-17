@@ -14,26 +14,106 @@
   "sandbox": false,
   "allowAnyCharacter": false,
   "roster": [
-    { "characterId": "s4.vaiva.petrauskaite.colorgarde.season.4.ver", "formId": "s4.vaiva.petrauskaite.colorgarde.season.4.ver", "locationId": "petrabyte-tower" },
-    { "characterId": "s4.anastasia.carnaz.gravitasha", "formId": "s4.anastasia.carnaz.gravitasha", "locationId": "maple-heights" },
-    { "characterId": "s4.brie.anderson.hula.hawk", "formId": "s4.brie.anderson.hula.hawk", "locationId": "neon-docks" },
-    { "characterId": "s4.christina.chris.goldclaw.crimson.crush", "formId": "s4.christina.chris.goldclaw.crimson.crush", "locationId": "sirens-styles" },
-    { "characterId": "s4.claire.atropos.recorrupted", "formId": "s4.claire.atropos.recorrupted", "locationId": "clarity-hq" },
-    { "characterId": "s4.damage.control", "formId": "s4.damage.control", "locationId": "neoterra-pd-hq" },
-    { "characterId": "s4.ginny.aylesworth.avalanche", "formId": "s4.ginny.aylesworth.avalanche", "locationId": "rust-yard" },
-    { "characterId": "s4.jack.dune.gold.slasher", "formId": "s4.jack.dune.gold.slasher", "locationId": "gold-paradise-casino" },
-    { "characterId": "s4.lilliana.shroud.cyber.courtesan", "formId": "s4.lilliana.shroud.cyber.courtesan", "locationId": "gold-paradise-casino" },
-    { "characterId": "s4.noah.atropos.phage.clotho", "formId": "s4.noah.atropos.phage.clotho", "locationId": "clarity-hq" },
-    { "characterId": "s4.roseline.rosy.bellington.pink.power", "formId": "s4.roseline.rosy.bellington.pink.power", "locationId": "sirens-styles" },
-    { "characterId": "s4.selina.cross.umbra.vampire", "formId": "s4.selina.cross.umbra.vampire", "locationId": "gold-paradise-casino" }
+    {
+      "characterId": "s4.vaiva.petrauskaite.colorgarde.season.4.ver",
+      "formId": "s4.vaiva.petrauskaite.colorgarde.season.4.ver",
+      "locationId": "petrabyte-tower"
+    },
+    {
+      "characterId": "s4.anastasia.carnaz.gravitasha",
+      "formId": "s4.anastasia.carnaz.gravitasha",
+      "locationId": "maple-heights"
+    },
+    {
+      "characterId": "s4.brie.anderson.hula.hawk",
+      "formId": "s4.brie.anderson.hula.hawk",
+      "locationId": "neon-docks"
+    },
+    {
+      "characterId": "s4.christina.chris.goldclaw.crimson.crush",
+      "formId": "s4.christina.chris.goldclaw.crimson.crush",
+      "locationId": "sirens-styles"
+    },
+    {
+      "characterId": "s4.claire.atropos.recorrupted",
+      "formId": "s4.claire.atropos.recorrupted",
+      "locationId": "clarity-hq"
+    },
+    {
+      "characterId": "s4.damage.control",
+      "formId": "s4.damage.control",
+      "locationId": "neoterra-pd-hq"
+    },
+    {
+      "characterId": "s4.ginny.aylesworth.avalanche",
+      "formId": "s4.ginny.aylesworth.avalanche",
+      "locationId": "rust-yard"
+    },
+    {
+      "characterId": "s4.jack.dune.gold.slasher",
+      "formId": "s4.jack.dune.gold.slasher",
+      "locationId": "gold-paradise-casino"
+    },
+    {
+      "characterId": "s4.lilliana.shroud.cyber.courtesan",
+      "formId": "s4.lilliana.shroud.cyber.courtesan",
+      "locationId": "gold-paradise-casino"
+    },
+    {
+      "characterId": "s4.noah.atropos.phage.clotho",
+      "formId": "s4.noah.atropos.phage.clotho",
+      "locationId": "clarity-hq"
+    },
+    {
+      "characterId": "s4.roseline.rosy.bellington.pink.power",
+      "formId": "s4.roseline.rosy.bellington.pink.power",
+      "locationId": "sirens-styles"
+    },
+    {
+      "characterId": "s4.selina.cross.umbra.vampire",
+      "formId": "s4.selina.cross.umbra.vampire",
+      "locationId": "gold-paradise-casino"
+    }
   ],
   "factions": [
-    { "id": "clarity", "influence": 70, "status": "dominant", "goals": ["Return Claire and Noah to absolute control", "Freeze the hero community into compliance"] },
-    { "id": "petrabyte", "influence": 45, "status": "active", "goals": ["Hold the line through the winter", "Keep the Sirens and the Coalition supplied"] },
-    { "id": "sensational-sirens", "influence": 45, "status": "active" },
-    { "id": "corvus-corp", "influence": 40, "status": "active" },
-    { "id": "neoterra-pd", "influence": 30, "status": "active" },
-    { "id": "crisis-coalition", "influence": 20, "status": "active" }
+    {
+      "id": "clarity",
+      "influence": 70,
+      "status": "dominant",
+      "goals": [
+        "Return Claire and Noah to absolute control",
+        "Freeze the hero community into compliance"
+      ]
+    },
+    {
+      "id": "petrabyte",
+      "influence": 45,
+      "status": "active",
+      "goals": [
+        "Hold the line through the winter",
+        "Keep the Sirens and the Coalition supplied"
+      ]
+    },
+    {
+      "id": "sensational-sirens",
+      "influence": 45,
+      "status": "active"
+    },
+    {
+      "id": "corvus-corp",
+      "influence": 40,
+      "status": "active"
+    },
+    {
+      "id": "neoterra-pd",
+      "influence": 30,
+      "status": "active"
+    },
+    {
+      "id": "crisis-coalition",
+      "influence": 20,
+      "status": "active"
+    }
   ],
   "threats": [
     {
@@ -82,7 +162,10 @@
     }
   ],
   "startLocationId": "central-plaza",
-  "openingBeats": ["s4.opening.claire-returns", "s4.opening.cold-snap"],
+  "openingBeats": [
+    "s4.opening.claire-returns",
+    "s4.opening.cold-snap"
+  ],
   "canonBeats": [
     {
       "id": "s4.opening.claire-returns",
@@ -90,10 +173,28 @@
       "title": "Claire Returns",
       "description": "Claire Atropos reappears in public, recorrupted and backed by Noah, and makes the first move of the season.",
       "act": "opening",
-      "conditions": { "turnRange": [0, 12], "locationIds": ["clarity-hq", "central-plaza"], "actorIds": ["s4.claire.atropos.recorrupted", "s4.noah.atropos.phage.clotho"] },
+      "conditions": {
+        "turnRange": [
+          0,
+          12
+        ],
+        "locationIds": [
+          "clarity-hq",
+          "central-plaza"
+        ],
+        "actorIds": [
+          "s4.claire.atropos.recorrupted",
+          "s4.noah.atropos.phage.clotho"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "claire-returns" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "claire-returns"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 12,
@@ -107,10 +208,25 @@
       "title": "The Cold Snap",
       "description": "A localized freeze or a coordinated betrayal signals that the Cold Front is already in motion.",
       "act": "opening",
-      "conditions": { "turnRange": [3, 20], "locationIds": ["rust-yard", "neon-docks", "maple-heights"] },
+      "conditions": {
+        "turnRange": [
+          3,
+          20
+        ],
+        "locationIds": [
+          "rust-yard",
+          "neon-docks",
+          "maple-heights"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "cold-snap" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "cold-snap"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 20,
@@ -124,11 +240,28 @@
       "title": "Phage Clotho Activates",
       "description": "Noah's conversion system goes live, and a named metahuman is rewritten into a Clarity asset.",
       "act": "escalation",
-      "conditions": { "turnRange": [10, 35], "requiresBeats": ["s4.opening.claire-returns"], "locationIds": ["clarity-hq", "bcp-facility", "petrabyte-tower"] },
+      "conditions": {
+        "turnRange": [
+          10,
+          35
+        ],
+        "requiresBeats": [
+          "s4.opening.claire-returns"
+        ],
+        "locationIds": [
+          "clarity-hq",
+          "bcp-facility",
+          "petrabyte-tower"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s4.christina.chris.goldclaw.crimson.crush", "formId": "s4.cyber.dragon.infected.crimson.crush" }
+          {
+            "kind": "form-active",
+            "characterId": "s4.christina.chris.goldclaw.crimson.crush",
+            "formId": "s4.cyber.dragon.infected.crimson.crush"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -143,11 +276,23 @@
       "title": "The Ice Queen",
       "description": "Claire coldheartedly rewrites a hero she once cared for — or is rewritten herself — making the Cold Front visible and devastating.",
       "act": "escalation",
-      "conditions": { "turnRange": [15, 45], "requiresBeats": ["s4.opening.cold-snap"] },
+      "conditions": {
+        "turnRange": [
+          15,
+          45
+        ],
+        "requiresBeats": [
+          "s4.opening.cold-snap"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s4.claire.atropos.recorrupted", "formId": "s4.ice.queen.coldhearted.claire.atropos" }
+          {
+            "kind": "form-active",
+            "characterId": "s4.claire.atropos.recorrupted",
+            "formId": "s4.ice.queen.coldhearted.claire.atropos"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -162,10 +307,26 @@
       "title": "Assault on Clarity",
       "description": "A coalition of heroes, Sirens, and whoever is still standing strikes Clarity HQ to end the Cold Front at its source.",
       "act": "climax",
-      "conditions": { "turnRange": [30, 70], "requiresBeats": ["s4.escalation.phage-clotho"], "locationIds": ["clarity-hq"] },
+      "conditions": {
+        "turnRange": [
+          30,
+          70
+        ],
+        "requiresBeats": [
+          "s4.escalation.phage-clotho"
+        ],
+        "locationIds": [
+          "clarity-hq"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "assault-clarity" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "assault-clarity"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 70,
@@ -179,11 +340,29 @@
       "title": "The City Thaws",
       "description": "The Cold Front breaks: Noah and Claire are removed, the conversion grid is shut down, or Avalanche's winter is stopped.",
       "act": "resolution",
-      "conditions": { "turnRange": [40, 90], "requiresBeats": ["s4.climax.assault-clarity"] },
+      "conditions": {
+        "turnRange": [
+          40,
+          90
+        ],
+        "requiresBeats": [
+          "s4.climax.assault-clarity"
+        ]
+      },
       "completion": {
         "type": "state",
         "predicates": [
-          { "kind": "character-status", "characterId": "s4.noah.atropos.phage.clotho", "statuses": ["captured", "dead", "retired", "lost", "corrupted"] }
+          {
+            "kind": "character-status",
+            "characterId": "s4.noah.atropos.phage.clotho",
+            "statuses": [
+              "captured",
+              "dead",
+              "retired",
+              "lost",
+              "corrupted"
+            ]
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -193,7 +372,10 @@
       "rewriteHints": "Either main threat may be the one resolved first. If Noah falls early, resolve through Claire or Avalanche and record the divergence."
     }
   ],
-  "finalDeadline": { "turns": 90, "date": "2043-12-31" },
+  "finalDeadline": {
+    "turns": 90,
+    "date": "2043-12-31"
+  },
   "failureState": "villain-victory",
   "manualOnly": [],
   "altFormsAllowed": [
@@ -206,5 +388,150 @@
     "s4.ice.queen.coldhearted.claire.atropos",
     "s4.shattered.shard.corrupted.pink.power",
     "s4.pink.icicle.coldhearted-pink-power"
-  ]
+  ],
+  "postVictory": {
+    "resistance": {
+      "title": "The Resistance",
+      "victorFactionId": "clarity",
+      "threat": {
+        "id": "s4.post.victor",
+        "name": "Noah Atropos / Phage Clotho Regime",
+        "rank": "main",
+        "sourceFactionId": "clarity",
+        "agenda": "Hunt the resistance and make the victory permanent.",
+        "stages": [
+          "Martial control",
+          "Purges and informants",
+          "Total dominion"
+        ],
+        "progress": 60,
+        "locationId": "clarity-hq"
+      },
+      "beats": [
+        {
+          "id": "s4.post.resistance.recruit",
+          "order": 110,
+          "title": "Recruit the First Cell",
+          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-recruit"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The victor captures a prospective ally and the cell shrinks.",
+          "rewriteHints": "Any ally, defector, or contact may anchor the cell."
+        },
+        {
+          "id": "s4.post.resistance.strike",
+          "order": 120,
+          "title": "Strike the Victor's Seat",
+          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s4.post.resistance.recruit"
+            ]
+          },
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-strike"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The regime tightens control and the resistance loses its base.",
+          "rewriteHints": "The target may be a symbol, a prison, or a supply hub."
+        }
+      ]
+    },
+    "join-villain": {
+      "title": "Serve the Victor",
+      "victorFactionId": "clarity",
+      "threat": {
+        "id": "s4.post.resistance",
+        "name": "The Resistance",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Overthrow the victor and restore the old order.",
+        "stages": [
+          "Cells form",
+          "Sabotage spreads",
+          "Open uprising"
+        ],
+        "progress": 15,
+        "locationId": "old-subway"
+      },
+      "beats": [
+        {
+          "id": "s4.post.join.break-resistance",
+          "order": 110,
+          "title": "Break a Resistance Cell",
+          "description": "Locate and destroy a resistance cell before it can grow.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-cell"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance recruits a named hero and gains influence.",
+          "rewriteHints": "Any cell, safehouse, or symbol of resistance counts."
+        },
+        {
+          "id": "s4.post.join.conquer",
+          "order": 120,
+          "title": "Conquer the Next District",
+          "description": "Take a neighbouring district and install an occupation government.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s4.post.join.break-resistance"
+            ]
+          },
+          "completion": {
+            "type": "state",
+            "predicates": [
+              {
+                "kind": "flag",
+                "flag": "postVictoryConquest",
+                "value": true
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance holds the district and humiliates the victor.",
+          "rewriteHints": "Use an occupied district; the exact target may change."
+        }
+      ],
+      "conquest": {
+        "targets": [
+          "central-plaza"
+        ],
+        "goal": "Conquer the neighbouring districts and city."
+      }
+    }
+  }
 }

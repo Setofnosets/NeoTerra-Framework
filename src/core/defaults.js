@@ -77,6 +77,12 @@ export const DEFAULT_SETTINGS = freezeDeep({
         },
     },
 
+    ending: {
+        // Default villain-victory epilogue length. Clamped to 3-8 by the flow.
+        paragraphs: 5,
+        prompt: '',
+    },
+
     badEnds: {
         enabled: false,
         allowDeadContinuation: false,

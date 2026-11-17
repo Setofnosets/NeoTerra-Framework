@@ -23,8 +23,13 @@ import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
 import { createStorylineTracker } from '../agents/storyline.js';
+import { createEpilogueAgent } from '../agents/epilogue.js';
+import { createChoicesAgent } from '../agents/choices.js';
 import { createAgentClient } from '../agents/client.js';
 import { createAgentRunner } from '../agents/runner.js';
+import { createEndingFlow, isEndingScreenActive } from '../flows/ending.js';
+import { mountEndingPanel, disposeEndingPanel } from './ending.js';
+import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
 
 const logger = createLogger('shell');
 
@@ -250,13 +255,26 @@ function buildStorylineInitiative(context, store, season) {
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
-    return createInitiative({
+    const ending = createEndingFlow({
         store,
+        agent: createEpilogueAgent({
+            runner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        }),
         season,
-        storyline,
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
+    const initiative = createInitiative({
+        store,
+        season,
+        storyline,
+        ending,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
+    return { initiative, ending, runner };
 }
 
 function buildMapRuntime(context, panelRef) {
@@ -291,7 +309,7 @@ function buildMapRuntime(context, panelRef) {
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
-    const initiative = buildStorylineInitiative(context, store, season);
+    const { initiative, ending } = buildStorylineInitiative(context, store, season);
     const travel = createTravelFlow({
         store,
         season,
@@ -303,7 +321,7 @@ function buildMapRuntime(context, panelRef) {
         now: Date.now,
         log: (message, error) => logger.warn(message, error),
     });
-    mapRuntime = { chatId, store, panelRef, scene, initiative, travel };
+    mapRuntime = { chatId, store, panelRef, scene, initiative, ending, travel };
     return mapRuntime;
 }
 
@@ -405,6 +423,196 @@ async function mountMapPanelComponent(context) {
         logger.warn('Could not mount the city map', error);
         host.innerHTML = '<p class="neoterra-error" role="alert">The city map could not be mounted.</p>';
         return null;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Ending and CYOA wiring                                               */
+/* ------------------------------------------------------------------ */
+
+let interactionRuntime = null;
+let interactionSubscription = null;
+let choicesBar = null;
+
+function ensureChoicesHost() {
+    let host = document.getElementById('neoterra-choices-host');
+    if (host) {
+        return host;
+    }
+    host = document.createElement('div');
+    host.id = 'neoterra-choices-host';
+    host.className = 'neoterra-choices-host';
+    const form = document.getElementById('send_form');
+    if (form) {
+        form.prepend(host);
+    } else {
+        document.body.append(host);
+    }
+    return host;
+}
+
+function ensureEndingHost() {
+    let host = document.getElementById('neoterra-ending-host');
+    if (host) {
+        return host;
+    }
+    host = document.createElement('div');
+    host.id = 'neoterra-ending-host';
+    host.className = 'neoterra-ending-host';
+    document.body.append(host);
+    return host;
+}
+
+function sendChoiceText(text) {
+    const textarea = document.getElementById('send_textarea');
+    if (!textarea) {
+        return false;
+    }
+    textarea.value = String(text ?? '');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('send_but')?.click?.();
+    return true;
+}
+
+function buildInteractionRuntime(context) {
+    const chatId = currentChatId(context);
+    const metadata = context?.chatMetadata;
+    if (!chatId || !metadata) {
+        return null;
+    }
+    if (interactionRuntime && interactionRuntime.chatId === chatId) {
+        return interactionRuntime;
+    }
+    let store;
+    try {
+        store = createWorldStateStore({
+            metadata,
+            saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
+            storage: readLocalStorage(),
+            chatId,
+        });
+    } catch (error) {
+        logger.warn('Could not open the chat world state for ending/choices', error);
+        return null;
+    }
+    if (!store.get()) {
+        return null;
+    }
+    const season = metadata.neoterra?.seasonDefinition ?? null;
+    const { initiative, ending, runner } = buildStorylineInitiative(context, store, season);
+    const choicesAgent = createChoicesAgent({
+        runner,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
+    const controller = createChoicesController({
+        agent: choicesAgent,
+        getState: () => store.get(),
+        getSettings: () => getSettings(context),
+        getSeason: () => season,
+        onSend: (text) => sendChoiceText(text),
+    });
+    interactionRuntime = { chatId, store, season, initiative, ending, controller };
+    return interactionRuntime;
+}
+
+async function refreshInteractionUi(context = null) {
+    if (!hasDom()) {
+        return null;
+    }
+    const live = context ?? refreshContext();
+    const runtime = buildInteractionRuntime(live);
+    if (!runtime) {
+        choicesBar = null;
+        disposeChoicesBar();
+        disposeEndingPanel();
+        return null;
+    }
+    if (!choicesBar) {
+        choicesBar = mountChoicesBar({
+            root: ensureChoicesHost(),
+            controller: runtime.controller,
+        });
+    }
+    const state = runtime.store.get();
+    if (isEndingScreenActive(state) || state?.ending?.status === 'continued') {
+        mountEndingPanel({
+            root: ensureEndingHost(),
+            store: runtime.store,
+            flow: runtime.ending,
+        });
+    } else {
+        disposeEndingPanel();
+    }
+    return runtime;
+}
+
+async function handleAssistantMessage(message, messageIndex, context = null) {
+    const live = context ?? refreshContext();
+    const runtime = await refreshInteractionUi(live);
+    if (!runtime) {
+        return;
+    }
+    const messages = Array.isArray(live?.chat) ? live.chat : [];
+    try {
+        await runtime.initiative?.afterTurn?.({
+            recentProse: typeof message?.mes === 'string' ? message.mes : '',
+        });
+    } catch (error) {
+        logger.warn('Storyline pass failed after a message', error);
+    }
+    await refreshInteractionUi(live);
+    const view = await runtime.controller.request({
+        messages,
+        messageIndex,
+        swipeId: Number.isInteger(message?.swipe_id) ? message.swipe_id : 0,
+    });
+    if (view?.visible) {
+        choicesBar?.refresh?.();
+    }
+}
+
+function subscribeInteractionEvents(context) {
+    unsubscribeInteractionEvents();
+    const eventSource = context?.eventSource ?? context?.eventTypes;
+    const on = typeof eventSource?.on === 'function' ? eventSource.on.bind(eventSource) : null;
+    if (!on) {
+        void refreshInteractionUi(context);
+        return;
+    }
+    const messageEvent = context?.eventTypes?.MESSAGE_RECEIVED ?? 'message_received';
+    const handler = (messageIndex) => {
+        const live = refreshContext();
+        const messages = Array.isArray(live?.chat) ? live.chat : [];
+        const index = Number.isInteger(messageIndex) ? messageIndex : messages.length - 1;
+        const message = messages[index] ?? null;
+        if (!message || message.is_user === true) {
+            return;
+        }
+        void handleAssistantMessage(message, index, live);
+    };
+    try {
+        on(messageEvent, handler);
+        interactionSubscription = { eventSource, event: messageEvent, handler };
+    } catch (error) {
+        logger.debug('MESSAGE_RECEIVED subscription unavailable', error);
+    }
+    void refreshInteractionUi(context);
+}
+
+function unsubscribeInteractionEvents() {
+    const subscription = interactionSubscription;
+    interactionSubscription = null;
+    if (!subscription) {
+        return;
+    }
+    try {
+        const off = subscription.eventSource?.removeListener ?? subscription.eventSource?.off;
+        off?.call?.(subscription.eventSource, subscription.event, subscription.handler);
+        // (event name and handler are passed separately above)
+
+    } catch (error) {
+        logger.debug('Could not remove the MESSAGE_RECEIVED listener', error);
     }
 }
 
@@ -607,6 +815,7 @@ export async function initialize(options = {}) {
         void mountSeasonPanel(ctx);
         registerSlashCommand(ctx);
         subscribeChatChanges(ctx);
+        subscribeInteractionEvents(ctx);
         exposeDebugApi(ctx);
         await mountSettingsPanel(ctx, { signal: abort.signal });
 
@@ -653,10 +862,15 @@ function subscribeChatChanges(context) {
     const handler = () => {
         mapRuntime = null;
         mountedMapChatId = null;
+        interactionRuntime = null;
+        choicesBar = null;
         disposeMapPanel();
+        disposeChoicesBar();
+        disposeEndingPanel();
         if (isShellOpen() && getActiveTab() === 'map') {
             void mountMapPanelForActiveChat();
         }
+        void refreshInteractionUi(refreshContext());
     };
     try {
         on('chat_changed', handler);
@@ -689,11 +903,18 @@ export function dispose() {
 
     unregisterSlashCommand(ctx);
     unsubscribeChatChanges();
+    unsubscribeInteractionEvents();
     mapRuntime = null;
     mountedMapChatId = null;
+    interactionRuntime = null;
+    choicesBar = null;
     disposeSeasonMenu();
     disposeMapPanel();
     disposeSettingsPanel();
+    disposeChoicesBar();
+    disposeEndingPanel();
+    document.getElementById('neoterra-choices-host')?.remove();
+    document.getElementById('neoterra-ending-host')?.remove();
 
     if (hasDom()) {
         document.getElementById(UI_IDS.ROOT)?.remove();

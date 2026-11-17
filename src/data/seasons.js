@@ -12,6 +12,7 @@
 
 import {
     BEAT_ACTS,
+    validateBeat,
     validateBeats,
 } from './beats.js';
 import { buildFactionIndex, loadFactions, validateFactions } from './factions.js';
@@ -375,6 +376,85 @@ export function validateSeasonDefinition(season, context = {}) {
                 add(errors, `openingBeats[${index}]`, 'openingBeats may only reference opening-act beats');
             }
         });
+    }
+
+    // --- post-victory arcs ------------------------------------------------
+    if (season.postVictory !== undefined) {
+        if (!isObject(season.postVictory)) {
+            add(errors, 'postVictory', 'must be an object when present');
+        } else {
+            for (const path of ['resistance', 'join-villain']) {
+                const config = season.postVictory[path];
+                if (config === undefined) {
+                    continue;
+                }
+                const pathPrefix = `postVictory.${path}`;
+                if (!isObject(config)) {
+                    add(errors, pathPrefix, 'must be an object');
+                    continue;
+                }
+                if (config.title !== undefined
+                    && (typeof config.title !== 'string' || config.title.trim().length === 0)) {
+                    add(errors, `${pathPrefix}.title`, 'must be a non-empty string');
+                }
+                for (const field of ['victorFactionId', 'resistanceFactionId']) {
+                    const factionId = config[field];
+                    if (factionId !== undefined && factionId !== null) {
+                        if (typeof factionId !== 'string' || !factionIds.has(factionId)) {
+                            add(errors, `${pathPrefix}.${field}`, `unresolved faction "${String(factionId)}"`);
+                        }
+                    }
+                }
+                if (config.threat !== undefined) {
+                    const threat = config.threat;
+                    if (!isObject(threat)) {
+                        add(errors, `${pathPrefix}.threat`, 'must be an object');
+                    } else {
+                        if (typeof threat.id !== 'string' || threat.id.length === 0) {
+                            add(errors, `${pathPrefix}.threat.id`, 'must be a non-empty string');
+                        }
+                        if (typeof threat.name !== 'string' || threat.name.trim().length === 0) {
+                            add(errors, `${pathPrefix}.threat.name`, 'must be a non-empty string');
+                        }
+                        if (!THREAT_RANKS.includes(threat.rank)) {
+                            add(errors, `${pathPrefix}.threat.rank`, `must be one of ${THREAT_RANKS.join(', ')}`);
+                        }
+                        if (threat.sourceFactionId !== null && threat.sourceFactionId !== undefined
+                            && !factionIds.has(threat.sourceFactionId)) {
+                            add(errors, `${pathPrefix}.threat.sourceFactionId`, 'unresolved faction');
+                        }
+                        if (!Array.isArray(threat.stages) || threat.stages.length < 2) {
+                            add(errors, `${pathPrefix}.threat.stages`, 'must declare at least two stages');
+                        }
+                        if (threat.locationId !== null && threat.locationId !== undefined
+                            && !locationIds.has(threat.locationId)) {
+                            add(errors, `${pathPrefix}.threat.locationId`, 'unresolved location');
+                        }
+                    }
+                }
+                if (config.beats !== undefined) {
+                    if (!Array.isArray(config.beats)) {
+                        add(errors, `${pathPrefix}.beats`, 'must be an array');
+                    } else {
+                        const beatIds = new Set(
+                            config.beats.map((beat) => beat?.id).filter((id) => typeof id === 'string'),
+                        );
+                        config.beats.forEach((beat, index) => {
+                            const validation = validateBeat(beat, season.id, {
+                                characterIds,
+                                locationIds,
+                                factionIds,
+                                threatIds,
+                                beatIds,
+                            });
+                            for (const error of validation.errors) {
+                                add(errors, `${pathPrefix}.beats[${index}].${error.path}`, error.message);
+                            }
+                        });
+                    }
+                }
+            }
+        }
     }
 
     // --- deadline, failure state, and season-specific rules ---------------

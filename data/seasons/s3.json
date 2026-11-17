@@ -14,23 +14,98 @@
   "sandbox": false,
   "allowAnyCharacter": false,
   "roster": [
-    { "characterId": "s3.vireze.tylow.midnight.treat", "formId": "s3.vireze.tylow.midnight.treat", "locationId": "midnight-lair" },
-    { "characterId": "s3.selina.cross.umbra", "formId": "s3.selina.cross.umbra", "locationId": "gold-paradise-casino" },
-    { "characterId": "s3.zara.embarr", "formId": "s3.zara.embarr", "locationId": "central-plaza" },
-    { "characterId": "s3.elizabeth.ellie.addison", "formId": "s3.elizabeth.ellie.addison", "locationId": "neon-docks" },
-    { "characterId": "s3.keira.cooper", "formId": "s3.keira.cooper", "locationId": "maple-heights" },
-    { "characterId": "s3.lucia.lulu.illusi.chamisulli", "formId": "s3.lucia.lulu.illusi.chamisulli", "locationId": "gold-paradise-casino" },
-    { "characterId": "s3.melissa.liz.ashton", "formId": "s3.melissa.liz.ashton", "locationId": "old-subway" },
-    { "characterId": "s3.miracle.mira.nillava.vanillamirror", "formId": "s3.miracle.mira.nillava.vanillamirror", "locationId": "sirens-styles" },
-    { "characterId": "s3.blood.bound.corrupted.emeral.allure", "formId": "s3.blood.bound.corrupted.emeral.allure", "locationId": "neon-docks" },
-    { "characterId": "s3.adrian.tylow.shacklaw", "formId": "s3.adrian.tylow.shacklaw", "locationId": "old-subway" }
+    {
+      "characterId": "s3.vireze.tylow.midnight.treat",
+      "formId": "s3.vireze.tylow.midnight.treat",
+      "locationId": "midnight-lair"
+    },
+    {
+      "characterId": "s3.selina.cross.umbra",
+      "formId": "s3.selina.cross.umbra",
+      "locationId": "gold-paradise-casino"
+    },
+    {
+      "characterId": "s3.zara.embarr",
+      "formId": "s3.zara.embarr",
+      "locationId": "central-plaza"
+    },
+    {
+      "characterId": "s3.elizabeth.ellie.addison",
+      "formId": "s3.elizabeth.ellie.addison",
+      "locationId": "neon-docks"
+    },
+    {
+      "characterId": "s3.keira.cooper",
+      "formId": "s3.keira.cooper",
+      "locationId": "maple-heights"
+    },
+    {
+      "characterId": "s3.lucia.lulu.illusi.chamisulli",
+      "formId": "s3.lucia.lulu.illusi.chamisulli",
+      "locationId": "gold-paradise-casino"
+    },
+    {
+      "characterId": "s3.melissa.liz.ashton",
+      "formId": "s3.melissa.liz.ashton",
+      "locationId": "old-subway"
+    },
+    {
+      "characterId": "s3.miracle.mira.nillava.vanillamirror",
+      "formId": "s3.miracle.mira.nillava.vanillamirror",
+      "locationId": "sirens-styles"
+    },
+    {
+      "characterId": "s3.blood.bound.corrupted.emeral.allure",
+      "formId": "s3.blood.bound.corrupted.emeral.allure",
+      "locationId": "neon-docks"
+    },
+    {
+      "characterId": "s3.adrian.tylow.shacklaw",
+      "formId": "s3.adrian.tylow.shacklaw",
+      "locationId": "old-subway"
+    }
   ],
   "factions": [
-    { "id": "midnight-treat", "influence": 20, "status": "underground", "goals": ["Distribute treats across every district", "Keep the heroes fighting each other"] },
-    { "id": "sensational-sirens", "influence": 50, "status": "active", "goals": ["Protect the city with style", "Keep the team's reputation intact"] },
-    { "id": "corvus-corp", "influence": 55, "status": "active" },
-    { "id": "neoterra-pd", "influence": 35, "status": "active", "goals": ["Contain the treat epidemic", "Stop lethal vigilantism"] },
-    { "id": "crisis-coalition", "influence": 25, "status": "active", "goals": ["Coordinate heroes and civilians against the treats"] }
+    {
+      "id": "midnight-treat",
+      "influence": 20,
+      "status": "underground",
+      "goals": [
+        "Distribute treats across every district",
+        "Keep the heroes fighting each other"
+      ]
+    },
+    {
+      "id": "sensational-sirens",
+      "influence": 50,
+      "status": "active",
+      "goals": [
+        "Protect the city with style",
+        "Keep the team's reputation intact"
+      ]
+    },
+    {
+      "id": "corvus-corp",
+      "influence": 55,
+      "status": "active"
+    },
+    {
+      "id": "neoterra-pd",
+      "influence": 35,
+      "status": "active",
+      "goals": [
+        "Contain the treat epidemic",
+        "Stop lethal vigilantism"
+      ]
+    },
+    {
+      "id": "crisis-coalition",
+      "influence": 25,
+      "status": "active",
+      "goals": [
+        "Coordinate heroes and civilians against the treats"
+      ]
+    }
   ],
   "threats": [
     {
@@ -64,7 +139,10 @@
     }
   ],
   "startLocationId": "central-plaza",
-  "openingBeats": ["s3.opening.first-treat", "s3.opening.vigilante-line"],
+  "openingBeats": [
+    "s3.opening.first-treat",
+    "s3.opening.vigilante-line"
+  ],
   "canonBeats": [
     {
       "id": "s3.opening.first-treat",
@@ -72,10 +150,25 @@
       "title": "The First Treat",
       "description": "A civilian is gifted hypnotic power and causes a public, very visible incident.",
       "act": "opening",
-      "conditions": { "turnRange": [0, 12], "locationIds": ["central-plaza", "gold-paradise-casino", "maple-heights"] },
+      "conditions": {
+        "turnRange": [
+          0,
+          12
+        ],
+        "locationIds": [
+          "central-plaza",
+          "gold-paradise-casino",
+          "maple-heights"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "first-treat" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "first-treat"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 12,
@@ -89,10 +182,25 @@
       "title": "The Vigilante Line",
       "description": "A vigilante kills or maims a treat-carrier, forcing the heroes and the police to take a public position.",
       "act": "opening",
-      "conditions": { "turnRange": [3, 20], "locationIds": ["neoterra-pd-hq", "neon-docks", "rust-yard"] },
+      "conditions": {
+        "turnRange": [
+          3,
+          20
+        ],
+        "locationIds": [
+          "neoterra-pd-hq",
+          "neon-docks",
+          "rust-yard"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "vigilante-line" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "vigilante-line"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 20,
@@ -106,10 +214,28 @@
       "title": "The Heroes Fracture",
       "description": "A public disagreement between heroes over the treats becomes a lasting split, and Midnight Treat uses it.",
       "act": "escalation",
-      "conditions": { "turnRange": [8, 30], "requiresBeats": ["s3.opening.vigilante-line"], "locationIds": ["sirens-styles", "corvus-corp", "central-plaza"] },
+      "conditions": {
+        "turnRange": [
+          8,
+          30
+        ],
+        "requiresBeats": [
+          "s3.opening.vigilante-line"
+        ],
+        "locationIds": [
+          "sirens-styles",
+          "corvus-corp",
+          "central-plaza"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "hero-fracture" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "hero-fracture"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 30,
@@ -123,11 +249,23 @@
       "title": "The Siren's Plague",
       "description": "A public hero is treated and becomes a treat-themed villain, making the epidemic personal.",
       "act": "escalation",
-      "conditions": { "turnRange": [12, 38], "requiresBeats": ["s3.opening.first-treat"] },
+      "conditions": {
+        "turnRange": [
+          12,
+          38
+        ],
+        "requiresBeats": [
+          "s3.opening.first-treat"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s3.miracle.mira.nillava.vanillamirror", "formId": "s3.pink.mirage.treated.miracle.mira.nillava" }
+          {
+            "kind": "form-active",
+            "characterId": "s3.miracle.mira.nillava.vanillamirror",
+            "formId": "s3.pink.mirage.treated.miracle.mira.nillava"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -142,10 +280,29 @@
       "title": "Unmask Midnight Treat",
       "description": "The heroes identify Vireze Tylow as Midnight Treat and corner her in her shuttered skyscraper.",
       "act": "climax",
-      "conditions": { "turnRange": [20, 50], "actorIds": ["s3.vireze.tylow.midnight.treat"], "locationIds": ["midnight-lair"], "requiresBeats": ["s3.escalation.hero-fracture"] },
+      "conditions": {
+        "turnRange": [
+          20,
+          50
+        ],
+        "actorIds": [
+          "s3.vireze.tylow.midnight.treat"
+        ],
+        "locationIds": [
+          "midnight-lair"
+        ],
+        "requiresBeats": [
+          "s3.escalation.hero-fracture"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "midnight-treat-unmasked" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "midnight-treat-unmasked"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 50,
@@ -159,11 +316,29 @@
       "title": "The Treat Ends",
       "description": "Vireze is captured, killed, or cleansed, and the gifted powers can be contained or reversed.",
       "act": "resolution",
-      "conditions": { "turnRange": [30, 60], "requiresBeats": ["s3.climax.unmask"] },
+      "conditions": {
+        "turnRange": [
+          30,
+          60
+        ],
+        "requiresBeats": [
+          "s3.climax.unmask"
+        ]
+      },
       "completion": {
         "type": "state",
         "predicates": [
-          { "kind": "character-status", "characterId": "s3.vireze.tylow.midnight.treat", "statuses": ["captured", "dead", "retired", "lost", "corrupted"] }
+          {
+            "kind": "character-status",
+            "characterId": "s3.vireze.tylow.midnight.treat",
+            "statuses": [
+              "captured",
+              "dead",
+              "retired",
+              "lost",
+              "corrupted"
+            ]
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -173,9 +348,14 @@
       "rewriteHints": "A cure, a ritual, or a public renunciation all count. If Vireze is already gone, resolve through the fate of the epidemic instead and record the substitution."
     }
   ],
-  "finalDeadline": { "turns": 60, "date": "2042-10-31" },
+  "finalDeadline": {
+    "turns": 60,
+    "date": "2042-10-31"
+  },
   "failureState": "villain-victory",
-  "manualOnly": ["s3.the.sensational.sirens"],
+  "manualOnly": [
+    "s3.the.sensational.sirens"
+  ],
   "altFormsAllowed": [
     "s3.blood.bride.corrupted.umbra",
     "s3.crazy.cupid.treated.zara.embarr",
@@ -185,5 +365,150 @@
     "s3.midnight.gift.cleansed.midnight.treat",
     "s3.oversight.treated.melissa.liz.ashton",
     "s3.pink.mirage.treated.miracle.mira.nillava"
-  ]
+  ],
+  "postVictory": {
+    "resistance": {
+      "title": "The Resistance",
+      "victorFactionId": "midnight-treat",
+      "threat": {
+        "id": "s3.post.victor",
+        "name": "Midnight Treat Regime",
+        "rank": "main",
+        "sourceFactionId": "midnight-treat",
+        "agenda": "Hunt the resistance and make the victory permanent.",
+        "stages": [
+          "Martial control",
+          "Purges and informants",
+          "Total dominion"
+        ],
+        "progress": 60,
+        "locationId": "midnight-lair"
+      },
+      "beats": [
+        {
+          "id": "s3.post.resistance.recruit",
+          "order": 110,
+          "title": "Recruit the First Cell",
+          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-recruit"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The victor captures a prospective ally and the cell shrinks.",
+          "rewriteHints": "Any ally, defector, or contact may anchor the cell."
+        },
+        {
+          "id": "s3.post.resistance.strike",
+          "order": 120,
+          "title": "Strike the Victor's Seat",
+          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s3.post.resistance.recruit"
+            ]
+          },
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-strike"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The regime tightens control and the resistance loses its base.",
+          "rewriteHints": "The target may be a symbol, a prison, or a supply hub."
+        }
+      ]
+    },
+    "join-villain": {
+      "title": "Serve the Victor",
+      "victorFactionId": "midnight-treat",
+      "threat": {
+        "id": "s3.post.resistance",
+        "name": "The Resistance",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Overthrow the victor and restore the old order.",
+        "stages": [
+          "Cells form",
+          "Sabotage spreads",
+          "Open uprising"
+        ],
+        "progress": 15,
+        "locationId": "old-subway"
+      },
+      "beats": [
+        {
+          "id": "s3.post.join.break-resistance",
+          "order": 110,
+          "title": "Break a Resistance Cell",
+          "description": "Locate and destroy a resistance cell before it can grow.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-cell"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance recruits a named hero and gains influence.",
+          "rewriteHints": "Any cell, safehouse, or symbol of resistance counts."
+        },
+        {
+          "id": "s3.post.join.conquer",
+          "order": 120,
+          "title": "Conquer the Next District",
+          "description": "Take a neighbouring district and install an occupation government.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s3.post.join.break-resistance"
+            ]
+          },
+          "completion": {
+            "type": "state",
+            "predicates": [
+              {
+                "kind": "flag",
+                "flag": "postVictoryConquest",
+                "value": true
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance holds the district and humiliates the victor.",
+          "rewriteHints": "Use an occupied district; the exact target may change."
+        }
+      ],
+      "conquest": {
+        "targets": [
+          "central-plaza"
+        ],
+        "goal": "Conquer the neighbouring districts and city."
+      }
+    }
+  }
 }

@@ -14,16 +14,63 @@
   "sandbox": false,
   "allowAnyCharacter": false,
   "roster": [
-    { "characterId": "s1dark.carol.bleeding-heart", "formId": "s1dark.carol.bleeding-heart", "locationId": "clarity-hq" },
-    { "characterId": "s1dark.akui.koden.cyber.sakura", "formId": "s1dark.akui.koden.cyber.sakura", "locationId": "clarity-hq" },
-    { "characterId": "s1dark.aurelia.season-dark-version", "formId": "s1dark.aurelia.season-dark-version", "locationId": "old-subway" },
-    { "characterId": "s1dark.jacqueline.webb.poisoness", "formId": "s1dark.jacqueline.webb.poisoness", "locationId": "gold-paradise-casino" }
+    {
+      "characterId": "s1dark.carol.bleeding-heart",
+      "formId": "s1dark.carol.bleeding-heart",
+      "locationId": "clarity-hq"
+    },
+    {
+      "characterId": "s1dark.akui.koden.cyber.sakura",
+      "formId": "s1dark.akui.koden.cyber.sakura",
+      "locationId": "clarity-hq"
+    },
+    {
+      "characterId": "s1dark.aurelia.season-dark-version",
+      "formId": "s1dark.aurelia.season-dark-version",
+      "locationId": "old-subway"
+    },
+    {
+      "characterId": "s1dark.jacqueline.webb.poisoness",
+      "formId": "s1dark.jacqueline.webb.poisoness",
+      "locationId": "gold-paradise-casino"
+    }
   ],
   "factions": [
-    { "id": "clarity", "influence": 85, "status": "dominant", "goals": ["Keep the city under Bleeding Heart's protection racket", "Convert or destroy every surviving hero"] },
-    { "id": "petrabyte", "influence": 25, "status": "underground", "goals": ["Keep the resistance alive", "Restore a hero government"] },
-    { "id": "crisis-coalition", "influence": 20, "status": "underground", "goals": ["Unite the survivors without being detected"] },
-    { "id": "neoterra-pd", "influence": 30, "status": "active", "goals": ["Survive the new order", "Protect civilians where possible"] }
+    {
+      "id": "clarity",
+      "influence": 85,
+      "status": "dominant",
+      "goals": [
+        "Keep the city under Bleeding Heart's protection racket",
+        "Convert or destroy every surviving hero"
+      ]
+    },
+    {
+      "id": "petrabyte",
+      "influence": 25,
+      "status": "underground",
+      "goals": [
+        "Keep the resistance alive",
+        "Restore a hero government"
+      ]
+    },
+    {
+      "id": "crisis-coalition",
+      "influence": 20,
+      "status": "underground",
+      "goals": [
+        "Unite the survivors without being detected"
+      ]
+    },
+    {
+      "id": "neoterra-pd",
+      "influence": 30,
+      "status": "active",
+      "goals": [
+        "Survive the new order",
+        "Protect civilians where possible"
+      ]
+    }
   ],
   "threats": [
     {
@@ -57,7 +104,10 @@
     }
   ],
   "startLocationId": "clarity-hq",
-  "openingBeats": ["s1dark.opening.coronation", "s1dark.opening.first-knight"],
+  "openingBeats": [
+    "s1dark.opening.coronation",
+    "s1dark.opening.first-knight"
+  ],
   "canonBeats": [
     {
       "id": "s1dark.opening.coronation",
@@ -65,10 +115,27 @@
       "title": "The Coronation of Bleeding Heart",
       "description": "The city acknowledges Carol Fate's rule, whether through fear, tribute, or a public spectacle.",
       "act": "opening",
-      "conditions": { "turnRange": [0, 12], "locationIds": ["clarity-hq", "central-plaza"], "actorIds": ["s1dark.carol.bleeding-heart"] },
+      "conditions": {
+        "turnRange": [
+          0,
+          12
+        ],
+        "locationIds": [
+          "clarity-hq",
+          "central-plaza"
+        ],
+        "actorIds": [
+          "s1dark.carol.bleeding-heart"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "villain-coronation" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "villain-coronation"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 12,
@@ -82,11 +149,23 @@
       "title": "The First Knight",
       "description": "One of the surviving villains or heroes is transformed into Bleeding Heart's loyal knight through a declared form rule.",
       "act": "opening",
-      "conditions": { "turnRange": [3, 20], "actorIds": ["s1dark.akui.koden.cyber.sakura"] },
+      "conditions": {
+        "turnRange": [
+          3,
+          20
+        ],
+        "actorIds": [
+          "s1dark.akui.koden.cyber.sakura"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s1dark.akui.koden.cyber.sakura", "formId": "s1dark.heart.attack.knighted.cyber.sakura" }
+          {
+            "kind": "form-active",
+            "characterId": "s1dark.akui.koden.cyber.sakura",
+            "formId": "s1dark.heart.attack.knighted.cyber.sakura"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -101,10 +180,26 @@
       "title": "Hunt the Resistance",
       "description": "Bleeding Heart's forces locate and strike a resistance safehouse, forcing the survivors to relocate.",
       "act": "escalation",
-      "conditions": { "turnRange": [10, 40], "locationIds": ["old-subway", "maple-heights", "petrabyte-tower"], "threatStage": 1 },
+      "conditions": {
+        "turnRange": [
+          10,
+          40
+        ],
+        "locationIds": [
+          "old-subway",
+          "maple-heights",
+          "petrabyte-tower"
+        ],
+        "threatStage": 1
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "resistance-hunted" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "resistance-hunted"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 40,
@@ -118,10 +213,26 @@
       "title": "Poison at Gold Paradise",
       "description": "Jacqueline's casino becomes a stage for eliminating or flipping a key resistance backer.",
       "act": "escalation",
-      "conditions": { "turnRange": [15, 45], "locationIds": ["gold-paradise-casino"], "actorIds": ["s1dark.jacqueline.webb.poisoness"] },
+      "conditions": {
+        "turnRange": [
+          15,
+          45
+        ],
+        "locationIds": [
+          "gold-paradise-casino"
+        ],
+        "actorIds": [
+          "s1dark.jacqueline.webb.poisoness"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "casino-coup" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "casino-coup"
+          }
+        ]
       },
       "flexibility": "optional",
       "deadlineTurns": 45,
@@ -135,11 +246,26 @@
       "title": "Break the White Rabbit",
       "description": "The resistance's best hope is converted into Bleeding Heart's White Rabbit, collapsing the counter-offensive.",
       "act": "climax",
-      "conditions": { "turnRange": [30, 65], "actorIds": ["s1dark.aurelia.season-dark-version"], "requiresBeats": ["s1dark.escalation.hunt"] },
+      "conditions": {
+        "turnRange": [
+          30,
+          65
+        ],
+        "actorIds": [
+          "s1dark.aurelia.season-dark-version"
+        ],
+        "requiresBeats": [
+          "s1dark.escalation.hunt"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s1dark.aurelia.season-dark-version", "formId": "s1dark.white.rabbit.knighted.longshot" }
+          {
+            "kind": "form-active",
+            "characterId": "s1dark.aurelia.season-dark-version",
+            "formId": "s1dark.white.rabbit.knighted.longshot"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -154,11 +280,23 @@
       "title": "Dominion Secured",
       "description": "PetraByte Tower falls or is surrendered, and Bleeding Heart's order becomes the city's permanent status quo.",
       "act": "resolution",
-      "conditions": { "turnRange": [40, 80], "requiresBeats": ["s1dark.climax.white-rabbit"] },
+      "conditions": {
+        "turnRange": [
+          40,
+          80
+        ],
+        "requiresBeats": [
+          "s1dark.climax.white-rabbit"
+        ]
+      },
       "completion": {
         "type": "state",
         "predicates": [
-          { "kind": "location-control", "locationId": "petrabyte-tower", "factionId": "clarity" }
+          {
+            "kind": "location-control",
+            "locationId": "petrabyte-tower",
+            "factionId": "clarity"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -168,7 +306,10 @@
       "rewriteHints": "The victory can be military, political, or psychological. If the player chooses an early ending, close the remaining beats as 'closed'."
     }
   ],
-  "finalDeadline": { "turns": 80, "date": "2040-06-01" },
+  "finalDeadline": {
+    "turns": 80,
+    "date": "2040-06-01"
+  },
   "failureState": "villain-victory",
   "manualOnly": [],
   "altFormsAllowed": [
@@ -178,5 +319,150 @@
     "s1dark.heart.attack.knighted.cyber.sakura",
     "s1dark.bittersweet.knighted.poisoness",
     "s1dark.white.rabbit.knighted.longshot"
-  ]
+  ],
+  "postVictory": {
+    "resistance": {
+      "title": "The Resistance",
+      "victorFactionId": "petrabyte",
+      "threat": {
+        "id": "s1dark.post.victor",
+        "name": "The Underground Resistance Regime",
+        "rank": "main",
+        "sourceFactionId": "petrabyte",
+        "agenda": "Hunt the resistance and make the victory permanent.",
+        "stages": [
+          "Martial control",
+          "Purges and informants",
+          "Total dominion"
+        ],
+        "progress": 60,
+        "locationId": "old-subway"
+      },
+      "beats": [
+        {
+          "id": "s1dark.post.resistance.recruit",
+          "order": 110,
+          "title": "Recruit the First Cell",
+          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-recruit"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The victor captures a prospective ally and the cell shrinks.",
+          "rewriteHints": "Any ally, defector, or contact may anchor the cell."
+        },
+        {
+          "id": "s1dark.post.resistance.strike",
+          "order": 120,
+          "title": "Strike the Victor's Seat",
+          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s1dark.post.resistance.recruit"
+            ]
+          },
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-strike"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The regime tightens control and the resistance loses its base.",
+          "rewriteHints": "The target may be a symbol, a prison, or a supply hub."
+        }
+      ]
+    },
+    "join-villain": {
+      "title": "Serve the Victor",
+      "victorFactionId": "petrabyte",
+      "threat": {
+        "id": "s1dark.post.resistance",
+        "name": "The Resistance",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Overthrow the victor and restore the old order.",
+        "stages": [
+          "Cells form",
+          "Sabotage spreads",
+          "Open uprising"
+        ],
+        "progress": 15,
+        "locationId": "old-subway"
+      },
+      "beats": [
+        {
+          "id": "s1dark.post.join.break-resistance",
+          "order": 110,
+          "title": "Break a Resistance Cell",
+          "description": "Locate and destroy a resistance cell before it can grow.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-cell"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance recruits a named hero and gains influence.",
+          "rewriteHints": "Any cell, safehouse, or symbol of resistance counts."
+        },
+        {
+          "id": "s1dark.post.join.conquer",
+          "order": 120,
+          "title": "Conquer the Next District",
+          "description": "Take a neighbouring district and install an occupation government.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s1dark.post.join.break-resistance"
+            ]
+          },
+          "completion": {
+            "type": "state",
+            "predicates": [
+              {
+                "kind": "flag",
+                "flag": "postVictoryConquest",
+                "value": true
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance holds the district and humiliates the victor.",
+          "rewriteHints": "Use an occupied district; the exact target may change."
+        }
+      ],
+      "conquest": {
+        "targets": [
+          "clarity-hq"
+        ],
+        "goal": "Conquer the neighbouring districts and city."
+      }
+    }
+  }
 }

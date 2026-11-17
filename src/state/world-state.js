@@ -487,6 +487,65 @@ export function createEmptyWorldState({ chatId = 'empty-chat' } = {}) {
     };
 }
 
+/**
+ * State-aware availability for the "join the villain" ending path.
+ *
+ * Always available to villain-POV, corrupted, brainwashed, or coerced players;
+ * unavailable to an unambiguously heroic player with no leverage.
+ */
+export function isJoinVillainPathAvailable(state) {
+    if (!isObject(state)) {
+        return false;
+    }
+    const playerCharacterId = state.player?.identity === 'canon'
+        && typeof state.player.characterId === 'string'
+        ? state.player.characterId
+        : null;
+    const playerCharacter = playerCharacterId
+        ? state.characters?.[playerCharacterId] ?? null
+        : null;
+    const allegiance = String(
+        state.player?.allegiance
+        ?? playerCharacter?.allegiance
+        ?? '',
+    ).toLowerCase();
+    const playerRelationship = (state.relationships ?? []).some(
+        (relationship) => relationship?.type === 'owner/servant'
+            && (
+                (playerCharacterId && (relationship.a === playerCharacterId || relationship.b === playerCharacterId))
+                || (!playerCharacterId && (relationship.a === 'player' || relationship.b === 'player'))
+            ),
+    );
+    return state.playerRole === 'villain'
+        || Number(state.player?.corruption?.stage ?? 0) > 0
+        || state.flags?.brainwashed === true
+        || state.flags?.identityLoss === true
+        || state.flags?.coercedHero === true
+        || state.flags?.coercion === true
+        || allegiance === 'villain'
+        || playerRelationship;
+}
+
+/** Resistance is unavailable to a player whose agency the world has removed. */
+export function isResistancePathAvailable(state) {
+    if (!isObject(state)) {
+        return false;
+    }
+    const badEnd = state.player?.identity === 'canon' && state.player.characterId
+        ? state.badEnds?.[state.player.characterId] ?? null
+        : null;
+    if (badEnd && badEnd.reversed !== true && [
+        'death',
+        'identity-loss',
+        'imprisonment',
+        'autonomy-loss',
+        'corruption',
+    ].includes(badEnd.type)) {
+        return false;
+    }
+    return state.flags?.brainwashed !== true && state.flags?.identityLoss !== true;
+}
+
 export function isCanonPlayer(state) {
     return state?.player?.identity === 'canon' && typeof state.player.characterId === 'string';
 }

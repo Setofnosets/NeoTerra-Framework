@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neoterra.local/schemas/ending.schema.json",
+  "title": "Neo Terra Epilogue Agent Response",
+  "description": "Schema-validated JSON returned by the Epilogue Agent. The ending flow stores epilogueText once and never regenerates it without an explicit request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["epilogueText", "victor", "playerStatus", "castFates"],
+  "properties": {
+    "epilogueText": {
+      "type": "string",
+      "minLength": 80,
+      "maxLength": 9000
+    },
+    "victor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "playerStatus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "castFates": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["characterId", "fate"],
+        "properties": {
+          "characterId": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "fate": { "type": "string", "minLength": 1, "maxLength": 400 }
+        }
+      }
+    },
+    "factionControl": {
+      "type": "string",
+      "maxLength": 600
+    },
+    "cityState": {
+      "type": "string",
+      "maxLength": 600
+    }
+  }
+}

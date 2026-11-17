@@ -107,9 +107,35 @@
     "manualOnly": { "type": "array", "items": { "type": "string" } },
     "altFormsAllowed": { "type": "array", "items": { "type": "string" } },
     "auxiliaryBook": { "type": "string" },
-    "notPlayableReason": { "type": "string" }
+    "notPlayableReason": { "type": "string" },
+    "postVictory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resistance": { "$ref": "#/$defs/postVictoryPath" },
+        "join-villain": { "$ref": "#/$defs/postVictoryPath" }
+      }
+    }
   },
   "$defs": {
+    "postVictoryPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "victorFactionId": { "type": ["string", "null"] },
+        "resistanceFactionId": { "type": ["string", "null"] },
+        "threat": { "$ref": "#/$defs/threat" },
+        "beats": {
+          "type": "array",
+          "items": { "$ref": "beat.schema.json" }
+        },
+        "conquest": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        }
+      }
+    },
     "threat": {
       "type": "object",
       "additionalProperties": false,

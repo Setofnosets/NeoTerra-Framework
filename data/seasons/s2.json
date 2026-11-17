@@ -14,21 +14,85 @@
   "sandbox": false,
   "allowAnyCharacter": false,
   "roster": [
-    { "characterId": "s2.vaiva.petrauskait.colorgarde.season.2.ver", "formId": "s2.vaiva.petrauskait.colorgarde.season.2.ver", "locationId": "maple-heights" },
-    { "characterId": "s2.amy.matic.seasonal.siren", "formId": "s2.amy.matic.seasonal.siren", "locationId": "matic-estate" },
-    { "characterId": "s2.monika.matic.monochromatic", "formId": "s2.monika.matic.monochromatic", "locationId": "matic-estate" },
-    { "characterId": "s2.annabelle.verd.iron.maiden", "formId": "s2.annabelle.verd.iron.maiden", "locationId": "corvus-corp" },
-    { "characterId": "s2.laura.brimael.demon.laura", "formId": "s2.laura.brimael.demon.laura", "locationId": "old-subway" },
-    { "characterId": "s2.leila.renya", "formId": "s2.leila.renya", "locationId": "renya-shrine" },
-    { "characterId": "s2.gintvilas.petrauskas.darkgarde", "formId": "s2.gintvilas.petrauskas.darkgarde", "locationId": "petrabyte-tower" }
+    {
+      "characterId": "s2.vaiva.petrauskait.colorgarde.season.2.ver",
+      "formId": "s2.vaiva.petrauskait.colorgarde.season.2.ver",
+      "locationId": "maple-heights"
+    },
+    {
+      "characterId": "s2.amy.matic.seasonal.siren",
+      "formId": "s2.amy.matic.seasonal.siren",
+      "locationId": "matic-estate"
+    },
+    {
+      "characterId": "s2.monika.matic.monochromatic",
+      "formId": "s2.monika.matic.monochromatic",
+      "locationId": "matic-estate"
+    },
+    {
+      "characterId": "s2.annabelle.verd.iron.maiden",
+      "formId": "s2.annabelle.verd.iron.maiden",
+      "locationId": "corvus-corp"
+    },
+    {
+      "characterId": "s2.laura.brimael.demon.laura",
+      "formId": "s2.laura.brimael.demon.laura",
+      "locationId": "old-subway"
+    },
+    {
+      "characterId": "s2.leila.renya",
+      "formId": "s2.leila.renya",
+      "locationId": "renya-shrine"
+    },
+    {
+      "characterId": "s2.gintvilas.petrauskas.darkgarde",
+      "formId": "s2.gintvilas.petrauskas.darkgarde",
+      "locationId": "petrabyte-tower"
+    }
   ],
   "factions": [
-    { "id": "renya-clan", "influence": 30, "status": "active", "goals": ["Revert Neo Terra to a primal age", "Break Vaiva's allies one by one"] },
-    { "id": "petrabyte", "influence": 45, "status": "active", "goals": ["Regain control of PetraByte", "Restore the Superhero Social Network"] },
-    { "id": "corvus-corp", "influence": 50, "status": "active", "goals": ["Keep superhero suits functional", "Shelter displaced heroes"] },
-    { "id": "sensational-sirens", "influence": 35, "status": "active" },
-    { "id": "clarity", "influence": 10, "status": "disbanded" },
-    { "id": "neoterra-pd", "influence": 25, "status": "active" }
+    {
+      "id": "renya-clan",
+      "influence": 30,
+      "status": "active",
+      "goals": [
+        "Revert Neo Terra to a primal age",
+        "Break Vaiva's allies one by one"
+      ]
+    },
+    {
+      "id": "petrabyte",
+      "influence": 45,
+      "status": "active",
+      "goals": [
+        "Regain control of PetraByte",
+        "Restore the Superhero Social Network"
+      ]
+    },
+    {
+      "id": "corvus-corp",
+      "influence": 50,
+      "status": "active",
+      "goals": [
+        "Keep superhero suits functional",
+        "Shelter displaced heroes"
+      ]
+    },
+    {
+      "id": "sensational-sirens",
+      "influence": 35,
+      "status": "active"
+    },
+    {
+      "id": "clarity",
+      "influence": 10,
+      "status": "disbanded"
+    },
+    {
+      "id": "neoterra-pd",
+      "influence": 25,
+      "status": "active"
+    }
   ],
   "threats": [
     {
@@ -62,7 +126,10 @@
     }
   ],
   "startLocationId": "maple-heights",
-  "openingBeats": ["s2.opening.petrabyte-seized", "s2.opening.ssn-dark"],
+  "openingBeats": [
+    "s2.opening.petrabyte-seized",
+    "s2.opening.ssn-dark"
+  ],
   "canonBeats": [
     {
       "id": "s2.opening.petrabyte-seized",
@@ -70,10 +137,27 @@
       "title": "PetraByte Falls",
       "description": "Leila's plot completes: Gintvilas is brainwashed and PetraByte changes hands.",
       "act": "opening",
-      "conditions": { "turnRange": [0, 15], "locationIds": ["petrabyte-tower"], "actorIds": ["s2.leila.renya", "s2.gintvilas.petrauskas.darkgarde"] },
+      "conditions": {
+        "turnRange": [
+          0,
+          15
+        ],
+        "locationIds": [
+          "petrabyte-tower"
+        ],
+        "actorIds": [
+          "s2.leila.renya",
+          "s2.gintvilas.petrauskas.darkgarde"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "petrabyte-seized" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "petrabyte-seized"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 15,
@@ -87,10 +171,24 @@
       "title": "The Social Network Goes Dark",
       "description": "The Superhero Social Network is disabled, cutting heroes off from coordination and the police.",
       "act": "opening",
-      "conditions": { "turnRange": [2, 20], "locationIds": ["petrabyte-tower", "neoterra-pd-hq"] },
+      "conditions": {
+        "turnRange": [
+          2,
+          20
+        ],
+        "locationIds": [
+          "petrabyte-tower",
+          "neoterra-pd-hq"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "ssn-dark" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "ssn-dark"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 20,
@@ -104,11 +202,23 @@
       "title": "The Seasonal Siren Falls",
       "description": "One of Vaiva's closest allies is Renya-ized, turning a symbol of hope into a Clanswoman.",
       "act": "escalation",
-      "conditions": { "turnRange": [10, 35], "requiresBeats": ["s2.opening.ssn-dark"] },
+      "conditions": {
+        "turnRange": [
+          10,
+          35
+        ],
+        "requiresBeats": [
+          "s2.opening.ssn-dark"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s2.amy.matic.seasonal.siren", "formId": "s2.tribal.temptress.corrupted.seasonal.siren" }
+          {
+            "kind": "form-active",
+            "characterId": "s2.amy.matic.seasonal.siren",
+            "formId": "s2.tribal.temptress.corrupted.seasonal.siren"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -123,10 +233,25 @@
       "title": "The Antidote Raid",
       "description": "The free heroes secure a supply of the Renya curse antidote from a Clarity-era cache or a PetraByte lab.",
       "act": "escalation",
-      "conditions": { "turnRange": [15, 45], "locationIds": ["rust-yard", "bcp-facility", "petrabyte-tower"] },
+      "conditions": {
+        "turnRange": [
+          15,
+          45
+        ],
+        "locationIds": [
+          "rust-yard",
+          "bcp-facility",
+          "petrabyte-tower"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "antidote-raid" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "antidote-raid"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 45,
@@ -140,10 +265,27 @@
       "title": "Vaiva vs Leila",
       "description": "Vaiva confronts Leila Renya with the weight of PetraByte and the city behind her.",
       "act": "climax",
-      "conditions": { "turnRange": [25, 60], "actorIds": ["s2.vaiva.petrauskait.colorgarde.season.2.ver", "s2.leila.renya"], "requiresBeats": ["s2.escalation.siren-turned"] },
+      "conditions": {
+        "turnRange": [
+          25,
+          60
+        ],
+        "actorIds": [
+          "s2.vaiva.petrauskait.colorgarde.season.2.ver",
+          "s2.leila.renya"
+        ],
+        "requiresBeats": [
+          "s2.escalation.siren-turned"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "leila-confrontation" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "leila-confrontation"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 60,
@@ -157,11 +299,29 @@
       "title": "The Curse Breaks",
       "description": "Leila is defeated or stripped of the Living Curse, and the converts can be brought back.",
       "act": "resolution",
-      "conditions": { "turnRange": [30, 70], "requiresBeats": ["s2.climax.leila-confrontation"] },
+      "conditions": {
+        "turnRange": [
+          30,
+          70
+        ],
+        "requiresBeats": [
+          "s2.climax.leila-confrontation"
+        ]
+      },
       "completion": {
         "type": "state",
         "predicates": [
-          { "kind": "character-status", "characterId": "s2.leila.renya", "statuses": ["captured", "dead", "retired", "lost", "corrupted"] }
+          {
+            "kind": "character-status",
+            "characterId": "s2.leila.renya",
+            "statuses": [
+              "captured",
+              "dead",
+              "retired",
+              "lost",
+              "corrupted"
+            ]
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -171,7 +331,10 @@
       "rewriteHints": "Leila may die, be captured, be cleansed, or lose the curse to a rival. Any outcome that removes her control resolves the beat."
     }
   ],
-  "finalDeadline": { "turns": 70, "date": "2042-06-10" },
+  "finalDeadline": {
+    "turns": 70,
+    "date": "2042-06-10"
+  },
   "failureState": "villain-victory",
   "manualOnly": [],
   "altFormsAllowed": [
@@ -181,5 +344,150 @@
     "s2.savage.succubus.corrupted.demon.laura",
     "s2.leila.renya.femme.feral",
     "s2.stygian.stalker.corrupted.colorgarde"
-  ]
+  ],
+  "postVictory": {
+    "resistance": {
+      "title": "The Resistance",
+      "victorFactionId": "renya-clan",
+      "threat": {
+        "id": "s2.post.victor",
+        "name": "The Renya Clan Regime",
+        "rank": "main",
+        "sourceFactionId": "renya-clan",
+        "agenda": "Hunt the resistance and make the victory permanent.",
+        "stages": [
+          "Martial control",
+          "Purges and informants",
+          "Total dominion"
+        ],
+        "progress": 60,
+        "locationId": "renya-shrine"
+      },
+      "beats": [
+        {
+          "id": "s2.post.resistance.recruit",
+          "order": 110,
+          "title": "Recruit the First Cell",
+          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-recruit"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The victor captures a prospective ally and the cell shrinks.",
+          "rewriteHints": "Any ally, defector, or contact may anchor the cell."
+        },
+        {
+          "id": "s2.post.resistance.strike",
+          "order": 120,
+          "title": "Strike the Victor's Seat",
+          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s2.post.resistance.recruit"
+            ]
+          },
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-strike"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The regime tightens control and the resistance loses its base.",
+          "rewriteHints": "The target may be a symbol, a prison, or a supply hub."
+        }
+      ]
+    },
+    "join-villain": {
+      "title": "Serve the Victor",
+      "victorFactionId": "renya-clan",
+      "threat": {
+        "id": "s2.post.resistance",
+        "name": "The Resistance",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Overthrow the victor and restore the old order.",
+        "stages": [
+          "Cells form",
+          "Sabotage spreads",
+          "Open uprising"
+        ],
+        "progress": 15,
+        "locationId": "old-subway"
+      },
+      "beats": [
+        {
+          "id": "s2.post.join.break-resistance",
+          "order": 110,
+          "title": "Break a Resistance Cell",
+          "description": "Locate and destroy a resistance cell before it can grow.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-cell"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance recruits a named hero and gains influence.",
+          "rewriteHints": "Any cell, safehouse, or symbol of resistance counts."
+        },
+        {
+          "id": "s2.post.join.conquer",
+          "order": 120,
+          "title": "Conquer the Next District",
+          "description": "Take a neighbouring district and install an occupation government.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s2.post.join.break-resistance"
+            ]
+          },
+          "completion": {
+            "type": "state",
+            "predicates": [
+              {
+                "kind": "flag",
+                "flag": "postVictoryConquest",
+                "value": true
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance holds the district and humiliates the victor.",
+          "rewriteHints": "Use an occupied district; the exact target may change."
+        }
+      ],
+      "conquest": {
+        "targets": [
+          "maple-heights"
+        ],
+        "goal": "Conquer the neighbouring districts and city."
+      }
+    }
+  }
 }

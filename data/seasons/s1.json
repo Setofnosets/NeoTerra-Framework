@@ -14,18 +14,66 @@
   "sandbox": false,
   "allowAnyCharacter": false,
   "roster": [
-    { "characterId": "s1.vaiva.colorgarde", "formId": "s1.vaiva.colorgarde", "locationId": "petrabyte-tower" },
-    { "characterId": "s1.aurelia.longshot", "formId": "s1.aurelia.longshot", "locationId": "central-plaza" },
-    { "characterId": "s1.tindur.sharkbite", "formId": "s1.tindur.sharkbite", "locationId": "neon-docks" },
-    { "characterId": "s1.claire.atropos", "formId": "s1.claire.atropos", "locationId": "clarity-hq" },
-    { "characterId": "s1.twisting.fate.corrupted.carol.fate", "formId": "s1.twisting.fate.corrupted.carol.fate", "locationId": "old-subway" },
-    { "characterId": "s1.crystal.cat", "formId": "s1.crystal.cat", "locationId": "clarity-hq" }
+    {
+      "characterId": "s1.vaiva.colorgarde",
+      "formId": "s1.vaiva.colorgarde",
+      "locationId": "petrabyte-tower"
+    },
+    {
+      "characterId": "s1.aurelia.longshot",
+      "formId": "s1.aurelia.longshot",
+      "locationId": "central-plaza"
+    },
+    {
+      "characterId": "s1.tindur.sharkbite",
+      "formId": "s1.tindur.sharkbite",
+      "locationId": "neon-docks"
+    },
+    {
+      "characterId": "s1.claire.atropos",
+      "formId": "s1.claire.atropos",
+      "locationId": "clarity-hq"
+    },
+    {
+      "characterId": "s1.twisting.fate.corrupted.carol.fate",
+      "formId": "s1.twisting.fate.corrupted.carol.fate",
+      "locationId": "old-subway"
+    },
+    {
+      "characterId": "s1.crystal.cat",
+      "formId": "s1.crystal.cat",
+      "locationId": "clarity-hq"
+    }
   ],
   "factions": [
-    { "id": "clarity", "influence": 80, "status": "dominant", "goals": ["Own Neo Terra's institutions", "Convert every useful metahuman through the Beast Conversion Program"] },
-    { "id": "petrabyte", "influence": 65, "status": "active", "goals": ["Protect Neo Terra's people", "Give Colorgarde the resources to dismantle Clarity"] },
-    { "id": "neoterra-pd", "influence": 35, "status": "active" },
-    { "id": "crisis-coalition", "influence": 15, "status": "dormant" }
+    {
+      "id": "clarity",
+      "influence": 80,
+      "status": "dominant",
+      "goals": [
+        "Own Neo Terra's institutions",
+        "Convert every useful metahuman through the Beast Conversion Program"
+      ]
+    },
+    {
+      "id": "petrabyte",
+      "influence": 65,
+      "status": "active",
+      "goals": [
+        "Protect Neo Terra's people",
+        "Give Colorgarde the resources to dismantle Clarity"
+      ]
+    },
+    {
+      "id": "neoterra-pd",
+      "influence": 35,
+      "status": "active"
+    },
+    {
+      "id": "crisis-coalition",
+      "influence": 15,
+      "status": "dormant"
+    }
   ],
   "threats": [
     {
@@ -59,7 +107,10 @@
     }
   ],
   "startLocationId": "central-plaza",
-  "openingBeats": ["s1.opening.arms-deal", "s1.opening.beast-rumors"],
+  "openingBeats": [
+    "s1.opening.arms-deal",
+    "s1.opening.beast-rumors"
+  ],
   "canonBeats": [
     {
       "id": "s1.opening.arms-deal",
@@ -67,10 +118,27 @@
       "title": "The Illegal Arms Deal",
       "description": "Colorgarde interrupts one of Clarity's illegal arms deals, announcing herself as a real threat to the corporation.",
       "act": "opening",
-      "conditions": { "turnRange": [0, 12], "locationIds": ["neon-docks", "clarity-hq"], "actorIds": ["s1.vaiva.colorgarde"] },
+      "conditions": {
+        "turnRange": [
+          0,
+          12
+        ],
+        "locationIds": [
+          "neon-docks",
+          "clarity-hq"
+        ],
+        "actorIds": [
+          "s1.vaiva.colorgarde"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "arms-deal" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "arms-deal"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 12,
@@ -84,10 +152,25 @@
       "title": "Rumors of the Beast Conversion Program",
       "description": "The first credible rumor surfaces that missing metahumans are being experimented on rather than killed.",
       "act": "opening",
-      "conditions": { "turnRange": [3, 20], "locationIds": ["rust-yard", "bcp-facility", "neoterra-pd-hq"] },
+      "conditions": {
+        "turnRange": [
+          3,
+          20
+        ],
+        "locationIds": [
+          "rust-yard",
+          "bcp-facility",
+          "neoterra-pd-hq"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "bcp-rumor" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "bcp-rumor"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 20,
@@ -101,11 +184,23 @@
       "title": "The First Conversion",
       "description": "A known metahuman is broken by the BCP and reappears as an animal-themed villain serving Clarity.",
       "act": "escalation",
-      "conditions": { "turnRange": [10, 35], "requiresBeats": ["s1.opening.beast-rumors"] },
+      "conditions": {
+        "turnRange": [
+          10,
+          35
+        ],
+        "requiresBeats": [
+          "s1.opening.beast-rumors"
+        ]
+      },
       "completion": {
         "type": "transformation",
         "predicates": [
-          { "kind": "form-active", "characterId": "s1.aurelia.longshot", "formId": "s1.redraw.corrupted.longshot" }
+          {
+            "kind": "form-active",
+            "characterId": "s1.aurelia.longshot",
+            "formId": "s1.redraw.corrupted.longshot"
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -120,10 +215,29 @@
       "title": "Crystal Cat Hunts Colorgarde",
       "description": "Mira Shard, Claire's crystal clone, is deployed specifically to neutralize Colorgarde's light powers and humiliate her in public.",
       "act": "escalation",
-      "conditions": { "turnRange": [18, 45], "actorIds": ["s1.crystal.cat", "s1.vaiva.colorgarde"], "locationIds": ["central-plaza", "clarity-hq", "sirens-styles"] },
+      "conditions": {
+        "turnRange": [
+          18,
+          45
+        ],
+        "actorIds": [
+          "s1.crystal.cat",
+          "s1.vaiva.colorgarde"
+        ],
+        "locationIds": [
+          "central-plaza",
+          "clarity-hq",
+          "sirens-styles"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "crystal-cat-showdown" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "crystal-cat-showdown"
+          }
+        ]
       },
       "flexibility": "adaptable",
       "deadlineTurns": 45,
@@ -137,10 +251,27 @@
       "title": "The Confrontation with Claire",
       "description": "Colorgarde and Claire Atropos finally face each other with the fate of the city on the line.",
       "act": "climax",
-      "conditions": { "turnRange": [30, 70], "actorIds": ["s1.vaiva.colorgarde", "s1.claire.atropos"], "requiresBeats": ["s1.escalation.first-conversion"] },
+      "conditions": {
+        "turnRange": [
+          30,
+          70
+        ],
+        "actorIds": [
+          "s1.vaiva.colorgarde",
+          "s1.claire.atropos"
+        ],
+        "requiresBeats": [
+          "s1.escalation.first-conversion"
+        ]
+      },
       "completion": {
         "type": "event",
-        "predicates": [{ "kind": "event-tag", "tag": "claire-confrontation" }]
+        "predicates": [
+          {
+            "kind": "event-tag",
+            "tag": "claire-confrontation"
+          }
+        ]
       },
       "flexibility": "strict",
       "deadlineTurns": 70,
@@ -154,11 +285,29 @@
       "title": "Clarity Incorporated Falls",
       "description": "Claire is defeated and Clarity's control breaks — through capture, conversion, death, or a public collapse of the corporation.",
       "act": "resolution",
-      "conditions": { "turnRange": [40, 90], "requiresBeats": ["s1.climax.claire-confrontation"] },
+      "conditions": {
+        "turnRange": [
+          40,
+          90
+        ],
+        "requiresBeats": [
+          "s1.climax.claire-confrontation"
+        ]
+      },
       "completion": {
         "type": "state",
         "predicates": [
-          { "kind": "character-status", "characterId": "s1.claire.atropos", "statuses": ["captured", "corrupted", "dead", "retired", "lost"] }
+          {
+            "kind": "character-status",
+            "characterId": "s1.claire.atropos",
+            "statuses": [
+              "captured",
+              "corrupted",
+              "dead",
+              "retired",
+              "lost"
+            ]
+          }
         ]
       },
       "flexibility": "adaptable",
@@ -168,13 +317,163 @@
       "rewriteHints": "Claire may be brainwashed into Claire Lachesis, imprisoned, killed, or forced into exile. Any terminal or converted state resolves the beat; record the divergence."
     }
   ],
-  "finalDeadline": { "turns": 90, "date": "2040-06-01" },
+  "finalDeadline": {
+    "turns": 90,
+    "date": "2040-06-01"
+  },
   "failureState": "villain-victory",
-  "manualOnly": ["s1.atropos.couple"],
+  "manualOnly": [
+    "s1.atropos.couple"
+  ],
   "altFormsAllowed": [
     "s1.redraw.corrupted.longshot",
     "s1.blood.frenzy.corrupted.sharkbite",
     "s1.claire.lachesis.cleansed.claire.atropos",
     "s1.light.shade.corrupted.colorgarde"
-  ]
+  ],
+  "postVictory": {
+    "resistance": {
+      "title": "The Resistance",
+      "victorFactionId": "clarity",
+      "threat": {
+        "id": "s1.post.victor",
+        "name": "Clarity Incorporated Regime",
+        "rank": "main",
+        "sourceFactionId": "clarity",
+        "agenda": "Hunt the resistance and make the victory permanent.",
+        "stages": [
+          "Martial control",
+          "Purges and informants",
+          "Total dominion"
+        ],
+        "progress": 60,
+        "locationId": "clarity-hq"
+      },
+      "beats": [
+        {
+          "id": "s1.post.resistance.recruit",
+          "order": 110,
+          "title": "Recruit the First Cell",
+          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-recruit"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The victor captures a prospective ally and the cell shrinks.",
+          "rewriteHints": "Any ally, defector, or contact may anchor the cell."
+        },
+        {
+          "id": "s1.post.resistance.strike",
+          "order": 120,
+          "title": "Strike the Victor's Seat",
+          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s1.post.resistance.recruit"
+            ]
+          },
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-strike"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The regime tightens control and the resistance loses its base.",
+          "rewriteHints": "The target may be a symbol, a prison, or a supply hub."
+        }
+      ]
+    },
+    "join-villain": {
+      "title": "Serve the Victor",
+      "victorFactionId": "clarity",
+      "threat": {
+        "id": "s1.post.resistance",
+        "name": "The Resistance",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Overthrow the victor and restore the old order.",
+        "stages": [
+          "Cells form",
+          "Sabotage spreads",
+          "Open uprising"
+        ],
+        "progress": 15,
+        "locationId": "old-subway"
+      },
+      "beats": [
+        {
+          "id": "s1.post.join.break-resistance",
+          "order": 110,
+          "title": "Break a Resistance Cell",
+          "description": "Locate and destroy a resistance cell before it can grow.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-cell"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance recruits a named hero and gains influence.",
+          "rewriteHints": "Any cell, safehouse, or symbol of resistance counts."
+        },
+        {
+          "id": "s1.post.join.conquer",
+          "order": 120,
+          "title": "Conquer the Next District",
+          "description": "Take a neighbouring district and install an occupation government.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "s1.post.join.break-resistance"
+            ]
+          },
+          "completion": {
+            "type": "state",
+            "predicates": [
+              {
+                "kind": "flag",
+                "flag": "postVictoryConquest",
+                "value": true
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance holds the district and humiliates the victor.",
+          "rewriteHints": "Use an occupied district; the exact target may change."
+        }
+      ],
+      "conquest": {
+        "targets": [
+          "central-plaza"
+        ],
+        "goal": "Conquer the neighbouring districts and city."
+      }
+    }
+  }
 }

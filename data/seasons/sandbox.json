@@ -15,18 +15,186 @@
   "allowAnyCharacter": true,
   "roster": [],
   "factions": [
-    { "id": "petrabyte", "influence": 60, "status": "active" },
-    { "id": "corvus-corp", "influence": 50, "status": "active" },
-    { "id": "neoterra-pd", "influence": 40, "status": "active" },
-    { "id": "crisis-coalition", "influence": 25, "status": "dormant" },
-    { "id": "clarity", "influence": 35, "status": "underground" }
+    {
+      "id": "petrabyte",
+      "influence": 60,
+      "status": "active"
+    },
+    {
+      "id": "corvus-corp",
+      "influence": 50,
+      "status": "active"
+    },
+    {
+      "id": "neoterra-pd",
+      "influence": 40,
+      "status": "active"
+    },
+    {
+      "id": "crisis-coalition",
+      "influence": 25,
+      "status": "dormant"
+    },
+    {
+      "id": "clarity",
+      "influence": 35,
+      "status": "underground"
+    }
   ],
   "threats": [],
   "startLocationId": "central-plaza",
   "openingBeats": [],
   "canonBeats": [],
-  "finalDeadline": { "turns": null, "date": null },
+  "finalDeadline": {
+    "turns": null,
+    "date": null
+  },
   "failureState": "none",
   "manualOnly": [],
-  "altFormsAllowed": []
+  "altFormsAllowed": [],
+  "postVictory": {
+    "resistance": {
+      "title": "The Resistance",
+      "victorFactionId": null,
+      "threat": {
+        "id": "sandbox.post.victor",
+        "name": "The Victor Regime",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Hunt the resistance and make the victory permanent.",
+        "stages": [
+          "Martial control",
+          "Purges and informants",
+          "Total dominion"
+        ],
+        "progress": 60,
+        "locationId": "central-plaza"
+      },
+      "beats": [
+        {
+          "id": "sandbox.post.resistance.recruit",
+          "order": 110,
+          "title": "Recruit the First Cell",
+          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-recruit"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The victor captures a prospective ally and the cell shrinks.",
+          "rewriteHints": "Any ally, defector, or contact may anchor the cell."
+        },
+        {
+          "id": "sandbox.post.resistance.strike",
+          "order": 120,
+          "title": "Strike the Victor's Seat",
+          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "sandbox.post.resistance.recruit"
+            ]
+          },
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-strike"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The regime tightens control and the resistance loses its base.",
+          "rewriteHints": "The target may be a symbol, a prison, or a supply hub."
+        }
+      ]
+    },
+    "join-villain": {
+      "title": "Serve the Victor",
+      "victorFactionId": null,
+      "threat": {
+        "id": "sandbox.post.resistance",
+        "name": "The Resistance",
+        "rank": "main",
+        "sourceFactionId": null,
+        "agenda": "Overthrow the victor and restore the old order.",
+        "stages": [
+          "Cells form",
+          "Sabotage spreads",
+          "Open uprising"
+        ],
+        "progress": 15,
+        "locationId": "central-plaza"
+      },
+      "beats": [
+        {
+          "id": "sandbox.post.join.break-resistance",
+          "order": 110,
+          "title": "Break a Resistance Cell",
+          "description": "Locate and destroy a resistance cell before it can grow.",
+          "act": "escalation",
+          "conditions": {},
+          "completion": {
+            "type": "event",
+            "predicates": [
+              {
+                "kind": "event-tag",
+                "tag": "post-resistance-cell"
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 20,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance recruits a named hero and gains influence.",
+          "rewriteHints": "Any cell, safehouse, or symbol of resistance counts."
+        },
+        {
+          "id": "sandbox.post.join.conquer",
+          "order": 120,
+          "title": "Conquer the Next District",
+          "description": "Take a neighbouring district and install an occupation government.",
+          "act": "resolution",
+          "conditions": {
+            "requiresBeats": [
+              "sandbox.post.join.break-resistance"
+            ]
+          },
+          "completion": {
+            "type": "state",
+            "predicates": [
+              {
+                "kind": "flag",
+                "flag": "postVictoryConquest",
+                "value": true
+              }
+            ]
+          },
+          "flexibility": "adaptable",
+          "deadlineTurns": 40,
+          "deadlineDate": null,
+          "deadlineConsequence": "The resistance holds the district and humiliates the victor.",
+          "rewriteHints": "Use an occupied district; the exact target may change."
+        }
+      ],
+      "conquest": {
+        "targets": [
+          "central-plaza"
+        ],
+        "goal": "Conquer the neighbouring districts and city."
+      }
+    }
+  }
 }

@@ -20,6 +20,8 @@ import {
     THREAT_STATUSES,
     WORLD_ARCS,
     ENDING_PATHS,
+    isJoinVillainPathAvailable,
+    isResistancePathAvailable,
 } from './world-state.js';
 
 function isObject(value) {
@@ -564,13 +566,11 @@ const HANDLERS = Object.freeze({
         if (!ENDING_PATHS.includes(path)) {
             fail(`Invalid ending path "${String(path)}"`);
         }
-        if (path === 'join-villain') {
-            const available = state.playerRole === 'villain'
-                || Number(state.player?.corruption?.stage ?? 0) > 0
-                || state.flags?.brainwashed === true;
-            if (!available) {
-                fail('Ending path "join-villain" is not available in this state');
-            }
+        if (path === 'join-villain' && !isJoinVillainPathAvailable(state)) {
+            fail('Ending path "join-villain" is not available in this state');
+        }
+        if (path === 'resistance' && !isResistancePathAvailable(state)) {
+            fail('Ending path "resistance" is not available in this state');
         }
 
         state.ending.path = path;

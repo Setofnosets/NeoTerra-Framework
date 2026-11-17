@@ -152,6 +152,7 @@ export function createInitiative({
     architect = null,
     storyline = null,
     auditor = null,
+    ending = null,
     getSettings = null,
     log = null,
     now = Date.now,
@@ -267,6 +268,19 @@ export function createInitiative({
                     },
                 }),
             });
+            let endingResult = null;
+            if (applied.ok && ending && typeof ending.trigger === 'function'
+                && applied.state?.ending?.status === 'epilogue'
+                && typeof applied.state.ending.epilogueText !== 'string') {
+                try {
+                    endingResult = await ending.trigger({ force: true });
+                } catch (error) {
+                    if (error?.name === 'AgentAbortedError' || error?.code === 'AGENT_ABORTED') {
+                        throw error;
+                    }
+                    logWarning(log, 'Ending epilogue failed; the deterministic fallback is retried next pass', error);
+                }
+            }
             return {
                 ran: applied.ok,
                 reason: applied.ok ? null : 'apply-failed',
@@ -276,8 +290,9 @@ export function createInitiative({
                 notes: result.notes ?? [],
                 rationale: result.rationale ?? '',
                 ending: result.ending === true,
+                endingResult,
                 error: applied.error,
-                state: applied.state,
+                state: endingResult?.state ?? applied.state,
             };
         } catch (error) {
             if (error?.name === 'AgentAbortedError' || error?.code === 'AGENT_ABORTED') {

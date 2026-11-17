@@ -68,6 +68,36 @@
                     <input type="number" min="1" max="100" step="1" data-neoterra-path="cyoa.maxLabelLength">
                 </label>
             </div>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-field">
+                    <span>Action weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.contentMix.action">
+                </label>
+                <label class="neoterra-field">
+                    <span>Dialogue weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.contentMix.dialogue">
+                </label>
+                <label class="neoterra-field">
+                    <span>Romance weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.contentMix.romance">
+                </label>
+                <label class="neoterra-field">
+                    <span>Investigation weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.contentMix.investigation">
+                </label>
+                <label class="neoterra-field">
+                    <span>Travel weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.contentMix.travel">
+                </label>
+                <label class="neoterra-field">
+                    <span>Lewd weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.contentMix.lewd">
+                </label>
+            </div>
+            <label class="neoterra-field neoterra-field-wide">
+                <span>Exploration choices prompt override (optional)</span>
+                <textarea rows="4" data-neoterra-path="cyoa.promptOverride"></textarea>
+            </label>
 
             <h4 class="neoterra-section-title">Combat choices (independent)</h4>
             <div class="neoterra-settings-grid">
@@ -92,7 +122,54 @@
                         <option value="lewd">Lewd</option>
                     </select>
                 </label>
+                <label class="neoterra-field">
+                    <span>Label length limit</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="cyoa.combatChoices.maxLabelLength">
+                </label>
             </div>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-field">
+                    <span>Action weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.combatChoices.contentMix.action">
+                </label>
+                <label class="neoterra-field">
+                    <span>Dialogue weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.combatChoices.contentMix.dialogue">
+                </label>
+                <label class="neoterra-field">
+                    <span>Romance weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.combatChoices.contentMix.romance">
+                </label>
+                <label class="neoterra-field">
+                    <span>Investigation weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.combatChoices.contentMix.investigation">
+                </label>
+                <label class="neoterra-field">
+                    <span>Travel weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.combatChoices.contentMix.travel">
+                </label>
+                <label class="neoterra-field">
+                    <span>Lewd weight</span>
+                    <input type="number" min="0" max="10" step="1" data-neoterra-path="cyoa.combatChoices.contentMix.lewd">
+                </label>
+            </div>
+            <label class="neoterra-field neoterra-field-wide">
+                <span>Combat choices prompt override (optional)</span>
+                <textarea rows="4" data-neoterra-path="cyoa.combatChoices.promptOverride"></textarea>
+            </label>
+
+            <h4 class="neoterra-section-title">Villain-victory epilogue</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-field">
+                    <span>Epilogue paragraphs (3-8)</span>
+                    <input type="number" min="3" max="8" step="1" data-neoterra-path="ending.paragraphs">
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                The epilogue is written once when the final deadline passes or the main threat
+                reaches its terminal stage. The player then chooses Resistance, Join the villain,
+                or End here.
+            </p>
 
             <h4 class="neoterra-section-title">Bad ends (opt-in)</h4>
             <div class="neoterra-settings-grid">
