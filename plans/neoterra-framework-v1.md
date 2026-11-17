@@ -2,7 +2,7 @@
 
 ## Meta
 - **Slug:** neoterra-framework-v1
-- **Status:** in progress — Steps 1–4 complete
+- **Status:** in progress — Steps 1–5 complete
 - **Date:** 2026-11-16
 - **Source spec:** `start.md`
 - **Target:** SillyTavern third-party extension, single repo `NeoTerra-Framework/`
@@ -357,7 +357,7 @@ NeoTerra-Framework/
 - [x] Step 2 — Data ingestion pipeline and character/form registry — `0a2ed16`
 - [x] Step 3 — Season, faction, and location definitions — `4410d5c`
 - [x] Step 4 — `WorldState` schema, store, reducer, migrations — `ea24a59`
-- [ ] Step 5 — Shared agent client, runner, and JSON contracts
+- [x] Step 5 — Shared agent client, runner, and JSON contracts — `337e668`
 - [ ] Step 6 — Context renderer, token budget, and interceptor
 - [ ] Step 7 — Season menu and deterministic world construction
 - [ ] Step 8 — Cast Director, world-book materialization, and form exclusivity
