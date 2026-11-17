@@ -29,13 +29,13 @@
 ## Current State (verified by exploration)
 
 ### Repository
-- As of this update, Steps 1–19 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `package.json`. The season/world construction, cast/world-book, storyline/beat ledger, player tracker, bad ends, lore agent, SVG map, travel, world overlay, villain-victory ending (epilogue agent, state-aware continuation, post-victory arcs,
+- As of this update, Steps 1–20 are implemented: `manifest.json`, `index.js`, `src/`, `data/`, `tools/`, `tests/`, `docs/`, `README.md`, `package.json`. The season/world construction, cast/world-book, storyline/beat ledger, player tracker, bad ends, lore agent, SVG map, travel, world overlay, villain-victory ending (epilogue agent, state-aware continuation, post-victory arcs,
   conquest occupation), optional CYOA choices (exploration plus independent
-  tactical combat), the Character Codex/settings surface/theme polish, and the
-  dice-based conflict resolver/combat integration (seeded resolver, bounded
+  tactical combat), the Character Codex/settings surface/theme polish,
+  the dice-based conflict resolver/combat integration (seeded resolver, bounded
   outcome tiers, `[NEOTERRA_COMBAT]` block, combat-owned resource suppression,
-  `/neoterra-roll` and dice function tool) are complete; Step 20 (Extensibility
-  tooling, import/export, docs, and release QA) is next.
+  `/neoterra-roll` and dice function tool), and the extensibility tooling,
+  world export/import, docs, and release QA are complete.
 - `Chars/` is raw source data, not runtime data. Card filenames carry the only machine-usable distinction between base and alternate forms.
 - Season ordering, faction registry, location lore, and transformation mapping were not extractable; they are authored in `data/`. The map is now the exception: its geometry **is** machine-extractable from the new SVG layers.
 - `.git` initially had no remotes; `origin` is now `https://github.com/Setofnosets/NeoTerra-Framework.git`.
@@ -867,7 +867,7 @@ Still optional, in rough priority order:
 
 ## Open Questions & Implementation Details
 
-No open questions. Steps 1–19 are complete; the plan is ready to continue with Step 20.
+No open questions. Steps 1–20 are complete and V1 is released.
 
 Remaining implementation details are fully specified by the decisions above:
 - Map geometry comes from the SVG layers via `build-map`; DeepSeek is only a fallback for unlabeled/new sites and is human-verified.
