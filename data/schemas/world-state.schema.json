@@ -1,0 +1,425 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Setofnosets/NeoTerra-Framework/data/schemas/world-state.schema.json",
+  "title": "Neo Terra WorldState",
+  "description": "Authoritative per-chat world document. Validation is implemented in JavaScript; this schema is documentation and tooling.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "chatId",
+    "seasonId",
+    "mode",
+    "meta",
+    "arc",
+    "ending",
+    "playerRole",
+    "player",
+    "characters",
+    "locations",
+    "factions",
+    "threats",
+    "beats",
+    "badEnds",
+    "relationships",
+    "recentEvents",
+    "scene",
+    "flags",
+    "log"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "chatId": { "type": "string", "minLength": 1 },
+    "seasonId": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["director", "group", "solo"] },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["turn", "inGameDate", "timeOfDay", "sceneId", "inCombat", "startedAt"],
+      "properties": {
+        "turn": { "type": "integer", "minimum": 0 },
+        "inGameDate": { "type": ["string", "null"] },
+        "timeOfDay": { "type": "string" },
+        "sceneId": { "type": "string" },
+        "inCombat": { "type": "boolean" },
+        "startedAt": { "type": "number" }
+      }
+    },
+    "arc": { "enum": ["season", "post-victory"] },
+    "ending": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["none", "epilogue", "continued", "ended"] },
+        "path": { "enum": ["resistance", "join-villain", "end"] },
+        "epilogueText": { "type": "string" },
+        "firedTurn": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "playerRole": { "enum": ["hero", "villain", "neutral"] },
+    "player": { "$ref": "#/$defs/Player" },
+    "characters": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/CharacterState" }
+    },
+    "locations": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/LocationState" }
+    },
+    "factions": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/FactionState" }
+    },
+    "threats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ThreatState" }
+    },
+    "beats": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/BeatState" }
+    },
+    "badEnds": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/BadEndRecord" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Relationship" }
+    },
+    "recentEvents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Event" }
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["locationId", "present", "framing"],
+      "properties": {
+        "locationId": { "type": ["string", "null"] },
+        "present": { "type": "array", "items": { "type": "string" } },
+        "combat": {
+          "type": ["object", "null"],
+          "additionalProperties": true,
+          "properties": {
+            "locationId": { "type": ["string", "null"] },
+            "participants": { "type": "array", "items": { "type": "string" } },
+            "kind": { "type": "string" },
+            "startedTurn": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "framing": { "type": "string" }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Small free-form flags used by beats and endings."
+    },
+    "log": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  },
+  "$defs": {
+    "Resource": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["current", "max"],
+      "properties": {
+        "current": { "type": "number", "minimum": 0 },
+        "max": { "type": "number", "minimum": 0 }
+      }
+    },
+    "Corruption": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["stage", "source", "progress"],
+      "properties": {
+        "stage": { "type": "integer", "minimum": 0 },
+        "source": { "type": ["string", "null"] },
+        "progress": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "Player": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["identity", "characterId", "personaNotes"],
+      "properties": {
+        "identity": { "enum": ["custom", "canon"] },
+        "characterId": { "type": ["string", "null"] },
+        "personaNotes": { "type": "string" },
+        "charId": { "type": ["string", "null"] },
+        "formId": { "type": ["string", "null"] },
+        "formGroup": { "type": ["string", "null"] },
+        "displayName": { "type": "string" },
+        "side": { "$ref": "#/$defs/Side" },
+        "controlledBy": { "enum": ["npc", "player"] },
+        "status": { "$ref": "#/$defs/CharacterStatus" },
+        "badEndType": { "$ref": "#/$defs/BadEndType" },
+        "locationId": { "type": ["string", "null"] },
+        "alive": { "type": "boolean" },
+        "threatLevel": { "type": ["string", "null"] },
+        "stamina": { "$ref": "#/$defs/Resource" },
+        "willpower": { "$ref": "#/$defs/Resource" },
+        "agenda": { "type": "string" },
+        "goals": { "type": "array", "items": { "type": "string" } },
+        "mood": { "type": "string" },
+        "allegiance": { "type": "string" },
+        "appearance": { "type": "string" },
+        "outfit": { "type": "string" },
+        "abilities": { "type": "array", "items": { "type": "string" } },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "traits": { "type": "array", "items": { "type": "string" } },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "dislikes": { "type": "array", "items": { "type": "string" } },
+        "relationships": { "type": "array" },
+        "corruption": { "$ref": "#/$defs/Corruption" },
+        "lastUpdatedTurn": { "type": "integer", "minimum": 0 },
+        "notes": { "type": "string" }
+      }
+    },
+    "CharacterState": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "charId",
+        "formId",
+        "formGroup",
+        "displayName",
+        "side",
+        "controlledBy",
+        "status",
+        "locationId",
+        "alive",
+        "threatLevel",
+        "stamina",
+        "willpower",
+        "agenda",
+        "goals",
+        "mood",
+        "allegiance",
+        "appearance",
+        "outfit",
+        "abilities",
+        "skills",
+        "traits",
+        "likes",
+        "dislikes",
+        "relationships",
+        "corruption",
+        "lastUpdatedTurn",
+        "notes"
+      ],
+      "properties": {
+        "charId": { "type": "string", "minLength": 1 },
+        "formId": { "type": "string", "minLength": 1 },
+        "formGroup": { "type": ["string", "null"] },
+        "displayName": { "type": "string", "minLength": 1 },
+        "side": { "$ref": "#/$defs/Side" },
+        "controlledBy": { "enum": ["npc", "player"] },
+        "status": { "$ref": "#/$defs/CharacterStatus" },
+        "badEndType": { "$ref": "#/$defs/BadEndType" },
+        "locationId": { "type": ["string", "null"] },
+        "alive": { "type": "boolean" },
+        "threatLevel": { "type": ["string", "null"] },
+        "stamina": { "$ref": "#/$defs/Resource" },
+        "willpower": { "$ref": "#/$defs/Resource" },
+        "agenda": { "type": "string" },
+        "goals": { "type": "array", "items": { "type": "string" } },
+        "mood": { "type": "string" },
+        "allegiance": { "type": "string" },
+        "appearance": { "type": "string" },
+        "outfit": { "type": "string" },
+        "abilities": { "type": "array", "items": { "type": "string" } },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "traits": { "type": "array", "items": { "type": "string" } },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "dislikes": { "type": "array", "items": { "type": "string" } },
+        "relationships": { "type": "array" },
+        "corruption": { "$ref": "#/$defs/Corruption" },
+        "lastUpdatedTurn": { "type": "integer", "minimum": 0 },
+        "notes": { "type": "string" }
+      }
+    },
+    "LocationState": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "name",
+        "district",
+        "kind",
+        "factionId",
+        "status",
+        "capacity",
+        "present",
+        "tags",
+        "visited",
+        "notes"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "district": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["landmark", "base", "district", "venue", "facility", "hideout", "wilderness"] },
+        "factionId": { "type": ["string", "null"] },
+        "status": { "enum": ["peaceful", "patrolled", "contested", "hostile", "locked", "unknown"] },
+        "capacity": { "type": "integer", "minimum": 1 },
+        "present": { "type": "array", "items": { "type": "string" } },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "visited": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "FactionState": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "name",
+        "side",
+        "influence",
+        "status",
+        "goals",
+        "description",
+        "headquartersLocationId"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "side": { "$ref": "#/$defs/Side" },
+        "influence": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "status": { "enum": ["active", "dormant", "disbanded", "underground", "dominant"] },
+        "goals": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "headquartersLocationId": { "type": ["string", "null"] }
+      }
+    },
+    "ThreatState": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "name",
+        "rank",
+        "sourceFactionId",
+        "agenda",
+        "stages",
+        "progress",
+        "stage",
+        "status",
+        "locationId"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "rank": { "enum": ["main", "secondary"] },
+        "sourceFactionId": { "type": ["string", "null"] },
+        "agenda": { "type": "string", "minLength": 1 },
+        "stages": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "stage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Bounded at runtime by stages.length - 1."
+        },
+        "status": { "enum": ["active", "dormant", "defeated", "contained"] },
+        "locationId": { "type": ["string", "null"] }
+      }
+    },
+    "BeatState": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["open", "deferred", "resolved", "adapted", "short-circuited", "closed"] },
+        "resolvedTurn": { "type": ["integer", "null"], "minimum": 0 },
+        "adaptedFrom": { "type": ["string", "null"] },
+        "adaptedTo": { "type": ["string", "null"] },
+        "reason": { "type": ["string", "null"] },
+        "deferredUntilTurn": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "BadEndRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "severity",
+        "cause",
+        "sourceCharacterId",
+        "sourceFactionId",
+        "turn",
+        "date",
+        "locationId",
+        "epilogueText",
+        "playableAs",
+        "continuityKey",
+        "reversibility",
+        "notes",
+        "records",
+        "reversed",
+        "reversedTurn",
+        "reversalReason"
+      ],
+      "properties": {
+        "type": { "$ref": "#/$defs/BadEndType" },
+        "severity": { "type": ["string", "number"] },
+        "cause": { "type": "string" },
+        "sourceCharacterId": { "type": ["string", "null"] },
+        "sourceFactionId": { "type": ["string", "null"] },
+        "turn": { "type": "integer", "minimum": 0 },
+        "date": { "type": ["string", "null"] },
+        "locationId": { "type": ["string", "null"] },
+        "epilogueText": { "type": "string" },
+        "playableAs": { "type": "boolean" },
+        "continuityKey": { "type": "string", "minLength": 1 },
+        "reversibility": { "type": "string" },
+        "notes": { "type": "string" },
+        "records": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "reversed": { "type": "boolean" },
+        "reversedTurn": { "type": ["integer", "null"], "minimum": 0 },
+        "reversalReason": { "type": ["string", "null"] },
+        "restoredStatus": { "$ref": "#/$defs/CharacterStatus" }
+      }
+    },
+    "Relationship": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["a", "b", "type", "affinity", "tension", "notes", "sinceTurn"],
+      "properties": {
+        "a": { "type": "string", "minLength": 1 },
+        "b": { "type": "string", "minLength": 1 },
+        "type": { "type": "string" },
+        "affinity": { "type": "number", "minimum": -100, "maximum": 100 },
+        "tension": { "type": "number", "minimum": -100, "maximum": 100 },
+        "notes": { "type": "string" },
+        "sinceTurn": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Event": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["turn", "date", "summary", "actors", "locationId", "tags"],
+      "properties": {
+        "turn": { "type": "integer", "minimum": 0 },
+        "date": { "type": ["string", "null"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "actors": { "type": "array", "items": { "type": "string" } },
+        "locationId": { "type": ["string", "null"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "headline": { "type": "string" },
+        "beatId": { "type": "string" }
+      }
+    },
+    "Side": { "enum": ["hero", "villain", "vigilante", "civilian", "neutral"] },
+    "CharacterStatus": {
+      "enum": ["active", "offscreen", "captured", "corrupted", "dead", "retired", "missing", "lost", "imprisoned"]
+    },
+    "BadEndType": {
+      "enum": ["death", "identity-loss", "autonomy-loss", "corruption", "imprisonment", "retirement"]
+    }
+  }
+}
