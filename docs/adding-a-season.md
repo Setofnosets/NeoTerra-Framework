@@ -18,6 +18,12 @@ The folder name is the display name; the season id is its lowercase form:
 Cards are read from `data.*`; the legacy duplicated top-level block is ignored.
 Card filenames decide `formKind` and the registry id, so keep them stable.
 
+> **PNG cards are not ingested yet.** `build-data` reads `.json` cards only.
+> If the art ships as a `chara_card_v3` PNG, export or author the JSON twin
+> beside it (same slug) and commit the JSON; the PNG is not registered, not
+> paired, and no `avatarPath` is emitted today. PNG ingestion is a planned,
+> opt-in build feature.
+
 ## 2. Add `data/seasons/<id>.json`
 
 The filename id must match the document `id` (auxiliary files may use

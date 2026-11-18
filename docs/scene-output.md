@@ -136,22 +136,37 @@ a short resolution frame.
 swipe or a re-render does not tick twice. For a new turn,
 `runTurnPipeline` runs:
 
+0. resolve automatic clock holds for an active encounter or beat (best-effort;
+   `clock.autoHold` only enables combat holds by default, so encounter and beat
+   holds are off unless the setting is turned on);
 1. `TICK_TIME` with `turns: 1` (advances `meta.turn`, so beat deadlines and the
    `everyNTurns` cadence can fire);
-2. the player **State Tracker**, when `agents.stateTracker.enabled` is on; its
+2. the off-screen **world tick** when `worldTick.enabled` is on and the clock
+   stage succeeded — faction influence (`state.factions`), threat progress
+   (`state.threats`), NPC movement (`state.characters`), rumors, and headlines
+   (world events), with tick bookkeeping under `flags.worldTick` (see
+   `docs/world-tick.md`);
+3. the deterministic **pacing** analysis when `pacing.enabled` is on; it writes
+   only `flags.pacing` and never changes story state (see `docs/pacing.md`);
+4. the player **State Tracker**, when `agents.stateTracker.enabled` is on; its
    events are applied atomically, and a failure keeps the previous state;
-3. the **Storyline Tracker** via `initiative.afterTurn`, on its existing
+5. the **Storyline Tracker** via `initiative.afterTurn`, on its existing
    `everyNTurns` (default 6) / location-change cadence — not every turn;
-4. a present-cast refresh (`scene.refreshCast({ runDirector: false })`), which
+6. a present-cast refresh (`scene.refreshCast({ runDirector: false })`), which
    updates `scene.present`, `scene.encounter`, and `[NEOTERRA_SCENE]`; manual
-   pins/removals still win;
-5. `MAP_UPDATED` with `reason: 'turn'` and a mounted map refresh;
-6. the interaction UI refresh, then CYOA **after** the trackers so the options
+   pins/removals still win. The **Cast Director is not run** on this path: the
+   turn pipeline passes `runDirector: false`, so the `agents.castDirector`
+   settings are currently inert;
+7. `MAP_UPDATED` with `reason: 'turn'` and a mounted map refresh;
+8. the interaction UI refresh, then CYOA **after** the trackers so the options
    reflect the new state.
 
 Each stage is isolated: a tracker failure is logged and does not block choices.
-The `MAP_UPDATED` refresh and the interaction runtime share one per-chat
-`WorldState` store, so a write is visible to the map without a remount.
+`runTurnPipeline` returns per-stage reports and an `errors[]` array, but the
+shell does not surface them yet, so a failed stage is only visible in the
+console. The `MAP_UPDATED` refresh and the interaction runtime share one
+per-chat `WorldState` store, so a write is visible to the map without a
+remount.
 
 ## Prompt-only world state
 

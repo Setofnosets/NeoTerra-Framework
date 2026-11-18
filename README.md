@@ -30,9 +30,12 @@ small schema-constrained agents that never free-write state.
 - **World state** — one versioned `WorldState` document per chat, written only
   through typed events. Per-chat storage, per-swipe snapshots, and a WAL guard
   against reloads mid-pass.
-- **Agents** — Architect, Storyline Tracker, State Tracker, Cast Director, Lore
-  Agent, Continuity Auditor, Epilogue Agent, Choices Agent, and Bad End
-  Detector. Every call is validated JSON; failures are logged, never applied.
+- **Agents** — every call is validated JSON; failures are logged, never
+  applied. **Wired today:** State Tracker (every assistant turn), Storyline
+  Tracker (its own cadence), Choices Agent (opt-in), and the Epilogue Agent.
+  **Library only, not wired into play yet:** Architect, Cast Director (cast
+  refresh runs with the Director disabled), Lore Agent, Continuity Auditor, Bad
+  End Detector UI, and the agent log panel.
 - **Canon Beat Ledger** — flexible completion, adaptation, short-circuiting,
   soft deadlines with escalating consequences, and a recorded villain victory.
 - **Villain victory** — a ~5-paragraph epilogue, then **Resistance**, **Join the
@@ -60,6 +63,10 @@ small schema-constrained agents that never free-write state.
   of war, a **Relations** graph tab, and a generic **Domain** sensorium for
   villain-POV seasons. All state lives under `WorldState.flags.*`; every
   feature can be switched off without touching a chat.
+
+> **Experience audit:** [docs/experience-audit.md](docs/experience-audit.md)
+> records the 2026-11-18 audit of the in-play experience, the intended-vs-actual
+> matrix, every known gap with a file:line anchor, and the remediation plan.
 
 ---
 
@@ -99,10 +106,13 @@ read Leaflet from a CDN, npm, or another extension's global.
    world book, selects the Director card, and posts an opening scene frame plus
    a **"Season started / You are / Goals / Current situation / Your move"**
    kickoff into the chat. The shell closes and focuses the input.
-4. Play normally. State Tracker runs every assistant turn; Storyline runs every
-   six turns or on a location change; Cast Director runs on scene changes; Lore
-   runs every ten turns. All cadences are configurable. Every assistant turn
-   advances the clock and refreshes the map before CYOA choices are requested.
+4. Play normally. State Tracker runs every assistant turn and Storyline runs
+   every six turns or on a location change; both cadences are configurable. The
+   Cast Director setting exists, but the per-turn cast refresh currently runs
+   with the Director disabled, and the Lore Agent is not wired into the turn
+   loop yet. Every assistant turn advances the clock, runs the off-screen world
+   tick and pacing analysis, and refreshes the map before CYOA choices are
+   requested.
 
 The chat is the primary surface: travel posts a `Location changed: X → Y`
 arrival frame (with the encounter, if any), and a small action bar offers
@@ -421,11 +431,10 @@ SillyTavern chat messages.
   use the manual checklist in the plan for live QA.
 - Imported character cards are not written to the repository by the browser;
   override generation is a download-and-merge workflow.
-- Version drift: `EXTENSION_VERSION` in `src/core/constants.js` currently
-  reports `0.1.0` while `package.json` and `manifest.json` report `1.0.0`. The
-  shell footer/debug API use the constant, so they show the older value.
-  Alignment is pending a check of SillyTavern's manifest compatibility
-  expectations; the manifest is intentionally not changed here.
+- PNG character cards are not ingested yet. `npm run build:data` reads
+  `chara_card_v3` JSON cards from `Chars/<Season>/`; `.png` card art is ignored.
+  Add the JSON twin for now (see
+  [docs/adding-a-season.md](docs/adding-a-season.md)).
 
 ---
 
