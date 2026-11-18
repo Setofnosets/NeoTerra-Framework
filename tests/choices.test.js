@@ -380,6 +380,46 @@ test('cache keys separate messages, swipes, modes, and regenerate runs', () => {
     );
 });
 
+test('a scene frame posted after travel can trigger choices without MESSAGE_RECEIVED', async () => {
+    const settings = settingsFor();
+    let calls = 0;
+    const agent = {
+        run: async ({ state }) => {
+            calls += 1;
+            return normalizeChoicesResult({
+                result: resultWith(['Head inside', 'Ask around', 'Keep walking', 'Check the map']),
+                settings,
+                state,
+                count: 4,
+            });
+        },
+    };
+    const controller = createChoicesController({
+        agent,
+        getState: () => ({
+            chatId: 'chat-travel',
+            ending: { status: 'none' },
+            meta: { turn: 3 },
+            scene: { present: [] },
+        }),
+        getSettings: () => settings,
+    });
+    // The arrival frame is an ordinary assistant message (neither user nor
+    // system), so the guard must allow CYOA for its new index.
+    const sceneFrame = {
+        name: 'Neo Terra',
+        is_user: false,
+        is_system: false,
+        mes: 'Location changed: Central Plaza → Maple Heights\n\nYou arrive.',
+        extra: { neoterra: { scene: { kind: 'travel', key: 'travel:chat-travel:central-plaza:maple-heights:3' } } },
+    };
+    const messages = [assistantMessage('You set out.'), sceneFrame];
+    const view = await controller.request({ messages, messageIndex: 1, swipeId: 0 });
+    assert.equal(view.visible, true);
+    assert.equal(view.choices.length, 4);
+    assert.equal(calls, 1);
+});
+
 test('the agent hides the row when the model fails', async () => {
     const agent = createChoicesAgent({
         runner: {

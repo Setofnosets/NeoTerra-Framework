@@ -10,12 +10,15 @@ import {
     buildOpeningSceneKey,
     buildSceneChatMessage,
     buildSceneKey,
+    buildTravelFrameText,
+    buildTravelSceneKey,
     hasStoryHistory,
     postSceneMessage,
     readSceneExtra,
     sceneKeyOf,
     stripContextBlocks,
 } from '../src/ui/chat-output.js';
+import { postTravelOutcome } from '../src/ui/shell.js';
 
 const NOW = Date.UTC(2037, 4, 1, 12, 30, 0);
 
@@ -275,6 +278,91 @@ test('the opening dedupe key is chat, season, and turn specific', () => {
     assert.equal(buildOpeningSceneKey({}), 'opening:0');
 });
 
+test('a travel frame is the location change header plus the intro paragraph', () => {
+    const text = buildTravelFrameText({
+        fromName: 'Central Plaza',
+        toName: 'Maple Heights',
+        intro: { text: 'Vaiva arrives at Maple Heights, Hilltop, on foot from Central Plaza.\n\nRain on the glass.' },
+    });
+    const [header, body] = text.split('\n\n');
+    assert.equal(header, 'Location changed: Central Plaza → Maple Heights');
+    assert.match(header, /→/);
+    assert.match(body, /Vaiva arrives at Maple Heights/);
+    // Prompt context blocks never survive into a chat frame.
+    const dirty = buildTravelFrameText({
+        fromName: 'A',
+        toName: 'B',
+        intro: { text: 'Arrived.\n[NEOTERRA_SCENE]\nLocation: B' },
+    });
+    assert.doesNotMatch(dirty, /\[NEOTERRA_/);
+    // The header alone is valid when the intro text is empty.
+    assert.equal(
+        buildTravelFrameText({ fromName: 'A', toName: 'B', intro: { text: '' } }),
+        'Location changed: A → B',
+    );
+    // The intro's location name is the destination, never the origin: a missing
+    // origin falls back to a neutral word instead of repeating the destination.
+    assert.equal(
+        buildTravelFrameText({ intro: { locationName: 'Maple Heights', text: '' } }),
+        'Location changed: somewhere → Maple Heights',
+    );
+    assert.equal(buildTravelFrameText({}), 'Location changed: somewhere → a new location');
+});
+
+test('the travel dedupe key is chat, route, and turn specific', () => {
+    assert.equal(
+        buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'b', turn: 3 }),
+        'travel:c1:a:b:3',
+    );
+    assert.notEqual(
+        buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'b', turn: 3 }),
+        buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'b', turn: 4 }),
+    );
+    assert.notEqual(
+        buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'b', turn: 3 }),
+        buildTravelSceneKey({ chatId: 'c2', from: 'a', to: 'b', turn: 3 }),
+    );
+    assert.notEqual(
+        buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'b', turn: 3 }),
+        buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'c', turn: 3 }),
+    );
+    const empty = buildTravelSceneKey({});
+    assert.equal(typeof empty, 'string');
+    assert.ok(empty.length > 0);
+    assert.equal(empty, 'travel:0');
+});
+
+test('a travel frame posts once and a repeat with the same key dedupes', async () => {
+    const ctx = fakeCtx([{ name: 'Player', is_user: true, mes: 'go north' }]);
+    const key = buildTravelSceneKey({ chatId: 'c1', from: 'a', to: 'b', turn: 2 });
+    const frame = () => buildSceneChatMessage({
+        kind: SCENE_KINDS.TRAVEL,
+        text: buildTravelFrameText({ fromName: 'A', toName: 'B', intro: { text: 'Arrived.' } }),
+        key,
+        extra: { from: 'a', to: 'b', turn: 2, encounter: null },
+        now: NOW,
+    });
+    const first = await postSceneMessage(ctx, frame(), { dedupeKey: key });
+    assert.deepEqual(first, { posted: true, index: 1 });
+    assert.equal(ctx.calls.rendered, 1);
+    assert.equal(ctx.calls.saves, 1);
+    assert.equal(ctx.chat[1].mes, 'Location changed: A → B\n\nArrived.');
+    assert.deepEqual(readSceneExtra(ctx.chat[1]), {
+        kind: 'travel',
+        key,
+        from: 'a',
+        to: 'b',
+        turn: 2,
+        encounter: null,
+    });
+
+    const second = await postSceneMessage(ctx, frame(), { dedupeKey: key });
+    assert.equal(second.posted, false);
+    assert.equal(second.deduped, true);
+    assert.equal(ctx.chat.length, 2);
+    assert.equal(ctx.calls.saves, 1);
+});
+
 test('a greeting-only chat is fresh; real story turns are not', () => {
     const greeting = { name: 'Carol', is_user: false, mes: 'Hello.' };
     assert.equal(hasStoryHistory([]), false);
@@ -331,4 +419,89 @@ test('the interceptor injects into the prompt copy only, once, and never into ct
     assert.match(promptCopy.find(isContextMessage).mes, /\[NEOTERRA_SCENE\]/);
     assert.equal(ctx.chat.length, before, 'ctx.chat is unchanged');
     assert.equal(ctx.chat.filter(isContextMessage).length, 0);
+});
+
+/* ------------------------------------------------------------------ *
+ * Travel outcome poster (shell seam)
+ * ------------------------------------------------------------------ */
+
+function travelCtx(chatId = 'c1', initial = []) {
+    const ctx = fakeCtx(initial);
+    ctx.chatId = chatId;
+    ctx.chatMetadata = { neoterra: { worldState: { chatId } } };
+    return ctx;
+}
+
+function travelResult(overrides = {}) {
+    return {
+        ok: true,
+        alreadyThere: false,
+        from: 'central-plaza',
+        to: 'maple-heights',
+        fromName: 'Central Plaza',
+        toName: 'Maple Heights',
+        turns: 1,
+        intro: { text: 'Vaiva arrives at Maple Heights on foot.', locationName: 'Maple Heights' },
+        messageExtra: { from: 'central-plaza', to: 'maple-heights', turns: 1 },
+        state: { meta: { turn: 2 }, scene: { encounter: null } },
+        ...overrides,
+    };
+}
+
+test('a successful travel posts one frame, attaches the record, announces, then requests choices', async () => {
+    const ctx = travelCtx('c1', [{ name: 'Player', is_user: true, mes: 'go north' }]);
+    const order = [];
+    const requests = [];
+    const posted = await postTravelOutcome(ctx, { chatId: 'c1' }, travelResult(), {
+        onPosted: (result) => order.push(`posted:${result.index}`),
+        requestChoices: async (live, index) => {
+            order.push(`choices:${index}`);
+            requests.push({ live, index });
+        },
+    });
+    assert.deepEqual(posted, { posted: true, index: 1 });
+    assert.equal(ctx.chat.length, 2);
+    assert.equal(ctx.calls.rendered, 1);
+    assert.equal(ctx.calls.saves, 1);
+    assert.match(ctx.chat[1].mes, /^Location changed: Central Plaza → Maple Heights\n\n/);
+    assert.equal(ctx.chat[1].extra.neoterra.travel.to, 'maple-heights');
+    assert.equal(ctx.chat[1].extra.neoterra.scene.kind, 'travel');
+    assert.deepEqual(order, ['posted:1', 'choices:1']);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].index, 1);
+});
+
+test('a chat switch aborts the travel post without writing', async () => {
+    const ctx = travelCtx('c1', [{ name: 'Player', is_user: true, mes: 'go' }]);
+    const other = travelCtx('c2');
+    const posted = await postTravelOutcome(ctx, { chatId: 'c1' }, travelResult(), {
+        resolveContext: () => other,
+    });
+    assert.equal(posted, null);
+    assert.equal(ctx.chat.length, 1);
+    assert.equal(ctx.calls.saves, 0);
+});
+
+test('a choices failure never discards the posted frame or throws', async () => {
+    const ctx = travelCtx('c1', []);
+    const posted = await postTravelOutcome(ctx, { chatId: 'c1' }, travelResult(), {
+        requestChoices: async () => { throw new Error('agent aborted'); },
+    });
+    assert.equal(posted.posted, true);
+    assert.equal(ctx.chat.length, 1);
+    assert.equal(ctx.calls.saves, 1);
+});
+
+test('a duplicate travel frame dedupes and still requests choices for its index', async () => {
+    const ctx = travelCtx('c1', []);
+    const result = travelResult();
+    await postTravelOutcome(ctx, { chatId: 'c1' }, result);
+    const requests = [];
+    const second = await postTravelOutcome(ctx, { chatId: 'c1' }, result, {
+        requestChoices: async (_live, index) => { requests.push(index); },
+    });
+    assert.equal(second.posted, false);
+    assert.equal(second.deduped, true);
+    assert.equal(ctx.chat.length, 1);
+    assert.deepEqual(requests, [0]);
 });

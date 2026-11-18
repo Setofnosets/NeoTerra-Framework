@@ -45,6 +45,8 @@ import {
     buildOpeningFrameText,
     buildOpeningSceneKey,
     buildSceneChatMessage,
+    buildTravelFrameText,
+    buildTravelSceneKey,
     hasStoryHistory,
     postSceneMessage,
 } from './chat-output.js';
@@ -456,25 +458,77 @@ function buildMapRuntime(context, panelRef) {
     return mapRuntime;
 }
 
-function recordTravelOnMessage(context, result) {
-    const messages = Array.isArray(context?.chat) ? context.chat : null;
-    if (!messages || !result?.messageExtra) {
-        return false;
+/**
+ * Post the travel arrival frame into the same chat and hand control back: the
+ * frame carries the `extra.neoterra.travel` record and its dedupe key, then the
+ * interaction UI is refreshed and CYOA is requested for the new message index.
+ *
+ * A chat switch during the awaited save must never write into the new chat. A
+ * choices failure (abort, missing agent) is non-fatal: the move and the frame
+ * stand, and the map update has already been announced through `onPosted`.
+ *
+ * Exported for tests; production callers use the default dependencies.
+ */
+export async function postTravelOutcome(context, runtime, result, {
+    onPosted = null,
+    requestChoices = requestChoicesFor,
+    resolveContext = refreshContext,
+    getChatId = currentChatId,
+} = {}) {
+    const live = resolveContext() ?? context;
+    const chatId = runtime?.chatId ?? null;
+    if (!chatId || getChatId(live) !== chatId) {
+        logger.warn('Chat changed; skipping the travel arrival frame');
+        return null;
     }
-    // Prefer the latest assistant message: the travel record describes the
-    // scene the narrator last presented, not the player's own prompt.
-    const message = [...messages].reverse().find((entry) => entry && entry.is_user !== true) ?? null;
-    if (!message) {
-        return false;
+    const turn = result?.state?.meta?.turn ?? 0;
+    const key = buildTravelSceneKey({
+        chatId,
+        from: result?.from,
+        to: result?.to,
+        turn,
+    });
+    const message = buildSceneChatMessage({
+        kind: SCENE_KINDS.TRAVEL,
+        text: buildTravelFrameText({
+            fromName: result?.fromName,
+            toName: result?.toName,
+            intro: result?.intro,
+        }),
+        key,
+        extra: {
+            from: result?.from ?? null,
+            to: result?.to ?? null,
+            turn,
+            encounter: result?.state?.scene?.encounter ?? null,
+        },
+    });
+    // Attach before posting so the persisted frame carries the travel record.
+    if (result?.messageExtra) {
+        attachTravelToMessage(message, result.messageExtra);
+    }
+    const posted = await postSceneMessage(live, message, { dedupeKey: key });
+    if (!posted.posted && !posted.deduped) {
+        return posted;
+    }
+    // Announce the move before the choices round-trip so the map never waits on
+    // an agent call to reflect the new location.
+    try {
+        onPosted?.(posted);
+    } catch (error) {
+        logger.warn('Could not announce the travel arrival', error);
+    }
+    const afterSave = resolveContext() ?? live;
+    if (getChatId(afterSave) !== chatId) {
+        logger.warn('Chat changed after the travel frame; skipping CYOA');
+        return posted;
     }
     try {
-        attachTravelToMessage(message, result.messageExtra);
-        context?.saveChat?.();
-        return true;
+        await requestChoices(afterSave, posted.index);
     } catch (error) {
-        logger.warn('Could not record the travel on the message', error);
-        return false;
+        logger.warn('Could not request choices after travel; the frame stands', error);
     }
+    return posted;
 }
 
 function buildMapTravelHandler(context, runtime, panelRef) {
@@ -503,9 +557,24 @@ function buildMapTravelHandler(context, runtime, panelRef) {
             bus.emit(EVENTS.MAP_UPDATED, { travel: result });
             return false;
         }
-        recordTravelOnMessage(context, result);
-        panelRef?.refresh?.();
-        bus.emit(EVENTS.MAP_UPDATED, { travel: result, intro: result.intro ?? null });
+        const announce = () => {
+            panelRef?.refresh?.();
+            bus.emit(EVENTS.MAP_UPDATED, { travel: result, intro: result.intro ?? null });
+        };
+        if (result.alreadyThere === true) {
+            announce();
+            return true;
+        }
+        const posted = await postTravelOutcome(context, runtime, result, { onPosted: announce });
+        if (!posted) {
+            // No chat/aborted post: still let the map reflect the committed move.
+            announce();
+            return true;
+        }
+        // A partial post (chat array only, no renderer) still needs its choices.
+        if (!posted.posted && !posted.deduped) {
+            announce();
+        }
         return true;
     };
 }
@@ -718,8 +787,11 @@ function buildInteractionRuntime(context) {
         return interactionRuntime;
     }
     let store;
+    // Share the map runtime's store for this chat: travel mutates the map store,
+    // and a second cached copy would give the choices agent the pre-travel world.
+    const shared = mapRuntime && mapRuntime.chatId === chatId ? mapRuntime : null;
     try {
-        store = createWorldStateStore({
+        store = shared?.store ?? createWorldStateStore({
             metadata,
             saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
             storage: readLocalStorage(),
@@ -733,7 +805,9 @@ function buildInteractionRuntime(context) {
         return null;
     }
     const season = metadata.neoterra?.seasonDefinition ?? null;
-    const { initiative, ending, runner } = buildStorylineInitiative(context, store, season);
+    const { initiative, ending, runner } = shared?.initiative
+        ? { initiative: shared.initiative, ending: shared.ending, runner: shared.runner }
+        : buildStorylineInitiative(context, store, season);
     const choicesAgent = createChoicesAgent({
         runner,
         getSettings: () => getSettings(context),

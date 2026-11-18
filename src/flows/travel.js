@@ -51,6 +51,7 @@ function isAbortError(error) {
  *   to: string|null,
  *   path?: string[],
  *   bridges?: string[],
+ *   bridgeNames?: string[],
  *   distance?: number,
  *   ability?: string|null,
  *   turns?: number,
@@ -62,6 +63,7 @@ export function buildTravelInitiativeContext({
     to = null,
     path = [],
     bridges = [],
+    bridgeNames = [],
     distance = 0,
     ability = null,
     turns = 0,
@@ -77,6 +79,12 @@ export function buildTravelInitiativeContext({
         path: normalizedPath,
         bridges: Array.isArray(bridges)
             ? bridges.filter((id) => typeof id === 'string')
+            : [],
+        // Display names for the same spans, so the arrival intro never shows
+        // raw `bridge:` ids. Blank entries are dropped: a name is only useful
+        // when it is non-empty.
+        bridgeNames: Array.isArray(bridgeNames)
+            ? bridgeNames.filter((name) => typeof name === 'string' && name.length > 0)
             : [],
         distance: Number.isFinite(distance) ? distance : 0,
         turns: Number.isFinite(turns) ? turns : 0,
@@ -371,6 +379,8 @@ export function createTravelFlow({
                 alreadyThere: true,
                 from,
                 to,
+                fromName: plan.fromName ?? from,
+                toName: plan.toName ?? to,
                 path: [to],
                 bridges: [],
                 turns: 0,
@@ -399,6 +409,7 @@ export function createTravelFlow({
             to,
             path: plan.path,
             bridges: plan.bridges,
+            bridgeNames: plan.bridgeNames ?? [],
             distance: plan.distance,
             turns: plan.turns,
             modes: plan.modes,
@@ -452,6 +463,8 @@ export function createTravelFlow({
             alreadyThere: false,
             from,
             to,
+            fromName: fromNode?.name ?? from,
+            toName: toNode?.name ?? to,
             path: plan.path,
             bridges: plan.bridges,
             bridgeNames: plan.bridgeNames ?? [],

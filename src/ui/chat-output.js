@@ -144,6 +144,11 @@ export function buildOpeningSceneKey({ chatId, seasonId, turn } = {}) {
     return buildSceneKey('opening', chatId, seasonId, turn ?? 0);
 }
 
+/** Dedupe key for a travel arrival frame: one per chat, route, and turn. */
+export function buildTravelSceneKey({ chatId, from, to, turn } = {}) {
+    return buildSceneKey('travel', chatId, from, to, turn ?? 0);
+}
+
 function firstNonEmpty(...values) {
     for (const value of values) {
         const text = typeof value === 'string' ? value.trim() : '';
@@ -152,6 +157,21 @@ function firstNonEmpty(...values) {
         }
     }
     return '';
+}
+
+/**
+ * Travel arrival frame text: the location change header, then the deterministic
+ * location intro as its own paragraph. `intro.text` is already prose-only, and
+ * any context block is stripped defensively; the frame never copies WorldState.
+ */
+export function buildTravelFrameText({ fromName, toName, from, to, intro } = {}) {
+    // The intro's locationName is the destination, so it must never be used as
+    // the origin: prefer the explicit origin name, then the origin id.
+    const origin = firstNonEmpty(fromName, from, 'somewhere');
+    const destination = firstNonEmpty(toName, intro?.locationName, to, 'a new location');
+    const header = `Location changed: ${origin} → ${destination}`;
+    const body = stripContextBlocks(intro?.text);
+    return body.length > 0 ? `${header}\n\n${body}` : header;
 }
 
 const NEUTRAL_GOALS = 'No goals are recorded yet — set your own course.';

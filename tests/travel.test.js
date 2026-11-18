@@ -482,6 +482,51 @@ test('travel moves the player, advances time, journals the trip, and builds an i
     assert.equal(result.messageExtra.to, 'maple-heights');
 });
 
+test('a cross-district trip keeps bridge display names in the arrival', async () => {
+    const store = makeStore();
+    const flow = makeTravel(store, { initiative: null });
+    const result = await flow.travel({ to: 'maple-heights' });
+    assert.equal(result.ok, true, result.message);
+    assert.ok(result.bridges.length >= 1, 'the route crosses at least one bridge');
+    assert.equal(result.bridgeNames.length, result.bridges.length);
+    for (const name of result.bridgeNames) {
+        assert.equal(typeof name, 'string');
+        assert.doesNotMatch(name, /^bridge:/, 'the context carries display names, not ids');
+        assert.ok(result.intro.text.includes(name), `the arrival names "${name}"`);
+    }
+    assert.doesNotMatch(result.intro.text, /bridge:/, 'no bridge id leaks into the arrival');
+});
+
+test('the initiative context carries normalized bridge display names', async () => {
+    const captured = [];
+    const store = makeStore();
+    const flow = makeTravel(store, {
+        initiative: {
+            afterLocationChange: async (options) => {
+                captured.push(options);
+                return { ran: true };
+            },
+        },
+    });
+    const result = await flow.travel({ to: 'maple-heights' });
+    assert.equal(result.ok, true);
+    assert.deepEqual(captured[0].travel.bridgeNames, result.bridgeNames);
+    assert.deepEqual(buildTravelInitiativeContext({ bridgeNames: ['A', '', 3] }).bridgeNames, ['A']);
+    assert.deepEqual(buildTravelInitiativeContext({}).bridgeNames, []);
+});
+
+test('a successful trip names both ends of the route', async () => {
+    const store = makeStore();
+    const flow = makeTravel(store, { initiative: null });
+    const result = await flow.travel({ to: 'maple-heights' });
+    assert.equal(result.ok, true);
+    assert.equal(result.fromName, 'Central Plaza');
+    assert.equal(result.toName, 'Maple Heights');
+    assert.equal(result.fromName, result.intro.fromName);
+    assert.equal(result.state.locations[result.from].name, result.fromName);
+    assert.equal(result.state.locations[result.to].name, result.toName);
+});
+
 test('a canonical player moves with the scene location', async () => {
     const store = makeStore({ player: { identity: 'canon', characterId: 's1.vaiva.colorgarde' } });
     const flow = makeTravel(store);
