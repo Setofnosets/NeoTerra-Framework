@@ -83,6 +83,14 @@ export const DEFAULT_SETTINGS = freezeDeep({
         prompt: '',
     },
 
+    // Season kickoff. The opening frame and the "your move" card are always
+    // posted; `auto` additionally sends `prompt` as the player on a fresh chat,
+    // which triggers one narrator turn. Off by default.
+    kickoff: {
+        auto: false,
+        prompt: 'I take in my surroundings and step into the story.',
+    },
+
     badEnds: {
         enabled: false,
         allowDeadContinuation: false,

@@ -2,15 +2,15 @@
 
 ## Meta
 - Slug: fix-identity-settings-map-travel-chat
-- Status: in progress — steps 1–3 complete
+- Status: in progress — steps 1–5 complete
 - Date: 2026-11-17
 
 ## Progress
-- [x] 1. Fix canon identity selection in the season menu — done (b015be7)
-- [x] 2. Make "Open settings panel" actually open the settings drawer — done (b015be7)
-- [x] 3. Make the map tab and map window fit vertically — done (b015be7)
-- [ ] 4. Add a reusable in-chat scene message writer
-- [ ] 5. Add an explicit season kickoff in the main chat
+- [x] 1. Fix canon identity selection in the season menu — done (733bbac)
+- [x] 2. Make "Open settings panel" actually open the settings drawer — done (733bbac)
+- [x] 3. Make the map tab and map window fit vertically — done (733bbac)
+- [x] 4. Add a reusable in-chat scene message writer — done (68607a3)
+- [x] 5. Add an explicit season kickoff in the main chat — done (68607a3)
 - [ ] 6. Detect and persist a location encounter
 - [ ] 7. Hand a location change back to the chat (arrival + encounter)
 - [ ] 8. Run the per-turn trackers, advance the clock, refresh map state, then offer CYOA

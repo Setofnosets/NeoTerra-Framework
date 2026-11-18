@@ -489,6 +489,31 @@ test('the identity step renders canon radios with data-character-id and keeps th
     }
 });
 
+test('season start hands the opening frame back to the chat', () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    const shell = readFileSync(join(root, 'src/ui/shell.js'), 'utf8');
+    const defaults = readFileSync(join(root, 'src/core/defaults.js'), 'utf8');
+    const settingsHtml = readFileSync(join(root, 'src/ui/settings.html'), 'utf8');
+
+    // The season menu reports a completed start; the shell owns the chat write.
+    assert.match(shell, /onEntered:\s*\(result\)\s*=>/);
+    assert.match(shell, /postSceneMessage\(/);
+    assert.match(shell, /SCENE_KINDS\.OPENING/);
+    assert.match(shell, /buildOpeningFrameText\(/);
+    assert.match(shell, /closeShell\(\)/);
+    assert.match(shell, /send_textarea'\)\?\.focus/);
+
+    // Auto-kickoff is off by default and sends the prompt through ST's send path.
+    assert.match(defaults, /kickoff:\s*\{[\s\S]*?auto:\s*false/);
+    assert.match(shell, /settings\?\.kickoff\?\.auto === true/);
+    assert.match(shell, /sendChoiceText\(prompt\)/);
+    assert.doesNotMatch(shell, /Generate\(/);
+    // An empty kickoff prompt must still request CYOA for the posted frame.
+    assert.match(shell, /if \(!\(auto && freshChat && prompt\.length > 0\)\)/);
+    assert.match(settingsHtml, /data-neoterra-path="kickoff\.auto"/);
+    assert.match(settingsHtml, /data-neoterra-path="kickoff\.prompt"/);
+});
+
 test('season menu markup escapes registry-sourced labels', () => {
     assert.equal(escapeHtml('<b>"x"</b>'), '&lt;b&gt;&quot;x&quot;&lt;/b&gt;');
     const entries = buildSeasonMenuEntries(seasonDocuments, { registry, locations });

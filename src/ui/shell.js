@@ -41,6 +41,14 @@ import { createEndingFlow, isEndingScreenActive } from '../flows/ending.js';
 import { mountEndingPanel, disposeEndingPanel } from './ending.js';
 import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
 import {
+    SCENE_KINDS,
+    buildOpeningFrameText,
+    buildOpeningSceneKey,
+    buildSceneChatMessage,
+    hasStoryHistory,
+    postSceneMessage,
+} from './chat-output.js';
+import {
     createCombatFlow,
     registerCombatIntegrations,
     unregisterCombatIntegrations,
@@ -226,6 +234,97 @@ function mountShell() {
     return root;
 }
 
+function seasonIdOf(result) {
+    // `meta.sceneId` is a scene id ('opening'), not a season id; an absent
+    // season id is simply dropped from the dedupe key.
+    return result?.opening?.seasonId ?? result?.state?.seasonId ?? null;
+}
+
+/**
+ * Post the season opening frame, hand control back to the chat, and (only when
+ * explicitly enabled on a fresh chat) send one player kickoff prompt.
+ *
+ * This is the "the story has started" signal: before it, `enterSeason` only
+ * seeded metadata and dropped the user back on the season list.
+ */
+async function handleSeasonEntered(result) {
+    const live = refreshContext() ?? ctx;
+    const seasonId = seasonIdOf(result);
+    const turn = Number.isFinite(result?.state?.meta?.turn) ? result.state.meta.turn : 0;
+    const chatId = currentChatId(live);
+    if (!chatId || !Array.isArray(live?.chat)) {
+        logger.warn('Season started without an open chat; skipping the opening frame');
+        return null;
+    }
+    const freshChat = !hasStoryHistory(live.chat);
+    const key = buildOpeningSceneKey({ chatId, seasonId, turn });
+    const message = buildSceneChatMessage({
+        kind: SCENE_KINDS.OPENING,
+        text: buildOpeningFrameText({
+            state: result?.state ?? null,
+            season: live?.chatMetadata?.neoterra?.seasonDefinition ?? null,
+            opening: result?.opening ?? null,
+        }),
+        key,
+        extra: { seasonId, turn },
+    });
+
+    // The post is synchronous up to `saveChat`, so re-check the chat right
+    // before writing: a chat switch must never receive another world's frame.
+    if (currentChatId(refreshContext() ?? live) !== chatId) {
+        logger.warn('Chat changed during season start; skipping the opening frame');
+        return null;
+    }
+    const posted = await postSceneMessage(live, message, { dedupeKey: key });
+    if (posted.posted || posted.deduped) {
+        closeShell();
+    }
+    document.getElementById('send_textarea')?.focus?.();
+    bus.emit(EVENTS.MAP_UPDATED, { reason: 'season-start', seasonId });
+
+    const settings = getSettings(live);
+    const auto = settings?.kickoff?.auto === true;
+    const prompt = typeof settings?.kickoff?.prompt === 'string' ? settings.kickoff.prompt.trim() : '';
+    const index = Number.isInteger(posted.index) ? posted.index : null;
+
+    // With an immediate auto-kickoff the narrator's reply owns the choices;
+    // requesting them for the frame too would flash and then replace chips.
+    // An empty kickoff prompt still only posts the frame, so it keeps chips.
+    if (!(auto && freshChat && prompt.length > 0)) {
+        await requestChoicesFor(live, index);
+    }
+    if (auto && freshChat && prompt.length > 0) {
+        // A chat switch during the awaited save must not send into the new chat.
+        if (currentChatId(refreshContext() ?? live) !== chatId) {
+            logger.warn('Chat changed before the auto-kickoff; skipping the send');
+            return posted;
+        }
+        // Normal ST send path: one player message, one narrator turn.
+        sendChoiceText(prompt);
+    }
+    return posted;
+}
+
+async function requestChoicesFor(live, messageIndex) {
+    if (!Number.isInteger(messageIndex) || messageIndex < 0) {
+        return null;
+    }
+    const runtime = await refreshInteractionUi(live);
+    if (!runtime) {
+        return null;
+    }
+    const messages = Array.isArray(live?.chat) ? live.chat : [];
+    const view = await runtime.controller.request({
+        messages,
+        messageIndex,
+        swipeId: 0,
+    });
+    if (view?.visible) {
+        choicesBar?.refresh?.();
+    }
+    return view;
+}
+
 async function mountSeasonPanel(context) {
     if (!hasDom()) {
         return null;
@@ -236,7 +335,16 @@ async function mountSeasonPanel(context) {
     }
     const host = panel.querySelector('[data-neoterra-season-host]') ?? panel;
     try {
-        return await mountSeasonMenu({ root: host, ctx: context, getContext: refreshContext });
+        return await mountSeasonMenu({
+            root: host,
+            ctx: context,
+            getContext: refreshContext,
+            onEntered: (result) => {
+                handleSeasonEntered(result).catch((error) => {
+                    logger.warn('Could not hand the season start back to the chat', error);
+                });
+            },
+        });
     } catch (error) {
         logger.warn('Could not mount the season menu', error);
         return null;

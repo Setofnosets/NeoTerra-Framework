@@ -71,6 +71,23 @@
                 <p class="neoterra-hint">Start or load a chat world to list its cast.</p>
             </div>
 
+            <h4 class="neoterra-section-title">Season kickoff</h4>
+            <p class="neoterra-hint">
+                Starting a season always posts an opening frame plus a short “your move” card in the
+                chat and focuses the input. Auto-kickoff additionally sends one player message on a
+                fresh chat, which makes the narrator reply immediately. It is skipped when the chat
+                already has story history.
+            </p>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="kickoff.auto">
+                    <span>Send the kickoff prompt automatically (off by default)</span>
+                </label>
+            </div>            <label class="neoterra-field neoterra-field-wide">
+                <span>Kickoff prompt (sent as the player)</span>
+                <textarea rows="2" data-neoterra-path="kickoff.prompt"></textarea>
+            </label>
+
             <h4 class="neoterra-section-title">CYOA choices</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">

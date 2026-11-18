@@ -1637,6 +1637,25 @@
     pointer-events: auto;
 }
 
+/* ---------- In-chat scene frames ---------- */
+
+/* Scene narration is real chat history, but it is not the narrator's prose:
+   a left accent and a muted name keep it readable without restyling ST's
+   chat message bubbles. */
+.mes.neoterra-scene-message .mes_text {
+    border-left: 3px solid var(--nt-accent);
+    padding-left: 0.75rem;
+}
+
+.mes.neoterra-scene-message .name_text {
+    color: var(--nt-accent);
+    letter-spacing: 0.04em;
+}
+
+.mes.neoterra-scene-message {
+    background: linear-gradient(90deg, var(--nt-accent-glow), transparent 60%);
+}
+
 /* ---------- Choices bar ---------- */
 
 .neoterra-choices-host {
