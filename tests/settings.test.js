@@ -327,3 +327,14 @@ test('the world-tick settings normalizer fills defaults and keeps unknown keys',
     assert.equal(legacy.worldTick.enabled, true);
     assert.equal(legacy.worldTick.allowNpcMovesDuringCombat, false);
 });
+
+test('the map off-screen settings normalize with defaults', () => {
+    const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.equal(defaults.map.showOffscreen, true);
+
+    const custom = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        map: { showOffscreen: false },
+    });
+    assert.equal(custom.map.showOffscreen, false);
+});

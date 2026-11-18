@@ -10,6 +10,7 @@ import {
     MAP_LAYER_ORDER,
     buildMapFeatureIndex,
     buildMapSubmenu,
+    buildOffscreenFeed,
     buildMapViewModel,
     clearGeneratedMapCaches,
     loadBridges,
@@ -1031,4 +1032,71 @@ test('internal self-transitions do not fire onChange (the panel repaints itself)
     assert.equal(flow.send('SELECT', { id: 'a' }), true);
     assert.equal(flow.state, 'location');
     assert.deepEqual(changes, []);
+});
+
+test('the off-screen feed model is snapshot-stable for a fixture state', () => {
+    const state = {
+        locations: {
+            'neon-docks': { id: 'neon-docks', name: 'Neon Docks', factionId: 'clarity' },
+        },
+        factions: {
+            clarity: { id: 'clarity', name: 'Clarity Incorporated' },
+            petrabyte: { id: 'petrabyte', name: 'PetraByte' },
+        },
+        recentEvents: [
+            {
+                turn: 4,
+                date: '2037-03-04',
+                summary: 'Clarity patrols the docks.',
+                headline: 'Patrols tighten at the docks',
+                actors: [],
+                locationId: 'neon-docks',
+                tags: ['offscreen', 'tick', 'tick:20', 'faction:clarity'],
+            },
+            {
+                turn: 5,
+                date: '2037-03-05',
+                summary: 'Resistance whispers spread.',
+                headline: 'Whispers near the tower',
+                actors: [],
+                locationId: 'neon-docks',
+                tags: ['offscreen', 'tick', 'tick:25', 'faction:petrabyte'],
+            },
+        ],
+    };
+    const feed = buildOffscreenFeed(state);
+    assert.deepEqual(feed, [
+        {
+            id: '5:2037-03-05:neon-docks:0',
+            turn: 5,
+            date: '2037-03-05',
+            summary: 'Resistance whispers spread.',
+            headline: 'Whispers near the tower',
+            text: 'Whispers near the tower',
+            factionId: 'petrabyte',
+            factionName: 'PetraByte',
+            controlledByFactionId: 'clarity',
+            controlledByFactionName: 'Clarity Incorporated',
+            locationId: 'neon-docks',
+            locationName: 'Neon Docks',
+            tags: ['offscreen', 'tick', 'tick:25', 'faction:petrabyte'],
+        },
+        {
+            id: '4:2037-03-04:neon-docks:1',
+            turn: 4,
+            date: '2037-03-04',
+            summary: 'Clarity patrols the docks.',
+            headline: 'Patrols tighten at the docks',
+            text: 'Patrols tighten at the docks',
+            factionId: 'clarity',
+            factionName: 'Clarity Incorporated',
+            controlledByFactionId: null,
+            controlledByFactionName: null,
+            locationId: 'neon-docks',
+            locationName: 'Neon Docks',
+            tags: ['offscreen', 'tick', 'tick:20', 'faction:clarity'],
+        },
+    ]);
+    // Rebuilding from the same state yields the same snapshot.
+    assert.deepEqual(buildOffscreenFeed(state), feed);
 });

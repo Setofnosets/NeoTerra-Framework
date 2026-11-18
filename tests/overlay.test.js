@@ -13,6 +13,7 @@ import {
     buildFactionViews,
     buildHeadlineViews,
     buildMapViewModel,
+    buildOffscreenFeed,
     buildRegionOverlayStyles,
     buildThreatViews,
     deleteMapOverride,
@@ -39,6 +40,7 @@ import {
     renderFactionOverlay,
     renderHeadlines,
     renderMapEditor,
+    renderOffscreenFeed,
     renderThreatOverlay,
     renderVirtualNodeForm,
     renderWorldOverlayMarkup,
@@ -325,6 +327,235 @@ test('overlay settings can hide sections without breaking the model', () => {
     assert.equal(model.threats.length, 0);
     assert.equal(model.factions.length, 0);
     assert.equal(model.headlines.length, 0);
+});
+
+/* ------------------------------------------------------------------ *
+ * Off-screen feed
+ * ------------------------------------------------------------------ */
+
+function offscreenState(patch = {}) {
+    return worldState({
+        locations: {
+            'clarity-hq': {
+                id: 'clarity-hq',
+                name: 'Clarity Incorporated HQ',
+                factionId: 'clarity',
+                status: 'patrolled',
+                present: [],
+                visited: true,
+            },
+            'neon-docks': {
+                id: 'neon-docks',
+                name: 'Neon Docks',
+                factionId: 'petrabyte',
+                status: 'contested',
+                present: [],
+                visited: true,
+            },
+        },
+        recentEvents: [
+            { turn: 1, date: '2037-03-01', summary: 'Season begins.', actors: [], locationId: 'clarity-hq', tags: ['season-start'] },
+            { turn: 2, date: '2037-03-02', summary: 'A quiet morning.', actors: [], locationId: 'neon-docks', tags: ['travel'] },
+            {
+                turn: 3,
+                date: '2037-03-03',
+                summary: 'Clarity patrols the docks.',
+                headline: 'Patrols tighten at the docks',
+                actors: [],
+                locationId: 'neon-docks',
+                tags: ['offscreen', 'tick', 'tick:15', 'faction:clarity'],
+            },
+            {
+                turn: 4,
+                date: '2037-03-04',
+                summary: 'Resistance whispers spread near Clarity HQ.',
+                headline: 'Whispers near the tower',
+                actors: [],
+                locationId: 'clarity-hq',
+                tags: ['offscreen', 'tick', 'tick:20', 'faction:petrabyte', 'resistance'],
+            },
+            {
+                turn: 5,
+                date: '2037-03-05',
+                summary: 'Smoke over an unmapped warehouse.',
+                actors: [],
+                locationId: 'ghost-location',
+                tags: ['offscreen', 'tick', 'tick:25'],
+            },
+        ],
+        ...patch,
+    });
+}
+
+test('the off-screen feed is newest-first, capped, and names the actor and location', () => {
+    const feed = buildOffscreenFeed(offscreenState(), { limit: 2 });
+    assert.equal(feed.length, 2);
+    assert.equal(feed[0].text, 'Smoke over an unmapped warehouse.');
+    assert.equal(feed[0].locationId, 'ghost-location');
+    // Unknown location degrades to the raw id, never undefined.
+    assert.equal(feed[0].locationName, 'ghost-location');
+    assert.equal(feed[0].factionId, null);
+    assert.equal(feed[1].text, 'Whispers near the tower');
+    // The actor comes from the faction tag, not from who controls the location.
+    assert.equal(feed[1].factionName, 'PetraByte');
+    assert.equal(feed[1].locationName, 'Clarity Incorporated HQ');
+    assert.equal(feed[1].controlledByFactionName, 'Clarity Incorporated');
+
+    const three = buildOffscreenFeed(offscreenState(), { limit: 3 });
+    assert.equal(three.length, 3);
+    assert.equal(three[2].factionName, 'Clarity Incorporated');
+    assert.equal(three[2].controlledByFactionName, 'PetraByte');
+
+    // The cap is 4 regardless of how many rows exist or what the caller asks.
+    assert.equal(buildOffscreenFeed(offscreenState(), { limit: 99 }).length, 3);
+});
+
+test('an unknown faction tag degrades to the id instead of undefined', () => {
+    const state = offscreenState();
+    state.recentEvents.push({
+        turn: 7,
+        date: '2037-03-07',
+        summary: 'A ghost faction moves.',
+        headline: 'Ghost activity',
+        actors: [],
+        locationId: 'neon-docks',
+        tags: ['offscreen', 'tick', 'tick:35', 'faction:ghost-faction'],
+    });
+    const feed = buildOffscreenFeed(state, { limit: 1 });
+    assert.equal(feed[0].factionId, 'ghost-faction');
+    assert.equal(feed[0].factionName, 'ghost-faction');
+});
+
+test('the off-screen feed passes through the content gate', () => {
+    const state = offscreenState();
+    state.recentEvents.push({
+        turn: 6,
+        date: '2037-03-06',
+        summary: 'Graphic violence erupts near the docks. Traders flee.',
+        headline: 'Graphic violence at the docks',
+        actors: [],
+        locationId: 'neon-docks',
+        tags: ['offscreen', 'tick', 'tick:30'],
+    });
+    const strict = buildOffscreenFeed(state, { limit: 1, contentGate: 'strict' });
+    assert.equal(strict.length, 1);
+    assert.doesNotMatch(strict[0].summary, /Graphic violence/i);
+    assert.match(strict[0].summary, /Traders flee/);
+    assert.doesNotMatch(strict[0].headline, /Graphic violence/i);
+    assert.doesNotMatch(strict[0].text, /Graphic violence/i);
+
+    const full = buildOffscreenFeed(state, { limit: 1, contentGate: 'full' });
+    assert.match(full[0].summary, /Graphic violence/);
+});
+
+test('per-player hard limits gate the feed even with a full global gate', () => {
+    const state = offscreenState();
+    state.recentEvents.push({
+        turn: 6,
+        date: '2037-03-06',
+        summary: 'Graphic violence erupts near the docks. Traders flee.',
+        headline: 'Graphic violence at the docks',
+        actors: [],
+        locationId: 'neon-docks',
+        tags: ['offscreen', 'tick', 'tick:30'],
+    });
+    const feed = buildOffscreenFeed(state, {
+        limit: 1,
+        contentGate: 'full',
+        contentLimits: { player: 'strict' },
+    });
+    assert.equal(feed.length, 1);
+    assert.doesNotMatch(feed[0].text, /Graphic violence/i);
+    assert.match(feed[0].text, /Traders flee/);
+});
+
+test('map.showOffscreen hides the model section and the markup section', () => {
+    const state = offscreenState();
+    const shown = buildWorldOverlay({
+        state,
+        season: seasonS4,
+        viewModel: viewModel(state),
+        settings: { showOffscreen: true },
+    });
+    assert.equal(shown.offscreen.length, 3);
+    assert.equal(shown.counts.offscreen, 3);
+    const markup = renderWorldOverlayMarkup(shown);
+    assert.match(markup, /data-neoterra-overlay-section="offscreen"/);
+    assert.match(markup, /City Desk \/ Off-screen/);
+    assert.match(markup, /Whispers near the tower/);
+
+    const hidden = buildWorldOverlay({
+        state,
+        season: seasonS4,
+        viewModel: viewModel(state),
+        settings: { showOffscreen: false },
+    });
+    assert.equal(hidden.offscreen.length, 0);
+    assert.doesNotMatch(renderWorldOverlayMarkup(hidden), /data-neoterra-overlay-section="offscreen"/);
+
+    // Empty feed renders no empty heading at all.
+    const empty = buildWorldOverlay({ state: worldState(), season: seasonS4, viewModel: viewModel() });
+    assert.equal(empty.offscreen.length, 0);
+    assert.doesNotMatch(renderWorldOverlayMarkup(empty), /City Desk/);
+    assert.equal(renderOffscreenFeed([]), '');
+});
+
+test('the overlay gate applies to markup headlines and activity, not just the city desk', () => {
+    const state = offscreenState();
+    state.recentEvents.push({
+        turn: 6,
+        date: '2037-03-06',
+        summary: 'Graphic violence erupts near the docks. Traders flee.',
+        headline: 'Graphic violence at the docks',
+        actors: [],
+        locationId: 'neon-docks',
+        tags: ['offscreen', 'tick', 'tick:30', 'faction:clarity'],
+    });
+    const model = buildWorldOverlay({
+        state,
+        season: seasonS4,
+        viewModel: viewModel(state),
+        settings: { contentGate: 'strict' },
+    });
+    const markup = renderWorldOverlayMarkup(model);
+    assert.doesNotMatch(markup, /Graphic violence/i);
+    assert.equal(model.headlines.some((entry) => /Graphic violence/i.test(entry.headline)), false);
+    assert.equal(
+        model.namedActivity.some((entry) => /Graphic violence/i.test(entry.headline ?? '')),
+        false,
+    );
+});
+
+test('the feed tolerates malformed events and clamps invalid limits', () => {
+    const state = offscreenState();
+    state.recentEvents.push(null, { tags: 'not-an-array' }, { turn: 9, tags: ['offscreen'] });
+    const feed = buildOffscreenFeed(state, { limit: 0 });
+    assert.ok(feed.length >= 1);
+    assert.ok(feed.length <= 4);
+    assert.equal(buildOffscreenFeed({ recentEvents: 'nope' }).length, 0);
+});
+
+test('building the off-screen feed performs no network access', () => {    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = () => {
+        calls += 1;
+        throw new Error('the overlay must not fetch');
+    };
+    try {
+        const model = buildWorldOverlay({
+            state: offscreenState(),
+            season: seasonS4,
+            viewModel: viewModel(offscreenState()),
+        });
+        assert.ok(model.offscreen.length > 0);
+        assert.equal(calls, 0);
+    } finally {
+        if (original === undefined) {
+            delete globalThis.fetch;
+        } else {
+            globalThis.fetch = original;
+        }
+    }
 });
 
 /* ------------------------------------------------------------------ *

@@ -360,6 +360,7 @@ export async function mountMapPanel(options = {}) {
         // machine reached `closed` but nothing was hidden.
         onClose: typeof onClose === 'function' ? onClose : null,
         onMapStateChange: options.onMapStateChange ?? null,
+        getSettings: typeof options.getSettings === 'function' ? options.getSettings : null,
         season: options.season ?? null,
         flow: null,
         overlay: null,
@@ -1304,6 +1305,18 @@ export function refreshMapPanel() {
     const state = mounted;
     if (!state?.sources || !state.viewModel) {
         return null;
+    }
+    // Settings can change mid-chat (including the content gate); re-read them so
+    // a repaint never renders with stale gating or visibility.
+    if (typeof state.getSettings === 'function') {
+        try {
+            const next = state.getSettings();
+            if (next && typeof next === 'object') {
+                state.settings = next;
+            }
+        } catch {
+            // A settings read failure keeps the last known map settings.
+        }
     }
     const worldState = readState(state);
     state.viewModel = buildPanelViewModel(state.sources, worldState);

@@ -809,11 +809,23 @@ async function mountMapPanelComponent(context) {
             getSources: () => ref.panel?.getSources?.() ?? null,
             refresh: () => ref.panel?.refresh?.(),
         });
+        // The overlay gates off-screen text at render time; contentGate and
+        // contentLimits are top-level settings, not map settings. The panel
+        // re-reads this getter on every repaint.
+        const mapSettingsNow = () => {
+            const whole = getSettings(refreshContext() ?? context);
+            return {
+                ...(whole.map ?? {}),
+                contentGate: whole.contentGate,
+                contentLimits: whole.contentLimits,
+            };
+        };
         const panel = await mountMapPanel({
             root: host,
             ctx: context,
             season: context?.chatMetadata?.neoterra?.seasonDefinition ?? null,
-            settings: getSettings(context).map ?? {},
+            settings: mapSettingsNow(),
+            getSettings: mapSettingsNow,
             store: runtime?.store ?? null,
             onTravel,
             // The toolbar X used to only send CLOSE to the panel's own state

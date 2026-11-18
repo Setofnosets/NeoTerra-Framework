@@ -36,6 +36,7 @@ export const OVERLAY_HEADINGS = Object.freeze({
     factions: 'Factions',
     rumors: 'Rumours',
     headlines: 'Headlines',
+    offscreen: 'City Desk / Off-screen',
     divergence: 'Divergence',
     editor: 'Map editor',
 });
@@ -176,6 +177,28 @@ export function renderHeadlines(headlines = []) {
     </ul>`;
 }
 
+/**
+ * Off-screen city activity: newest first. `text` is already content-gated; the
+ * location controller is a labelled aside, never presented as the actor.
+ */
+export function renderOffscreenFeed(entries = []) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+        return '';
+    }
+    return `
+    <ul class="neoterra-overlay-offscreen">
+        ${entries.map((entry) => `
+        <li data-neoterra-overlay-offscreen="${escapeOverlayHtml(entry.id)}">
+            <span class="neoterra-overlay-dateline">T${escapeOverlayHtml(entry.turn)}</span>
+            <span>
+                ${entry.factionName ? `<strong>${escapeOverlayHtml(entry.factionName)}</strong> — ` : ''}
+                ${escapeOverlayHtml(entry.text ?? entry.headline)}
+                ${entry.locationName ? `<span class="neoterra-overlay-offscreen-place">${escapeOverlayHtml(entry.locationName)}${entry.controlledByFactionName ? ` — controlled by ${escapeOverlayHtml(entry.controlledByFactionName)}` : ''}</span>` : ''}
+            </span>
+        </li>`).join('')}
+    </ul>`;
+}
+
 /** The complete overlay markup. `model` comes from `buildWorldOverlay`. */
 export function renderWorldOverlayMarkup(model, { collapsed = false } = {}) {
     if (!model?.hasWorld) {
@@ -209,6 +232,12 @@ export function renderWorldOverlayMarkup(model, { collapsed = false } = {}) {
                 <h5>${OVERLAY_HEADINGS.headlines}</h5>
                 ${renderHeadlines(model.headlines)}
             </div>
+            ${Array.isArray(model.offscreen) && model.offscreen.length > 0
+                ? `<div class="neoterra-overlay-section" data-neoterra-overlay-section="offscreen">
+                <h5>${OVERLAY_HEADINGS.offscreen}</h5>
+                ${renderOffscreenFeed(model.offscreen)}
+            </div>`
+                : ''}
             <div class="neoterra-overlay-section" data-neoterra-overlay-section="activity">
                 <h5>${OVERLAY_HEADINGS.activity}</h5>
                 ${renderActivityOverlay([...(model.keyActivity ?? []), ...(model.namedActivity ?? [])])}

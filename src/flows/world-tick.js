@@ -422,7 +422,16 @@ export function planWorldTick({
                 summary,
                 headline,
                 actors: [],
-                tags: ['offscreen', 'tick', `tick:${storyTurn}`, ...extraTags],
+                tags: [
+                    'offscreen',
+                    'tick',
+                    `tick:${storyTurn}`,
+                    // The actor faction travels as a tag: the reducer's event
+                    // shape is fixed, and the city desk must not mistake the
+                    // location's controller for the actor.
+                    ...(typeof factionId === 'string' ? [`faction:${factionId}`] : []),
+                    ...extraTags,
+                ],
             };
             if (locationId) {
                 event.locationId = locationId;

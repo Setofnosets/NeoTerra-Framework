@@ -245,6 +245,8 @@ export const DEFAULT_SETTINGS = freezeDeep({
         showFactions: true,
         showRumors: true,
         showHeadlines: true,
+        // Off-screen city activity (world tick) in the overlay; no LLM needed.
+        showOffscreen: true,
         showFactionTint: true,
         maxHeadlines: 5,
         // Override editor (never touches the SVGs).

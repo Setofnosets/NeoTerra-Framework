@@ -21,6 +21,7 @@ import {
     isFinalDeadlinePassed,
     summarizeBeatLedger,
 } from './beats.js';
+import { applyContentGate } from '../core/content-gate.js';
 
 export const CANONICAL_MAP = Object.freeze({
     path: 'NeoTerra.png',
@@ -1477,7 +1478,13 @@ export const OVERLAY_DEFAULT_SETTINGS = Object.freeze({
     showRumors: true,
     showHeadlines: true,
     showFactionTint: true,
+    // Off-screen city activity from the deterministic world tick (no LLM).
+    showOffscreen: true,
     maxHeadlines: 5,
+    maxOffscreen: 4,
+    // Render-time text gate; the shell forwards the live values.
+    contentGate: 'full',
+    contentLimits: {},
     editorEnabled: true,
 });
 
@@ -1887,22 +1894,35 @@ export function buildBeatViews(state, season = null) {
 }
 
 /** Latest events, newest first, with a newspaper-style headline fallback. */
-export function buildHeadlineViews(state, { limit = 5 } = {}) {
+export function buildHeadlineViews(state, { limit = 5, contentGate = 'full', contentLimits = {} } = {}) {
     const events = Array.isArray(state?.recentEvents) ? state.recentEvents : [];
+    const gate = (text) => applyContentGate(
+        String(text ?? ''),
+        contentGate,
+        contentLimits,
+        { isPlayer: true },
+    );
     return events
         .slice(-Math.max(0, limit))
         .reverse()
-        .map((event) => ({
-            turn: event?.turn ?? 0,
-            date: event?.date ?? null,
-            summary: event?.summary ?? '',
-            headline: typeof event?.headline === 'string' && event.headline.length > 0
-                ? event.headline
-                : event?.summary ?? '',
-            locationId: event?.locationId ?? null,
-            tags: Array.isArray(event?.tags) ? event.tags.slice() : [],
-            beatId: event?.beatId ?? null,
-        }));
+        .map((event) => {
+            const summary = gate(event?.summary);
+            const headline = gate(
+                typeof event?.headline === 'string' && event.headline.length > 0
+                    ? event.headline
+                    : event?.summary,
+            );
+            return {
+                turn: event?.turn ?? 0,
+                date: event?.date ?? null,
+                summary,
+                headline,
+                locationId: event?.locationId ?? null,
+                tags: Array.isArray(event?.tags) ? event.tags.slice() : [],
+                beatId: event?.beatId ?? null,
+            };
+        })
+        .filter((entry) => entry.headline.length > 0 || entry.summary.length > 0);
 }
 
 function latestEventByLocation(state) {
@@ -1955,6 +1975,82 @@ export function buildBridgeOverlayStyles(viewModel) {
 }
 
 /**
+ * Latest off-screen city activity from the world tick, newest first.
+ *
+ * Deterministic and LLM-free: it reads the `offscreen`-tagged events the tick
+ * already wrote. The actor faction travels as a `faction:<id>` tag; the
+ * location's controller is carried separately as `controlledBy*` so a row never
+ * claims the controller is the actor. Unknown ids degrade to the raw id. Text
+ * passes through the content gate, including per-player hard limits.
+ */
+export function buildOffscreenFeed(state, {
+    limit = 4,
+    contentGate = 'full',
+    contentLimits = {},
+} = {}) {
+    const events = Array.isArray(state?.recentEvents) ? state.recentEvents : [];
+    const cap = Math.max(1, Math.min(4, Number.isInteger(limit) ? limit : 4));
+    const gate = (text) => applyContentGate(
+        String(text ?? ''),
+        contentGate,
+        contentLimits,
+        { isPlayer: true },
+    );
+    const feed = [];
+    for (let index = events.length - 1; index >= 0 && feed.length < cap; index -= 1) {
+        const event = events[index];
+        if (!isObject(event) || !Array.isArray(event.tags) || !event.tags.includes('offscreen')) {
+            continue;
+        }
+        const locationId = typeof event.locationId === 'string' && event.locationId.length > 0
+            ? event.locationId
+            : null;
+        const location = locationId ? state?.locations?.[locationId] ?? null : null;
+        const factionTag = event.tags.find(
+            (tag) => typeof tag === 'string' && tag.startsWith('faction:'),
+        );
+        const factionId = factionTag ? factionTag.slice('faction:'.length) : null;
+        const factionName = factionId
+            ? String(state?.factions?.[factionId]?.name ?? factionId)
+            : null;
+        const controllerId = typeof location?.factionId === 'string' && location.factionId.length > 0
+            ? location.factionId
+            : null;
+        const controllerName = controllerId && controllerId !== factionId
+            ? String(state?.factions?.[controllerId]?.name ?? controllerId)
+            : null;
+        const locationName = locationId
+            ? String(location?.name ?? locationId)
+            : null;
+        const summary = gate(event.summary);
+        const headline = gate(
+            typeof event.headline === 'string' && event.headline.length > 0
+                ? event.headline
+                : event.summary,
+        );
+        if (summary.length === 0 && headline.length === 0) {
+            continue;
+        }
+        feed.push({
+            id: `${event.turn ?? 0}:${event.date ?? ''}:${locationId ?? ''}:${feed.length}`,
+            turn: Number.isInteger(event.turn) ? event.turn : 0,
+            date: event.date ?? null,
+            summary,
+            headline,
+            text: headline || summary,
+            factionId,
+            factionName,
+            controlledByFactionId: controllerName ? controllerId : null,
+            controlledByFactionName: controllerName,
+            locationId,
+            locationName,
+            tags: event.tags.slice(),
+        });
+    }
+    return feed;
+}
+
+/**
  * The whole "where am I in the story" model. Pure and renderer-agnostic; the
  * overlay UI and the map panel both consume it.
  */
@@ -1973,7 +2069,26 @@ export function buildWorldOverlay({
         // not a spoiler.
         beats.rumors = [];
     }
-    const headlines = config.showHeadlines ? buildHeadlineViews(state, { limit: config.maxHeadlines }) : [];
+    const headlines = config.showHeadlines
+        ? buildHeadlineViews(state, {
+            limit: config.maxHeadlines,
+            contentGate: config.contentGate,
+            contentLimits: config.contentLimits,
+        })
+        : [];
+    const offscreen = config.showOffscreen
+        ? buildOffscreenFeed(state, {
+            limit: config.maxOffscreen,
+            contentGate: config.contentGate,
+            contentLimits: config.contentLimits,
+        })
+        : [];
+    const gateText = (text) => applyContentGate(
+        String(text ?? ''),
+        config.contentGate,
+        config.contentLimits,
+        { isPlayer: true },
+    );
     const latestByLocation = latestEventByLocation(state);
     const keyActivity = (viewModel?.keyLocations ?? []).map((key) => {
         const event = key.locationId ? latestByLocation.get(key.locationId) ?? null : null;
@@ -1981,7 +2096,7 @@ export function buildWorldOverlay({
             id: key.id,
             name: key.name,
             locationId: key.locationId ?? null,
-            headline: event?.headline ?? event?.summary ?? null,
+            headline: event ? gateText(event.headline ?? event.summary) || null : null,
             turn: event?.turn ?? null,
         };
     });
@@ -1990,7 +2105,7 @@ export function buildWorldOverlay({
         return {
             id: location.id,
             name: location.name,
-            headline: event?.headline ?? event?.summary ?? null,
+            headline: event ? gateText(event.headline ?? event.summary) || null : null,
             turn: event?.turn ?? null,
         };
     });
@@ -2001,6 +2116,7 @@ export function buildWorldOverlay({
         factions,
         beats,
         headlines,
+        offscreen,
         regionStyles: buildRegionOverlayStyles(viewModel, state, config, factions),
         bridgeStyles: buildBridgeOverlayStyles(viewModel),
         keyActivity,
@@ -2010,6 +2126,7 @@ export function buildWorldOverlay({
             threats: threats.length,
             rumors: beats.rumors.length,
             headlines: headlines.length,
+            offscreen: offscreen.length,
         },
     };
 }

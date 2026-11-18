@@ -280,6 +280,7 @@ export function normalizeSettings(settings) {
             showFactions: asBoolean(settings.map?.showFactions, defaults.map.showFactions),
             showRumors: asBoolean(settings.map?.showRumors, defaults.map.showRumors),
             showHeadlines: asBoolean(settings.map?.showHeadlines, defaults.map.showHeadlines),
+            showOffscreen: asBoolean(settings.map?.showOffscreen, defaults.map.showOffscreen),
             showFactionTint: asBoolean(settings.map?.showFactionTint, defaults.map.showFactionTint),
             closeOnTravel: asBoolean(settings.map?.closeOnTravel, defaults.map.closeOnTravel),
             maxHeadlines: asNumber(settings.map?.maxHeadlines, defaults.map.maxHeadlines, {

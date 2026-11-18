@@ -723,6 +723,7 @@
 .neoterra-overlay-threats,
 .neoterra-overlay-rumors,
 .neoterra-overlay-headlines,
+.neoterra-overlay-offscreen,
 .neoterra-overlay-goals,
 .neoterra-overlay-divergence-list {
     list-style: none;
@@ -826,11 +827,18 @@
     color: var(--nt-text-muted);
 }
 
-.neoterra-overlay-headlines li {
+.neoterra-overlay-headlines li,
+.neoterra-overlay-offscreen li {
     display: flex;
     gap: 0.35rem;
     font-size: 0.74rem;
     line-height: 1.25;
+}
+
+.neoterra-overlay-offscreen-place {
+    margin-left: 0.3rem;
+    color: var(--nt-text-muted);
+    font-size: 0.68rem;
 }
 
 .neoterra-overlay-dateline {
