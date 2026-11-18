@@ -4,7 +4,7 @@ Off-screen world tick, newspaper, pacing/scene director, relationship graph, fog
 
 ## Meta
 - **Slug:** `neoterra-living-city-v1-1`
-- **Status:** in progress — Step 9 complete; next: Step 10
+- **Status:** in progress — Step 10 complete; next: Step 11
 - **Date:** 2026-11-18
 - **Base:** `plans/neoterra-framework-v1.md` (V1 complete, Steps 1–20)
 - **Target:** SillyTavern third-party extension, plain ESM, no bundler, no runtime deps
@@ -552,7 +552,7 @@ without code changes.
 - [x] Step 7 — Newspaper agent, reader UI, and `[NEOTERRA_NEWS]` (92f0e39)
 - [x] Step 8 — Exploration state, fog rules, travel discovery and gating (f7be1fb)
 - [x] Step 9 — Fog rendering, submenu gating, and editor reveal (667f127)
-- [ ] Step 10 — Relationship graph model and Relations tab
+- [x] Step 10 — Relationship graph model and Relations tab (b3261b4)
 - [ ] Step 11 — Domain sensorium (generic): data, tab, and `[NEOTERRA_DOMAIN]`
 - [ ] Step 12 — Docs, settings surface completion, changelog, and smoke QA
 
