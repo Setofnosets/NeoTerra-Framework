@@ -121,6 +121,25 @@ function renderScene(state, settings) {
         lines.push(`Present: ${present.map((id) => characterName(state, id)).join(', ')}`);
     }
 
+    // The encounter is derived state written by the scene flow. It belongs in
+    // the scene block so the model knows who is hostile without a new block.
+    // A record from another location (a failed cast refresh) is ignored.
+    const encounter = isObject(scene.encounter)
+        && (typeof scene.encounter.locationId !== 'string'
+            || scene.encounter.locationId === scene.locationId)
+        ? scene.encounter
+        : null;
+    if (encounter) {
+        const hostileIds = Array.isArray(encounter.characterIds) ? encounter.characterIds : [];
+        if (hostileIds.length > 0) {
+            lines.push(`Encounter: ${hostileIds.map((id) => characterName(state, id)).join(', ')}`);
+        }
+        const threats = Array.isArray(encounter.threatNames) ? encounter.threatNames : [];
+        if (threats.length > 0) {
+            lines.push(`Threats here: ${threats.join(', ')}`);
+        }
+    }
+
     if (typeof scene.framing === 'string' && scene.framing.trim().length > 0) {
         lines.push(`Framing: ${scene.framing.trim()}`);
     }

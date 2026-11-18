@@ -643,6 +643,57 @@ test('travel recomputes the present cast on the new location', async () => {
     assert.ok(result.state.flags.castDirector.locationId === 'clarity-hq');
 });
 
+test('traveling into a hostile records an encounter and names it in the arrival', async () => {
+    const store = makeStore();
+    const state = store.get();
+    // Move a seeded villain into the destination before the trip.
+    const villainId = Object.values(state.characters)
+        .find((entry) => entry.side === 'villain' && entry.controlledBy === 'npc')?.charId;
+    assert.ok(villainId, 'S1 seeds at least one villain');
+    store.dispatch({ type: 'MOVE_CHARACTER', characterId: villainId, locationId: 'clarity-hq' });
+
+    const scene = createSceneFlow({
+        store,
+        season: seasons.s1,
+        registry,
+        formGroups,
+        formRules,
+        getSettings: () => ({}),
+    });
+    const flow = makeTravel(store, { scene, initiative: null });
+    const result = await flow.travel({ to: 'clarity-hq' });
+    assert.equal(result.ok, true, result.message);
+    const encounter = result.cast?.cast?.encounter;
+    assert.ok(encounter, 'the arrival records the encounter');
+    assert.equal(encounter.locationId, 'clarity-hq');
+    assert.equal(encounter.source, 'travel');
+    assert.equal(result.state.scene.encounter.characterIds.includes(villainId), true);
+    const name = result.state.characters[villainId].displayName;
+    assert.match(result.intro.text, new RegExp(`Hostile presence: .*${name}`));
+});
+
+test('a peaceful arrival leaves no encounter behind', async () => {
+    const store = makeStore();
+    const scene = createSceneFlow({
+        store,
+        season: seasons.s1,
+        registry,
+        formGroups,
+        formRules,
+        getSettings: () => ({}),
+    });
+    const flow = makeTravel(store, { scene, initiative: null });
+    const result = await flow.travel({ to: 'maple-heights' });
+    assert.equal(result.ok, true);
+    const encounter = result.state.scene.encounter;
+    if (encounter) {
+        assert.equal(encounter.characterIds.length > 0 && encounter.threatNames.length === 0, false);
+    } else {
+        assert.equal(encounter, null);
+    }
+    assert.doesNotMatch(result.intro.text, /^Hostile presence:/m);
+});
+
 test('the travel hook builds a tracker context and reports a failing hook without throwing', async () => {
     const context = buildTravelInitiativeContext({
         from: 'central-plaza',

@@ -519,6 +519,79 @@ test('character profiles are trimmed and optionally gated', () => {
     }
 });
 
+test('the scene block ignores an encounter recorded for another location', () => {
+    const state = {
+        chatId: 'c1',
+        seasonId: 's1',
+        playerRole: 'hero',
+        player: { identity: 'custom', displayName: 'Player', characterId: null },
+        characters: { 'c.v': { charId: 'c.v', displayName: 'Claire', side: 'villain', controlledBy: 'npc', alive: true } },
+        locations: { 'loc.a': { id: 'loc.a', name: 'Arcade', district: 'Hub', factionId: null, status: 'quiet' } },
+        factions: {},
+        threats: [],
+        beats: {},
+        badEnds: {},
+        relationships: [],
+        recentEvents: [],
+        scene: {
+            locationId: 'loc.a',
+            present: ['c.v'],
+            combat: null,
+            framing: '',
+            encounter: { locationId: 'loc.other', characterIds: ['c.v'], threatNames: ['Glass Cartel'], source: 'travel' },
+        },
+        meta: { turn: 1, inGameDate: '2038-01-01', timeOfDay: 'night', sceneId: 'opening', inCombat: false },
+        flags: {},
+        log: [],
+    };
+    const result = renderContext(state, { settings: cloneDefaults() });
+    const scene = result.blocks.find((block) => block.id === 'scene');
+    assert.ok(scene);
+    assert.doesNotMatch(scene.body, /Encounter:/);
+    assert.doesNotMatch(scene.body, /Threats here:/);
+});
+
+test('the scene block drops the encounter lines with the block', () => {
+    const state = {
+        chatId: 'c1',
+        seasonId: 's1',
+        playerRole: 'hero',
+        player: { identity: 'custom', displayName: 'Player', characterId: null },
+        characters: { 'c.v': { charId: 'c.v', displayName: 'Claire', side: 'villain', controlledBy: 'npc', alive: true } },
+        locations: { 'loc.a': { id: 'loc.a', name: 'Arcade', district: 'Hub', factionId: null, status: 'quiet' } },
+        factions: {},
+        threats: [],
+        beats: {},
+        badEnds: {},
+        relationships: [],
+        recentEvents: [],
+        scene: {
+            locationId: 'loc.a',
+            present: ['c.v'],
+            combat: null,
+            framing: '',
+            encounter: { locationId: 'loc.a', characterIds: ['c.v'], threatNames: ['Glass Cartel'], source: 'travel' },
+        },
+        meta: { turn: 1, inGameDate: '2038-01-01', timeOfDay: 'night', sceneId: 'opening', inCombat: false },
+        flags: {},
+        log: [],
+    };
+    const settings = cloneDefaults();
+    const result = renderContext(state, { settings });
+    const scene = result.blocks.find((block) => block.id === 'scene');
+    assert.ok(scene);
+    assert.match(scene.body, /Encounter: Claire/);
+    assert.match(scene.body, /Threats here: Glass Cartel/);
+    assert.ok(scene.tokens <= result.totalTokens);
+
+    // Token budget: a scene block granted no tokens is dropped, not leaked.
+    const tiny = { ...settings, tokenBudget: { ...settings.tokenBudget, scene: 0 } };
+    const squeezed = renderContext(state, { settings: tiny });
+    assert.equal(squeezed.blocks.some((block) => block.id === 'scene'), false);
+    assert.equal(squeezed.dropped.includes('scene'), true);
+    assert.doesNotMatch(squeezed.text, /Threats here/);
+});
+
 test('interceptor injects exactly one tagged message and is idempotent', async () => {
     const settings = settingsWith();
     const state = makeState();

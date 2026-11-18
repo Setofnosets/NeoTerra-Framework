@@ -424,7 +424,12 @@ export function createTravelFlow({
         let cast = null;
         if (scene && typeof scene.refreshCast === 'function') {
             try {
-                cast = await scene.refreshCast({ runDirector: false, signal });
+                cast = await scene.refreshCast({
+                    runDirector: false,
+                    signal,
+                    // The persisted encounter records that the player arrived.
+                    encounterSource: 'travel',
+                });
             } catch (error) {
                 if (isAbortError(error)) {
                     cast = null;

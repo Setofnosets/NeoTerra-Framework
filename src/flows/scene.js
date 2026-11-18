@@ -14,6 +14,7 @@ import {
     buildFormIndex,
     selectExclusiveCast,
 } from '../data/forms.js';
+import { describeEncounter, detectEncounter } from './encounter.js';
 import { validateWorldState } from '../state/world-state.js';
 
 export const POV_LABELS = Object.freeze({
@@ -212,6 +213,10 @@ export function buildLocationIntro({ state, season = null, from = null, travel =
     } else {
         lines.push('Present: nobody you recognise.');
     }
+    const encounterLine = describeEncounter(state, state.scene?.encounter);
+    if (encounterLine.length > 0) {
+        lines.push(encounterLine);
+    }
     const framing = state.scene?.framing;
     if (typeof framing === 'string' && framing.trim().length > 0) {
         lines.push('');
@@ -366,6 +371,8 @@ export function createSceneFlow({
             manualPins: Array.isArray(flags.manualPins) ? flags.manualPins.slice() : [],
             manualRemovals: Array.isArray(flags.manualRemovals) ? flags.manualRemovals.slice() : [],
             source: flags.source ?? 'deterministic',
+            threatsHere: cast.threatsHere,
+            encounter: isObject(state.scene?.encounter) ? state.scene.encounter : null,
         };
     }
 
@@ -444,6 +451,7 @@ export function createSceneFlow({
         source,
         rejected = [],
         applied = [],
+        encounterSource = 'scene',
     }) {
         checkExclusivity(state);
         const flags = flagsFor(state);
@@ -507,7 +515,26 @@ export function createSceneFlow({
             prefer: manualPins,
         }).map((character) => character.charId);
 
-        const persisted = persistFlags(working, {
+        // The encounter is derived from the refreshed cast, not authored. It is
+        // written in the same validated replace as the cast flags so a reload
+        // (and the next prompt) sees the same situation.
+        const encounter = detectEncounter({
+            state: working,
+            present,
+            threatNames: cast.threatsHere,
+            locationId,
+            playerRole: working.playerRole ?? season?.playerRole ?? null,
+            source: encounterSource,
+        });
+        const withEncounter = {
+            ...working,
+            scene: {
+                ...(working.scene ?? {}),
+                encounter,
+            },
+        };
+
+        const persisted = persistFlags(withEncounter, {
             sceneId: working.meta?.sceneId ?? 'opening',
             locationId,
             turn: working.meta?.turn ?? 0,
@@ -523,6 +550,7 @@ export function createSceneFlow({
                 pinned: cast.pinned,
                 removed: cast.removed,
                 threatsHere: cast.threatsHere,
+                encounter,
             },
             events: appliedEvents,
             rejected,
@@ -610,7 +638,7 @@ export function createSceneFlow({
         });
     }
 
-    async function refreshCast({ runDirector = false, signal = null } = {}) {
+    async function refreshCast({ runDirector = false, signal = null, encounterSource = 'scene' } = {}) {
         const state = readState();
         const locationId = state.scene?.locationId ?? null;
         const result = await directorPass({
@@ -626,6 +654,7 @@ export function createSceneFlow({
             source: result.source,
             rejected: result.rejected,
             applied: applied.applied,
+            encounterSource,
         });
     }
 
