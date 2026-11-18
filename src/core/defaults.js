@@ -74,6 +74,17 @@ export const DEFAULT_SETTINGS = freezeDeep({
         allowNpcMovesDuringCombat: false,
     },
 
+    // In-world newspaper. Opt-in: when disabled there is no edition, no agent
+    // call, and no state write. With the feature on but the agent off, a
+    // deterministic edition is always available.
+    newspaper: {
+        enabled: false,
+        style: 'auto',
+        everyDays: 3,
+        minEvents: 6,
+        maxHeadlines: 6,
+    },
+
     cyoa: {
         enabled: false,
         count: 4,

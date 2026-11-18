@@ -34,6 +34,7 @@ import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
 import { createWorldTick } from '../flows/world-tick.js';
 import { createPacingFlow } from '../flows/pacing.js';
+import { createNewsroomFlow } from '../flows/newsroom.js';
 import { createStorylineTracker } from '../agents/storyline.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
@@ -1114,6 +1115,12 @@ function buildInteractionRuntime(context) {
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
+    const newsroom = shared?.newsroom ?? createNewsroomFlow({
+        store,
+        getSeason: () => season,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
     const controller = createChoicesController({
         agent: choicesAgent,
         getState: () => store.get(),
@@ -1131,6 +1138,7 @@ function buildInteractionRuntime(context) {
         ending,
         runner,
         worldTick,
+        newsroom,
         controller,
         combat: createCombatFlow({
             store,
@@ -1377,6 +1385,20 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
         }
         bus.emit(EVENTS.MAP_UPDATED, { reason: 'turn', turn: result?.turn ?? null });
         mapRuntime?.panelRef?.refresh?.();
+        // The newspaper is detached: a slow agent call must never delay CYOA.
+        if (runtime.newsroom && typeof runtime.newsroom.publish === 'function') {
+            void runtime.newsroom.publish({
+                chatId,
+                isCurrent: () => chatStillCurrent(chatId),
+            }).then((report) => {
+                if (report?.ok === true) {
+                    bus.emit(EVENTS.MAP_UPDATED, { reason: 'newsroom', date: report.edition?.date ?? null });
+                    mapRuntime?.panelRef?.refresh?.();
+                }
+            }).catch((error) => {
+                logger.warn('Detached newspaper publication failed', error);
+            });
+        }
         // CYOA is requested only after the new state is written.
         await refreshInteractionUi(live);
     }

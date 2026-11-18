@@ -347,6 +347,11 @@ test('the world-tick settings normalizer fills defaults and keeps unknown keys',
     assert.equal(defaults.worldTick.enabled, true);
     assert.equal(defaults.worldTick.allowNpcMovesDuringCombat, false);
 
+    assert.equal(defaults.newspaper.enabled, false);
+    assert.equal(defaults.newspaper.style, 'auto');
+    assert.equal(defaults.newspaper.everyDays, 3);
+    assert.equal(defaults.newspaper.minEvents, 6);
+
     const overridden = migrateSettings({
         schemaVersion: SCHEMA_VERSION,
         worldTick: { enabled: false, allowNpcMovesDuringCombat: true, custom: 'keep' },
@@ -358,6 +363,16 @@ test('the world-tick settings normalizer fills defaults and keeps unknown keys',
     const legacy = migrateSettings({ schemaVersion: SCHEMA_VERSION, worldTick: null });
     assert.equal(legacy.worldTick.enabled, true);
     assert.equal(legacy.worldTick.allowNpcMovesDuringCombat, false);
+
+    const newspaper = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        newspaper: { enabled: true, style: 'nope', everyDays: 0, minEvents: 999, custom: 'keep' },
+    });
+    assert.equal(newspaper.newspaper.enabled, true);
+    assert.equal(newspaper.newspaper.style, 'auto');
+    assert.equal(newspaper.newspaper.everyDays, 1);
+    assert.equal(newspaper.newspaper.minEvents, 50);
+    assert.equal(newspaper.newspaper.custom, 'keep');
 });
 
 test('the map off-screen settings normalize with defaults', () => {

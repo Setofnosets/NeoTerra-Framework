@@ -715,3 +715,28 @@ test('combat auto-holds and only a combat hold is cleared by COMBAT_END', () => 
     assert.equal(suppressed.flags.clock.hold.active, false);
     assert.equal(suppressed.meta.inCombat, true);
 });
+
+test('PUBLISH_EDITION validates, dedupes by date, and records the last edition', () => {
+    const state = seed('s1');
+    const edition = {
+        id: 'edition:s1:2037-03-06:4',
+        date: '2037-03-06',
+        turn: 4,
+        masthead: 'THE NEO TERRA CHRONICLE',
+        dateline: 'NEO TERRA — EVENING EDITION',
+        style: 'broadsheet',
+        source: 'deterministic',
+        headlines: [{ title: 'A quiet city', lede: 'Nothing happens.', section: 'general', tone: 'neutral' }],
+    };
+    const published = applyWorldEvent(state, { type: 'PUBLISH_EDITION', edition }, CONTEXT);
+    assert.equal(published.flags.newsroom.editions.length, 1);
+    assert.equal(published.flags.newsroom.lastEditionDate, '2037-03-06');
+    assert.equal(published.flags.newsroom.lastEditionTurn, 4);
+
+    const again = applyWorldEvent(published, {
+        type: 'PUBLISH_EDITION',
+        edition: { ...edition, id: 'edition:other', turn: 5 },
+    }, CONTEXT);
+    assert.equal(again, published, 'the same date is an idempotent no-op');
+    assert.equal(again.flags.newsroom.editions.length, 1);
+});

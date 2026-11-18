@@ -21,6 +21,10 @@ import {
     DEFAULT_SETTINGS,
     cloneDefaults,
 } from './defaults.js';
+import {
+    NEWSROOM_MAX_HEADLINES,
+    NEWSPAPER_STYLES,
+} from '../data/newsroom.js';
 
 export function isPlainObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -234,6 +238,22 @@ function normalizeWorldTick(worldTick, defaults) {
     };
 }
 
+function normalizeNewspaper(newspaper, defaults) {
+    const source = isPlainObject(newspaper) ? newspaper : {};
+    return {
+        ...source,
+        enabled: asBoolean(source.enabled, defaults.enabled),
+        style: NEWSPAPER_STYLES.includes(source.style) ? source.style : defaults.style,
+        everyDays: asNumber(source.everyDays, defaults.everyDays, { min: 1, max: 60, integer: true }),
+        minEvents: asNumber(source.minEvents, defaults.minEvents, { min: 1, max: 50, integer: true }),
+        maxHeadlines: asNumber(source.maxHeadlines, defaults.maxHeadlines, {
+            min: 1,
+            max: NEWSROOM_MAX_HEADLINES,
+            integer: true,
+        }),
+    };
+}
+
 function normalizePacing(pacing, defaults) {
     const source = isPlainObject(pacing) ? pacing : {};
     const clamped = (key, min, max) => asNumber(source[key], defaults[key], {
@@ -288,6 +308,10 @@ export function normalizeSettings(settings) {
         worldTick: normalizeWorldTick(
             isPlainObject(settings.worldTick) ? settings.worldTick : {},
             defaults.worldTick,
+        ),
+        newspaper: normalizeNewspaper(
+            isPlainObject(settings.newspaper) ? settings.newspaper : {},
+            defaults.newspaper,
         ),
         contentLimits: {
             ...(isPlainObject(settings.contentLimits) ? settings.contentLimits : {}),

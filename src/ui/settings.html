@@ -189,6 +189,39 @@
                 A held scene (time frozen) pauses the tick.
             </p>
 
+            <h4 class="neoterra-section-title">Newspaper</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="newspaper.enabled">
+                    <span>Publish in-world newspaper editions (off by default)</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Style</span>
+                    <select data-neoterra-path="newspaper.style">
+                        <option value="auto">auto</option>
+                        <option value="tabloid">tabloid</option>
+                        <option value="broadsheet">broadsheet</option>
+                        <option value="underground">underground</option>
+                    </select>
+                </label>
+                <label class="neoterra-field">
+                    <span>Publish every (in-game days)</span>
+                    <input type="number" min="1" max="60" step="1" data-neoterra-path="newspaper.everyDays">
+                </label>
+                <label class="neoterra-field">
+                    <span>Or after this many new events</span>
+                    <input type="number" min="1" max="50" step="1" data-neoterra-path="newspaper.minEvents">
+                </label>
+                <label class="neoterra-field">
+                    <span>Headlines per edition</span>
+                    <input type="number" min="1" max="6" step="1" data-neoterra-path="newspaper.maxHeadlines">
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                With the feature on and the newspaper agent off, editions are built
+                deterministically from events. A held scene publishes nothing.
+            </p>
+
             <h4 class="neoterra-section-title">CYOA choices</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">

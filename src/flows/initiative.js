@@ -127,7 +127,11 @@ export function applyEventBatch(store, events, {
         if (!validation.ok) {
             throw new Error(`Invalid WorldState after agent pass (${formatErrors(validation)})`);
         }
-        store.replace(next);
+        // Idempotent events return the exact input document. Replacing it would
+        // still schedule a metadata save and a WAL write for no change.
+        if (next !== base) {
+            store.replace(next);
+        }
         return { ok: true, state: next, error: null, applied: Array.isArray(events) ? events.length : 0 };
     } catch (error) {
         logWarning(log, 'Agent pass rejected atomically; state unchanged', error);

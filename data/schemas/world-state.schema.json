@@ -147,6 +147,20 @@
             },
             "lastEvaluatedTurn": { "type": "integer", "minimum": 0 }
           }
+        },
+        "newsroom": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Published newspaper editions. At most 20, newest last; lastEditionDate/Turn anchor the cadence.",
+          "properties": {
+            "lastEditionDate": { "type": ["string", "null"] },
+            "lastEditionTurn": { "type": ["integer", "null"], "minimum": 0 },
+            "editions": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "object", "additionalProperties": true }
+            }
+          }
         }
       }
     },

@@ -7,6 +7,7 @@
  */
 
 import { nextBeatStatus } from '../data/beats.js';
+import { editionKey, validateEdition, NEWSROOM_MAX_EDITIONS } from '../data/newsroom.js';
 import { effectiveStoryTurn } from '../core/world-clock.js';
 import { FACTION_STATUSES } from '../data/factions.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
@@ -724,6 +725,35 @@ const HANDLERS = Object.freeze({
         syncPlayerMirror(state);
     },
 
+    PUBLISH_EDITION(state, event) {
+        const validation = validateEdition(event.edition);
+        if (!validation.ok) {
+            fail(`PUBLISH_EDITION rejected: ${validation.errors.join('; ')}`);
+        }
+        const edition = validation.edition;
+        if (!isObject(state.flags)) {
+            state.flags = {};
+        }
+        const newsroom = isObject(state.flags.newsroom) ? state.flags.newsroom : {};
+        const editions = Array.isArray(newsroom.editions) ? newsroom.editions.slice() : [];
+        const key = editionKey(edition);
+        // The applyWorldEvent pre-check already returns the same document for a
+        // duplicate; this keeps a direct handler call idempotent too.
+        if (key && editions.some((entry) => editionKey(entry) === key)) {
+            return;
+        }
+        editions.push(edition);
+        if (editions.length > NEWSROOM_MAX_EDITIONS) {
+            editions.splice(0, editions.length - NEWSROOM_MAX_EDITIONS);
+        }
+        state.flags.newsroom = {
+            ...newsroom,
+            lastEditionDate: edition.date,
+            lastEditionTurn: edition.turn,
+            editions,
+        };
+    },
+
     SET_CLOCK_HOLD(state, event) {
         if (typeof event.active !== 'boolean') {
             fail('SET_CLOCK_HOLD active must be a boolean');
@@ -1207,6 +1237,17 @@ export function applyWorldEvent(state, event, context = {}) {
         || (event.type === 'SET_CLOCK_HOLD'
             && typeof event.active === 'boolean'
             && (state.flags?.clock?.hold?.active === true) === (event.active === true))
+        || (event.type === 'PUBLISH_EDITION'
+            && validateEdition(event.edition).ok
+            && (
+                (typeof event.edition.date === 'string'
+                    && state.flags?.newsroom?.lastEditionDate === event.edition.date)
+                || (typeof editionKey(event.edition) === 'string'
+                    && Array.isArray(state.flags?.newsroom?.editions)
+                    && state.flags.newsroom.editions.some(
+                        (entry) => editionKey(entry) === editionKey(event.edition),
+                    ))
+            ))
     ) {
         return state;
     }
