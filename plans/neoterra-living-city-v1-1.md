@@ -4,7 +4,7 @@ Off-screen world tick, newspaper, pacing/scene director, relationship graph, fog
 
 ## Meta
 - **Slug:** `neoterra-living-city-v1-1`
-- **Status:** in progress — Step 11 complete; next: Step 12
+- **Status:** complete — all 12 steps done (V1.1 shipped)
 - **Date:** 2026-11-18
 - **Base:** `plans/neoterra-framework-v1.md` (V1 complete, Steps 1–20)
 - **Target:** SillyTavern third-party extension, plain ESM, no bundler, no runtime deps
@@ -554,7 +554,7 @@ without code changes.
 - [x] Step 9 — Fog rendering, submenu gating, and editor reveal (667f127)
 - [x] Step 10 — Relationship graph model and Relations tab (b3261b4)
 - [x] Step 11 — Domain sensorium (generic): data, tab, and `[NEOTERRA_DOMAIN]` (b2379d5)
-- [ ] Step 12 — Docs, settings surface completion, changelog, and smoke QA
+- [x] Step 12 — Docs, settings surface completion, changelog, and smoke QA (b0c720b)
 
 ---
 
@@ -701,7 +701,7 @@ without code changes.
 ---
 
 ### Step 12 — Docs, settings surface completion, changelog, and smoke QA
-- **Files:** `docs/world-clock.md`, `docs/world-tick.md`, `docs/newspaper.md`, `docs/pacing.md`, `docs/fog-of-war.md`, `docs/relationships.md`, `docs/sensorium.md` (new), `docs/data-schema.md`, `docs/adding-a-season.md`, `README.md`, `CHANGELOG.md`, `package.json` (version 1.1.0), `tests/integration.test.js`
+- **Files:** `docs/world-clock.md`, `docs/world-tick.md`, `docs/newspaper.md`, `docs/pacing.md`, `docs/fog-of-war.md`, `docs/relationships.md`, `docs/sensorium.md` (new), `docs/data-schema.md`, `docs/adding-a-season.md`, `README.md`, `CHANGELOG.md`, `package.json` (version 1.1.0), `manifest.json`, `src/core/constants.js`, `src/ui/settings.html`, `src/ui/shell.js`, `tools/smoke-test.mjs`, `tests/integration.test.js`
 - **Depends on:** all prior steps
 - **Parallelizable:** no (final integration)
 - **Expected behavior:** Every new setting, data field, default, and flow is documented with an authoring example. The README covers the six features, their defaults, and how to disable each. `docs/world-clock.md` explains the pace, the time chip, and the `storyTurn`/`turn` split; `docs/adding-a-season.md` documents the generic `domain` block so a future villain season needs data only. `CHANGELOG.md` lists 1.1.0. The settings panel exposes every new toggle and numeric field, including `map.showFogOfWar` (currently hidden). Integration tests exercise the six features together in one fixture world (clock/hold → tick → pacing → newsroom → fog → graph → domain) with no LLM calls.
@@ -709,6 +709,7 @@ without code changes.
 - **Risk:** low
 - **Model/Effort routing:** standard implementer, low effort
 - **Commit message sketch:** `docs(v1.1): document the living-city features and finalize 1.1.0`
+- **Commit:** `b0c720b`
 
 ## Verification & Testing
 
