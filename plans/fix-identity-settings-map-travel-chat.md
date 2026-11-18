@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: fix-identity-settings-map-travel-chat
-- Status: in progress — steps 1–6 complete
+- Status: in progress — steps 1–7 complete
 - Date: 2026-11-17
 
 ## Progress
@@ -12,7 +12,7 @@
 - [x] 4. Add a reusable in-chat scene message writer — done (49ca616)
 - [x] 5. Add an explicit season kickoff in the main chat — done (49ca616)
 - [x] 6. Detect and persist a location encounter — done (d484b29)
-- [ ] 7. Hand a location change back to the chat (arrival + encounter)
+- [x] 7. Hand a location change back to the chat (arrival + encounter) — done (d9b6322)
 - [ ] 8. Run the per-turn trackers, advance the clock, refresh map state, then offer CYOA
 - [ ] 9. Give encounters explicit Engage/Talk/Avoid actions
 - [ ] 10. Close the map on a successful location change
