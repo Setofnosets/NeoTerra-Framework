@@ -145,6 +145,24 @@ A rejected travel (blocked route, combat active, no route) keeps the map open
 and posts nothing. Merely refreshing the map, switching tabs, or re-rendering
 the panel never closes the shell.
 
+## No world and returning to chat
+
+- With no `WorldState` in the chat, the Map tab shows a single **Start a season**
+  CTA that switches to the Story tab; it never renders an empty map with
+  disabled travel.
+- The map toolbar carries a **Return to chat** button in both travel modes, so
+  keep-open never traps the player in the map.
+- The arrival summary stays in the sidebar (`data-neoterra-map-intro`) until it
+  is dismissed, or until the map panel is remounted (switching tabs rebuilds
+  the panel).
+- The top **active** main threat's stage and progress render as a compact badge
+  above the overlay. A defeated/contained threat is not shown as current.
+- `map.closeOnTravel` defaults to `true`; Spike B measures whether the new
+  HUD/scene-card feedback justifies changing that default.
+- **Deferred:** a dedicated district-control overlay toggle with a faction
+  legend is not part of Milestone 1. The Map keeps the existing faction layer
+  and per-district editor until the HUD/window pass revisits the overlay.
+
 The toolbar **×** (`data-neoterra-map-close`) sends `CLOSE` to the map state
 machine and invokes the host's `onClose` callback, which closes the shell.
 Before this, the X only reached the panel's internal `closed` state and hid

@@ -214,7 +214,7 @@ multi-threat behavior. For a living example, read `data/seasons/s4.json`
 Director mode uses `assets/neoterra-director.json`, a bundled V2 character card
 named `Neo Terra — Director`. It is intentionally **not** under `Chars/`, so it is
 never added to the season registry or offered as a playable identity. Users
-download it from the Season tab setup strip (or the Settings panel) and import it
+download it from the Story tab setup strip (or the Settings panel) and import it
 through SillyTavern's **Characters → Import character** flow, then select it and
 start a new chat before entering a season.
 

@@ -55,7 +55,7 @@ export const UI_IDS = Object.freeze({
 });
 
 export const SHELL_TABS = Object.freeze([
-    { id: 'season', label: 'Season' },
+    { id: 'season', label: 'Story' },
     { id: 'map', label: 'Map' },
     { id: 'characters', label: 'Characters' },
     { id: 'relations', label: 'Relations' },

@@ -156,3 +156,73 @@ test('fog editor controls are themed', () => {
     assert.doesNotMatch(controls, /#[0-9a-fA-F]{3,8}\b/);
     assert.match(controls, /var\(--nt-/);
 });
+
+test('the season grid and identity picker are fully styled', () => {
+    for (const selector of [
+        '.neoterra-season-menu',
+        '.neoterra-season-grid',
+        '.neoterra-season-card',
+        '.neoterra-season-card-header',
+        '.neoterra-season-title',
+        '.neoterra-season-era',
+        '.neoterra-season-premise',
+        '.neoterra-season-facts',
+        '.neoterra-season-content-note',
+        '.neoterra-season-actions',
+        '.neoterra-season-toolbar',
+        '.neoterra-character-first',
+        '.neoterra-identity-options',
+        '.neoterra-identity-option',
+        '.neoterra-identity-label',
+        '.neoterra-identity-portrait',
+        '.neoterra-identity-detail',
+        '.neoterra-back',
+        '.neoterra-cancel',
+        '.neoterra-agent-log',
+        '.neoterra-agent-log-entry',
+        '.neoterra-agent-log-entry-heading',
+        '.neoterra-agent-log-errors',
+        '.neoterra-season-notice',
+    ]) {
+        const rule = ruleBody(selector);
+        assert.ok(rule, `expected a ${selector} rule`);
+    }
+
+    for (const selector of [
+        '.neoterra-season-card',
+        '.neoterra-season-title',
+        '.neoterra-season-era',
+        '.neoterra-season-premise',
+        '.neoterra-season-content-note',
+        '.neoterra-season-notice',
+        '.neoterra-identity-option',
+        '.neoterra-identity-label',
+        '.neoterra-identity-detail',
+        '.neoterra-identity-portrait',
+        '.neoterra-back',
+        '.neoterra-cancel',
+        '.neoterra-agent-log',
+        '.neoterra-agent-log-errors',
+    ]) {
+        const rule = ruleBody(selector);
+        assert.doesNotMatch(rule, /#[0-9a-fA-F]{3,8}\b/, `${selector} should use theme tokens`);
+        assert.match(rule, /var\(--nt-/, `${selector} should use theme tokens`);
+    }
+
+    const grid = ruleBody('.neoterra-season-grid');
+    assert.match(grid, /grid-template-columns/);
+    assert.match(grid, /repeat\(3,/);
+    const fieldset = ruleBody('.neoterra-identity-options');
+    assert.match(fieldset, /border:\s*0/);
+
+    const focus = css.match(/\.neoterra-back:focus-visible[\s\S]*?\{([\s\S]*?)\}/);
+    assert.ok(focus, 'expected a focus-visible rule for the story controls');
+    assert.match(focus[1], /--nt-focus-ring/);
+
+    for (const selector of ['.neoterra-map-empty', '.neoterra-map-threat']) {
+        const rule = ruleBody(selector);
+        assert.ok(rule, `expected a ${selector} rule`);
+        assert.doesNotMatch(rule, /#[0-9a-fA-F]{3,8}\b|rgba\(/, `${selector} should use theme tokens`);
+        assert.match(rule, /var\(--nt-/, `${selector} should use theme tokens`);
+    }
+});

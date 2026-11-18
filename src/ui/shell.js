@@ -15,7 +15,9 @@ import {
 import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings, setSetting } from '../core/settings.js';
-import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
+import { mountSeasonMenu, disposeSeasonMenu, refreshSeasonMenu, getSeasonMenuState } from './season-menu.js';
+import { mountSessionHome } from './session-home.js';
+import { createNewTimeline } from '../flows/new-chat.js';
 import { mountClockChip } from './clock-chip.js';
 import {
     describeMissingSettingsHost,
@@ -29,6 +31,10 @@ import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData, resolveCodexRegistry } from './codex-data.js';
 import { mountRelationships } from './relationships.js';
 import { mountSensorium } from './sensorium.js';
+import {
+    mountPlayerPanel,
+    disposePlayerPanel as disposeMountedPlayerPanel,
+} from './player-panel.js';
 import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
 import { loadRegistry } from '../data/registry.js';
 import { loadLocations } from '../data/locations.js';
@@ -118,7 +124,7 @@ const TAB_PLACEHOLDERS = Object.freeze({
 });
 
 /** Tabs whose panel is a live mountable component instead of a placeholder. */
-const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'domain', 'settings']);
+const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'domain', 'player', 'settings']);
 
 let ctx = null;
 let abort = null;
@@ -129,6 +135,14 @@ let registeredCommand = null;
 let activeTab = 'season';
 let previousFocus = null;
 let mapMounted = false;
+/** Story tab mode: Session Home when a world exists, the season grid otherwise. */
+let storyMode = null;
+let storyGridRequested = false;
+let storyNotice = null;
+let sessionHomePanel = null;
+let sessionHomeChatId = null;
+let mountingShell = false;
+let timelinePending = false;
 
 /** Per-message gate and serialized queue for the assistant-turn pipeline. */
 const turnGate = createTurnGate();
@@ -155,6 +169,38 @@ function refreshContext() {
     return ctx;
 }
 
+/** Last shell surface used in this chat, when it is still a known tab. */
+export function readLastTab(context) {
+    const stored = context?.chatMetadata?.neoterra?.ui?.lastTab;
+    return SHELL_TABS.some((tab) => tab.id === stored) ? stored : null;
+}
+
+/** Persist the last surface per chat. Never writes outside `neoterra.ui`. */
+export function rememberLastTab(tabId) {
+    try {
+        const live = refreshContext();
+        const metadata = live?.chatMetadata;
+        if (!metadata || typeof metadata !== 'object') {
+            return false;
+        }
+        const neoterra = metadata.neoterra && typeof metadata.neoterra === 'object'
+            ? metadata.neoterra
+            : (metadata.neoterra = { schemaVersion: 1 });
+        const ui = neoterra.ui && typeof neoterra.ui === 'object'
+            ? neoterra.ui
+            : (neoterra.ui = {});
+        if (ui.lastTab === tabId) {
+            return false;
+        }
+        ui.lastTab = tabId;
+        live.saveMetadataDebounced?.();
+        return true;
+    } catch (error) {
+        logger.debug('Could not remember the last shell tab', error);
+        return false;
+    }
+}
+
 function shellMarkup() {
     const tabs = SHELL_TABS.map(tab => `
         <button type="button" role="tab" class="neoterra-tab" id="neoterra-tab-${tab.id}"
@@ -176,6 +222,7 @@ function shellMarkup() {
             ${tab.id === 'characters' ? '<div class="neoterra-codex-host" data-neoterra-codex-host></div>' : ''}
             ${tab.id === 'relations' ? '<div class="neoterra-relations-host" data-neoterra-relations-host></div>' : ''}
             ${tab.id === 'domain' ? '<div class="neoterra-domain-host" data-neoterra-domain-host></div>' : ''}
+            ${tab.id === 'player' ? '<div class="neoterra-player-host" data-neoterra-player-host></div>' : ''}
             ${tab.id === 'settings' ? `
             <div class="neoterra-settings-tab">
                 <p class="neoterra-hint">Neo Terra settings live in SillyTavern's <strong>Extensions</strong>
@@ -353,10 +400,12 @@ function disposeClockChip() {
 }
 
 function mountShell() {
+    mountingShell = true;
     document.getElementById(UI_IDS.ROOT)?.remove();
     document.body.insertAdjacentHTML('beforeend', shellMarkup());
     const root = document.getElementById(UI_IDS.ROOT);
     if (!root) {
+        mountingShell = false;
         return null;
     }
 
@@ -372,8 +421,21 @@ function mountShell() {
         }
         if (event.target.closest?.('[data-neoterra-open-settings]')) {
             openSettingsPanel();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-start-season]')) {
+            storyGridRequested = true;
+            setActiveTab('season');
         }
     }, { signal: abort.signal });
+
+    // The sheet reflects the same per-chat document the map and the turn
+    // pipeline write: refresh it whenever the world announces a change.
+    playerRefreshOff?.();
+    playerRefreshOff = bus.on(EVENTS.MAP_UPDATED, () => {
+        playerPanel?.refresh?.();
+        sessionHomePanel?.refresh?.();
+    });
 
     // Apply authored-data tab visibility once at mount: before a chat exists
     // the Domain tab must already be hidden, not only after the first click.
@@ -398,6 +460,7 @@ function mountShell() {
         }
     }, { signal: abort.signal });
 
+    mountingShell = false;
     return root;
 }
 
@@ -506,20 +569,115 @@ async function mountSeasonPanel(context) {
         return null;
     }
     const host = panel.querySelector('[data-neoterra-season-host]') ?? panel;
+    const wantsHome = hasWorldInChat(context) && !storyGridRequested;
+    if (wantsHome) {
+        if (storyMode === 'home' && sessionHomePanel
+            && sessionHomeChatId === currentChatId(context)) {
+            sessionHomePanel.refresh();
+            return sessionHomePanel;
+        }
+        disposeSeasonMenu();
+        disposeSessionHome();
+        storyMode = 'home';
+        sessionHomeChatId = currentChatId(context);
+        sessionHomePanel = mountSessionHome({
+            root: host,
+            getContext: refreshContext,
+            onAction: (action) => handleSessionHomeAction(action),
+        });
+        return sessionHomePanel;
+    }
+    if (storyMode === 'grid' && getSeasonMenuState() && !storyNotice) {
+        // Keep the wizard/filter state when the grid is already mounted.
+        refreshSeasonMenu();
+        return getSeasonMenuState();
+    }
+    disposeSessionHome();
+    storyMode = 'grid';
+    const notice = storyNotice;
+    storyNotice = null;
     try {
         return await mountSeasonMenu({
             root: host,
             ctx: context,
             getContext: refreshContext,
+            notice,
             onEntered: (result) => {
+                storyGridRequested = false;
                 handleSeasonEntered(result).catch((error) => {
                     logger.warn('Could not hand the season start back to the chat', error);
                 });
+            },
+            onKeepCurrentWorld: () => {
+                // "Keep current world" returns to Session Home, not to the
+                // identity step in front of a destructive replace prompt.
+                storyGridRequested = false;
+                void mountSeasonPanel(refreshContext());
             },
         });
     } catch (error) {
         logger.warn('Could not mount the season menu', error);
         return null;
+    }
+}
+
+function hasWorldInChat(context) {
+    return Boolean(context?.chatMetadata?.neoterra?.worldState);
+}
+
+function disposeSessionHome() {
+    sessionHomePanel?.dispose?.();
+    sessionHomePanel = null;
+    sessionHomeChatId = null;
+}
+
+function handleSessionHomeAction(action) {
+    if (action === 'continue') {
+        closeShell();
+        document.getElementById('send_textarea')?.focus?.();
+        return;
+    }
+    if (action === 'new-timeline') {
+        void startNewTimeline();
+        return;
+    }
+    if (action === 'map' || action === 'characters' || action === 'player') {
+        setActiveTab(action);
+        return;
+    }
+    if (action === 'season') {
+        storyGridRequested = true;
+        void mountSeasonPanel(refreshContext());
+    }
+}
+
+/**
+ * "New timeline" creates a new chat, leaving the current timeline intact.
+ * Only a failed creation falls back to the explicit replace confirmation.
+ */
+async function startNewTimeline() {
+    if (timelinePending) {
+        return { ok: false, reason: 'pending' };
+    }
+    timelinePending = true;
+    try {
+        const live = refreshContext() ?? ctx;
+        const result = await createNewTimeline({ ctx: live });
+        if (!result.ok) {
+            storyGridRequested = true;
+            storyNotice = result.message ?? 'A new chat could not be created.';
+            await mountSeasonPanel(refreshContext());
+            return result;
+        }
+        // The new chat has no world yet: show the season grid so the user can
+        // start a fresh timeline there.
+        storyGridRequested = true;
+        storyNotice = null;
+        invalidateChatRuntimes(refreshContext() ?? live);
+        await mountSeasonPanel(refreshContext());
+        return result;
+    } finally {
+        timelinePending = false;
     }
 }
 
@@ -826,6 +984,18 @@ async function mountMapPanelComponent(context) {
     if (!host) {
         return null;
     }
+    if (!hasWorldInChat(context)) {
+        // No world: one CTA instead of an empty map with disabled travel.
+        disposeMapPanel();
+        mountedMapChatId = null;
+        host.innerHTML = `
+        <div class="neoterra-map-empty" data-neoterra-map-empty>
+            <h3>No world in this chat</h3>
+            <p>Start a season to unlock the districts, travel, and the living city.</p>
+            <button type="button" class="menu_button" data-neoterra-start-season>Start a season</button>
+        </div>`;
+        return null;
+    }
     try {
         // A chat switch keeps this module loaded: drop the old panel/store so
         // nothing is written into the previous chat's metadata.
@@ -1100,6 +1270,90 @@ async function mountDomainPanelComponent(context) {
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* Player sheet                                                       */
+/* ------------------------------------------------------------------ */
+
+let playerPanel = null;
+let mountedPlayerChatId = null;
+let playerRefreshOff = null;
+
+function disposePlayerPanelComponent() {
+    disposeMountedPlayerPanel();
+    playerPanel = null;
+}
+
+async function mountPlayerPanelForActiveChat() {
+    return mountPlayerPanelComponent(refreshContext());
+}
+
+async function mountPlayerPanelComponent(context) {
+    if (!hasDom()) {
+        return null;
+    }
+    const host = document.querySelector('[data-neoterra-player-host]');
+    if (!host) {
+        return null;
+    }
+    const chatId = currentChatId(context);
+    const metadata = context?.chatMetadata;
+    if (!chatId || !metadata) {
+        disposePlayerPanelComponent();
+        mountedPlayerChatId = null;
+        host.innerHTML = '<p class="neoterra-empty">Open a chat with a world to see the player sheet.</p>';
+        return null;
+    }
+    const store = sharedStoreFor(context);
+    if (!store || !store.get()) {
+        disposePlayerPanelComponent();
+        mountedPlayerChatId = null;
+        // `sharedStoreFor` may have registered an empty store; release it when
+        // no other runtime owns it so it cannot linger across the chat.
+        const ownedByMap = mapRuntime?.chatId === chatId;
+        const ownedByInteraction = interactionRuntime?.chatId === chatId;
+        if (!ownedByMap && !ownedByInteraction) {
+            releaseSharedWorldStateStore(chatId);
+        }
+        host.innerHTML = '<p class="neoterra-empty">This chat has no active world. Start a season to see the player sheet.</p>';
+        return null;
+    }
+    if (mountedPlayerChatId && mountedPlayerChatId !== chatId) {
+        disposePlayerPanelComponent();
+    }
+    mountedPlayerChatId = chatId;
+    if (playerPanel) {
+        playerPanel.refresh();
+        return playerPanel;
+    }
+    try {
+        const season = metadata.neoterra?.seasonDefinition ?? null;
+        const resolved = resolveCodexRegistry(metadata);
+        const registry = await resolved.registry;
+        // A chat switch during the registry fetch must not paint into the new
+        // chat with the previous chat's sheet.
+        if (mountedPlayerChatId !== chatId) {
+            return null;
+        }
+        disposePlayerPanelComponent();
+        playerPanel = mountPlayerPanel({
+            root: host,
+            store,
+            season,
+            registry,
+            onChange: () => {
+                // The sheet writes through the shared store; refresh the other
+                // surfaces that read the same document.
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'player-edit' });
+            },
+        });
+        return playerPanel;
+    } catch (error) {
+        logger.warn('Could not mount the player sheet', error);
+        host.innerHTML = '<p class="neoterra-error" role="alert">The player sheet could not be mounted.</p>';
+        return null;
+    }
+}
+
 /**
  * Drop the chat-bound runtimes and the shared store they were using. The next
  * activation rebuilds them from metadata; the gate resets so the first turn in
@@ -1107,7 +1361,7 @@ async function mountDomainPanelComponent(context) {
  */
 function disposeChatRuntimes() {
     const chatIds = [...new Set(
-        [mapRuntime?.chatId, interactionRuntime?.chatId].filter(Boolean),
+        [mapRuntime?.chatId, interactionRuntime?.chatId, mountedPlayerChatId].filter(Boolean),
     )];
     mapRuntime = null;
     mountedMapChatId = null;
@@ -1115,6 +1369,10 @@ function disposeChatRuntimes() {
     choicesBar = null;
     disposeEncounterBar();
     encounterBar = null;
+    // The sheet holds the same store; a released store must never be written
+    // back through a stale manual edit.
+    disposePlayerPanelComponent();
+    mountedPlayerChatId = null;
     // The registry is the single disposal point; the two runtimes share a store.
     for (const chatId of chatIds) {
         releaseSharedWorldStateStore(chatId);
@@ -1137,6 +1395,9 @@ function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
     }
     if (isShellOpen() && getActiveTab() === 'map') {
         void mountMapPanelForActiveChat();
+    }
+    if (isShellOpen() && getActiveTab() === 'player') {
+        void mountPlayerPanelForActiveChat();
     }
     void refreshInteractionUi(context ?? refreshContext());
 }
@@ -1705,6 +1966,11 @@ export function setActiveTab(tabId) {
     const visibleIds = new Set(visible.map(tab => tab.id));
     tabId = resolveActiveTab(tabId, state, season);
     activeTab = tabId;
+    // Never treat the mount-time default as a user choice: it would overwrite
+    // the per-chat last tab before `openShell` can restore it.
+    if (!mountingShell) {
+        rememberLastTab(tabId);
+    }
     if (!hasDom()) {
         return true;
     }
@@ -1737,11 +2003,17 @@ export function setActiveTab(tabId) {
     if (tabId === 'domain') {
         void mountDomainPanelForActiveChat();
     }
+    if (tabId === 'player') {
+        void mountPlayerPanelForActiveChat();
+    }
+    if (tabId === 'season' && !mountingShell) {
+        void mountSeasonPanel(refreshContext());
+    }
     bus.emit(EVENTS.TAB_CHANGED, { tab: tabId });
     return true;
 }
 
-export function openShell(tabId = activeTab) {
+export function openShell(tabId = null) {
     if (!hasDom()) {
         return false;
     }
@@ -1754,7 +2026,11 @@ export function openShell(tabId = activeTab) {
     // real viewport instead of a zero-size hidden container.
     root.hidden = false;
     root.classList.add('is-open');
-    setActiveTab(tabId);
+    // Restore the last surface used in this chat; the Story tab defaults to
+    // Session Home when a world exists, so a reload never forces a season
+    // re-selection.
+    const target = tabId ?? readLastTab(refreshContext()) ?? 'season';
+    setActiveTab(target);
     root.querySelector('.neoterra-close')?.focus?.();
     bus.emit(EVENTS.SHELL_OPENED, { tab: activeTab });
     return true;
@@ -1771,6 +2047,11 @@ export function closeShell() {
     }
     root.hidden = true;
     root.classList.remove('is-open');
+    // Reopening a chat that has a world should land on Session Home unless the
+    // user explicitly opens the grid again.
+    if (hasWorldInChat(refreshContext())) {
+        storyGridRequested = false;
+    }
     previousFocus?.focus?.();
     previousFocus = null;
     bus.emit(EVENTS.SHELL_CLOSED, { tab: activeTab });
@@ -1894,12 +2175,19 @@ async function resetChatWorld(context = null) {
     mountedCodexChatId = null;
     mountedRelationsChatId = null;
     mountedDomainChatId = null;
+    mountedPlayerChatId = null;
+    storyMode = null;
+    storyGridRequested = false;
+    storyNotice = null;
+    disposeSessionHome();
+    disposeSeasonMenu();
     interactionRuntime = null;
     choicesBar = null;
     disposeMapPanel();
     disposeCodex();
     disposeRelationsPanel();
     disposeDomainPanel();
+    disposePlayerPanelComponent();
     disposeChoicesBar();
     disposeEndingPanel();
     if (isShellOpen() && getActiveTab() === 'map') {
@@ -1913,6 +2201,12 @@ async function resetChatWorld(context = null) {
     }
     if (isShellOpen() && getActiveTab() === 'domain') {
         void mountDomainPanelForActiveChat();
+    }
+    if (isShellOpen() && getActiveTab() === 'player') {
+        void mountPlayerPanelForActiveChat();
+    }
+    if (isShellOpen() && getActiveTab() === 'season') {
+        void mountSeasonPanel(refreshContext());
     }
     void refreshInteractionUi(live);
     bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-reset' });
@@ -2041,6 +2335,13 @@ function subscribeChatChanges(context) {
         disposeRelationsPanel();
         mountedDomainChatId = null;
         disposeDomainPanel();
+        mountedPlayerChatId = null;
+        disposePlayerPanelComponent();
+        storyMode = null;
+        storyGridRequested = false;
+        storyNotice = null;
+        disposeSessionHome();
+        disposeSeasonMenu();
         disposeChoicesBar();
         disposeEncounterBar();
         encounterBar = null;
@@ -2056,6 +2357,12 @@ function subscribeChatChanges(context) {
         }
         if (isShellOpen() && getActiveTab() === 'domain') {
             void mountDomainPanelForActiveChat();
+        }
+        if (isShellOpen() && getActiveTab() === 'player') {
+            void mountPlayerPanelForActiveChat();
+        }
+        if (isShellOpen() && getActiveTab() === 'season') {
+            void mountSeasonPanel(refreshContext());
         }
         // A chat switch can hide the Domain tab; move focus to Characters
         // rather than leaving an invisible tab selected. Visible tabs keep
@@ -2109,11 +2416,19 @@ export function dispose() {
     mountedCodexChatId = null;
     mountedRelationsChatId = null;
     mountedDomainChatId = null;
+    mountedPlayerChatId = null;
     disposeSeasonMenu();
+    disposeSessionHome();
+    storyMode = null;
+    storyGridRequested = false;
+    storyNotice = null;
     disposeMapPanel();
     disposeCodex();
     disposeRelationsPanel();
     disposeDomainPanel();
+    disposePlayerPanelComponent();
+    playerRefreshOff?.();
+    playerRefreshOff = null;
     disposeSettingsPanel();
     disposeChoicesBar();
     disposeEncounterBar();

@@ -500,6 +500,13 @@ export async function mountMapPanel(options = {}) {
             selectFeature(state, null);
             return;
         }
+        if (event.target.closest?.('[data-neoterra-map-return]')) {
+            state.flow.send('CLOSE');
+            if (!runCloseHandler(state.onClose)) {
+                logger.debug('The map close callback failed');
+            }
+            return;
+        }
         if (event.target.closest?.('[data-neoterra-map-close]')) {
             state.flow.send('CLOSE');
             if (!runCloseHandler(state.onClose)) {
@@ -656,6 +663,7 @@ function renderShellMarkup(state) {
             <div class="neoterra-map-toggles" role="group" aria-label="Map layers">${toggles}</div>
             <div class="neoterra-map-buttons">
                 <button type="button" class="menu_button" data-neoterra-map-recenter>Recenter</button>
+                <button type="button" class="menu_button" data-neoterra-map-return>Return to chat</button>
                 <button type="button" class="neoterra-icon-button" data-neoterra-map-close aria-label="Close map">&times;</button>
             </div>
         </header>
@@ -1458,7 +1466,20 @@ function paintSide() {
                 <p>${escapeHtml(state.lastIntro.text).replaceAll('\n', '<br>')}</p>
            </section>`
         : '';
-    side.innerHTML = `${error}${intro}${state.pacingError ? `<p class="neoterra-error" role="alert">${escapeHtml(state.pacingError)}</p>` : ''}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
+    const threats = Array.isArray(state.overlay?.threats) ? state.overlay.threats : [];
+    const activeThreat = threats.find((threat) => threat.status === 'active' && threat.rank === 'main')
+        ?? threats.find((threat) => threat.status === 'active')
+        ?? null;
+    const threatBadge = activeThreat
+        ? `<div class="neoterra-map-threat" data-neoterra-map-threat>
+                <span class="neoterra-map-threat-name">${escapeHtml(activeThreat.name)}</span>
+                ${activeThreat.stageLabel
+                    ? `<span class="neoterra-overlay-chip is-stage">${escapeHtml(activeThreat.stageLabel)}</span>`
+                    : ''}
+                <span class="neoterra-map-threat-progress">${Number.isFinite(activeThreat.progress) ? activeThreat.progress : 0}%</span>
+           </div>`
+        : '';
+    side.innerHTML = `${error}${threatBadge}${intro}${state.pacingError ? `<p class="neoterra-error" role="alert">${escapeHtml(state.pacingError)}</p>` : ''}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
 }
 
 async function loadAndMount(state) {

@@ -413,6 +413,54 @@
     min-height: 0;
 }
 
+.neoterra-map-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100%;
+    padding: 32px;
+    text-align: center;
+    border: 1px dashed var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    background: var(--nt-bg-translucent);
+    color: var(--nt-text-muted);
+}
+
+.neoterra-map-empty h3 {
+    margin: 0;
+}
+
+.neoterra-map-empty p {
+    margin: 0;
+    max-width: 42ch;
+    opacity: 0.85;
+}
+
+.neoterra-map-threat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--nt-danger);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-danger-soft);
+    color: var(--nt-text);
+}
+
+.neoterra-map-threat-name {
+    font-weight: 600;
+}
+
+.neoterra-map-threat-progress {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+}
+
 .neoterra-map-host {
     position: relative;
     flex: 1 1 auto;
@@ -1724,6 +1772,159 @@
 
 /* ---------- Player sheet ---------- */
 
+/* Session Home ------------------------------------------------------- */
+
+.neoterra-session-home {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 4px 2px 12px;
+}
+
+.neoterra-home-header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 16px;
+    border: 1px solid rgba(120, 200, 255, 0.18);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(18, 34, 56, 0.92), rgba(10, 18, 32, 0.92));
+}
+
+.neoterra-home-portrait {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    border-radius: 50%;
+    border: 1px solid rgba(120, 200, 255, 0.4);
+    background: rgba(30, 60, 96, 0.6);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.neoterra-home-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.neoterra-home-era {
+    margin: 0;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+}
+
+.neoterra-home-title {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.neoterra-home-player {
+    margin: 0;
+    font-size: 0.92rem;
+    opacity: 0.9;
+}
+
+.neoterra-home-section h4 {
+    margin: 0 0 6px;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.75;
+}
+
+.neoterra-home-recap {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.neoterra-home-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.neoterra-home-threat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 140, 120, 0.25);
+    background: rgba(70, 24, 22, 0.35);
+}
+
+.neoterra-home-threat-name {
+    font-weight: 600;
+}
+
+.neoterra-home-threat-progress {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+
+.neoterra-home-cast {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.neoterra-home-cast-member {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(120, 200, 255, 0.18);
+    background: rgba(20, 34, 52, 0.7);
+    font-size: 0.85rem;
+}
+
+.neoterra-home-avatar {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(40, 80, 120, 0.7);
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+.neoterra-home-actions,
+.neoterra-home-secondary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.neoterra-home-actions [data-primary="true"] {
+    border-color: rgba(120, 200, 255, 0.6);
+    background: rgba(36, 90, 140, 0.75);
+}
+
+.neoterra-home-secondary {
+    padding-top: 8px;
+    border-top: 1px solid rgba(120, 200, 255, 0.12);
+}
+
+.neoterra-player-host {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .neoterra-player-sheet {
     display: flex;
     flex-direction: column;
@@ -2502,4 +2703,317 @@ body.neoterra-dialog-open {
     border-left: 2px solid var(--nt-border-strong);
     color: var(--nt-text);
     font-size: 0.85rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Story setup: season grid and identity picker                        */
+/* ------------------------------------------------------------------ */
+
+.neoterra-season-host {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.neoterra-season-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 4px 2px 16px;
+    color: var(--nt-text);
+}
+
+.neoterra-season-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    background: var(--nt-bg-translucent);
+}
+
+.neoterra-character-first {
+    flex: 1 1 260px;
+    margin: 0;
+}
+
+.neoterra-character-first input {
+    width: 100%;
+}
+
+.neoterra-season-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+@media (max-width: 1180px) {
+    .neoterra-season-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .neoterra-season-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.neoterra-season-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    background: linear-gradient(160deg, var(--nt-bg-elevated), var(--nt-bg-deep));
+    box-shadow: var(--nt-shadow-soft);
+    transition: border-color var(--nt-transition), transform var(--nt-transition),
+        box-shadow var(--nt-transition);
+}
+
+.neoterra-season-card:hover,
+.neoterra-season-card:focus-within {
+    border-color: var(--nt-border-strong);
+    box-shadow: var(--nt-glow);
+    transform: translateY(-1px);
+}
+
+.neoterra-season-card.is-disabled {
+    opacity: 0.6;
+}
+
+.neoterra-season-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.neoterra-season-title {
+    margin: 0;
+    font-size: 1.05rem;
+    line-height: 1.25;
+    color: var(--nt-text);
+}
+
+.neoterra-season-era {
+    margin: 0;
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-season-premise {
+    margin: 0;
+    color: var(--nt-text-muted);
+    line-height: 1.45;
+}
+
+.neoterra-season-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+
+.neoterra-season-facts > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.neoterra-season-facts dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-season-facts dd {
+    margin: 0;
+    font-size: 0.86rem;
+    color: var(--nt-text);
+    overflow-wrap: anywhere;
+}
+
+.neoterra-season-notice {
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-warning-soft);
+    color: var(--nt-text);
+    font-size: 0.8rem;
+}
+
+.neoterra-season-content-note {
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--nt-border);
+    font-size: 0.74rem;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-season-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.neoterra-season-actions .neoterra-primary,
+.neoterra-season-enter {
+    border-color: var(--nt-border-strong);
+    background: var(--nt-accent-soft);
+    color: var(--nt-text);
+}
+
+.neoterra-season-enter {
+    width: 100%;
+    margin-top: auto;
+    cursor: pointer;
+}
+
+.neoterra-season-enter:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.neoterra-identity-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+}
+
+.neoterra-identity-option {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-bg-translucent);
+    cursor: pointer;
+    transition: border-color var(--nt-transition), background var(--nt-transition);
+}
+
+.neoterra-identity-option:hover,
+.neoterra-identity-option:focus-within {
+    border-color: var(--nt-border-strong);
+    background: var(--nt-accent-soft);
+}
+
+.neoterra-identity-option input:focus-visible {
+    outline: none;
+    box-shadow: var(--nt-focus-ring);
+    border-radius: 50%;
+}
+
+.neoterra-identity-label {
+    font-weight: 600;
+    color: var(--nt-text);
+}
+
+.neoterra-identity-portrait {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--nt-border-strong);
+    background: var(--nt-accent-soft);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--nt-text);
+}
+
+.neoterra-identity-detail {
+    grid-column: 3;
+    font-size: 0.78rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-back {
+    align-self: flex-start;
+    border-color: var(--nt-border);
+    background: transparent;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-cancel {
+    align-self: flex-start;
+    border-color: var(--nt-border);
+    background: transparent;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-back:hover,
+.neoterra-cancel:hover {
+    color: var(--nt-text);
+    border-color: var(--nt-border-strong);
+}
+
+.neoterra-back:focus-visible,
+.neoterra-cancel:focus-visible,
+.neoterra-season-card button:focus-visible,
+.neoterra-identity-option button:focus-visible {
+    outline: none;
+    box-shadow: var(--nt-focus-ring);
+}
+
+.neoterra-agent-log {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 320px;
+    padding: 10px;
+    overflow: auto;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-bg-deep);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-agent-log-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: var(--nt-bg-elevated);
+}
+
+.neoterra-agent-log-entry-heading {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.neoterra-agent-log-errors {
+    padding: 6px 8px;
+    border-left: 2px solid var(--nt-danger);
+    border-radius: 4px;
+    background: var(--nt-danger-soft);
+    color: var(--nt-text);
+    white-space: pre-wrap;
+}
+
+.neoterra-agent-log-status.is-error {
+    color: var(--nt-danger);
 }
