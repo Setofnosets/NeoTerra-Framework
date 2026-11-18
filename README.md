@@ -20,6 +20,13 @@ small schema-constrained agents that never free-write state.
 - **Player identity** — custom persona by default, or "Play as" a canon
   character from the current roster (any registry character in Sandbox, with a
   persistent non-canon warning).
+- **In-chat scene output** — season start and travel post deduped Neo Terra
+  narrator frames into the same chat, including a "your move" kickoff card and
+  travel arrival/encounter prose. World state stays in the prompt, not the
+  transcript. See [docs/scene-output.md](docs/scene-output.md).
+- **Deterministic encounters** — arriving where hostiles are present records an
+  encounter in scene state and offers explicit **Engage / Talk / Avoid**
+  actions; Engage starts the deterministic combat flow.
 - **World state** — one versioned `WorldState` document per chat, written only
   through typed events. Per-chat storage, per-swipe snapshots, and a WAL guard
   against reloads mid-pass.
@@ -80,12 +87,22 @@ read Leaflet from a CDN, npm, or another extension's global.
 1. Open the shell and choose a season. Each card shows the era, premise, player
    role, main threat(s), and cast count.
 2. Choose an identity: **custom persona** or **play as a canon character**
-   (S1Dark preselects Carol / Bleeding Heart).
+   (S1Dark preselects Carol / Bleeding Heart). A canon radio carries its
+   registry id directly; choosing it and pressing **Begin** is enough — the
+   old "create a custom persona first, then Play as" workaround is gone.
 3. The extension seeds the world deterministically, materializes a chat-scoped
-   world book, selects the Director card, and writes the opening scene.
+   world book, selects the Director card, and posts an opening scene frame plus
+   a **"Season started / You are / Goals / Current situation / Your move"**
+   kickoff into the chat. The shell closes and focuses the input.
 4. Play normally. State Tracker runs every assistant turn; Storyline runs every
    six turns or on a location change; Cast Director runs on scene changes; Lore
-   runs every ten turns. All cadences are configurable.
+   runs every ten turns. All cadences are configurable. Every assistant turn
+   advances the clock and refreshes the map before CYOA choices are requested.
+
+The chat is the primary surface: travel posts a `Location changed: X → Y`
+arrival frame (with the encounter, if any), and a small action bar offers
+**Engage / Talk / Avoid** when hostiles are present. World state is never
+copied into the chat; it reaches the model through the generate interceptor.
 
 World state is stored in `chatMetadata.neoterra`, so two chats with the same
 season are independent timelines.
@@ -164,6 +181,24 @@ Themes: `auto`, `heroic`, `villainous`, `romantic`, `noir`, `comedic`,
 actions the resolver understands (strike, defend, grapple, feint, skill,
 retreat, surrender, talk down). See [docs/cyoa.md](docs/cyoa.md).
 
+Choices are requested after a new assistant turn **after** the clock tick, the
+State Tracker, the storyline pass, and the cast/map refresh, so the chips
+reflect the updated state. The season opening frame and a travel arrival frame
+also request choices when `cyoa.enabled` is on, even though no
+`MESSAGE_RECEIVED` event fired for them.
+
+---
+
+## Settings handoff
+
+The Neo Terra settings live inside SillyTavern's own **Extensions** drawer. The
+shell's **Settings → Open settings panel** button closes the full-screen shell,
+then opens the ST extensions drawer and expands/scrolls the Neo Terra panel
+instead of silently scrolling a hidden element. Re-clicking with the drawer
+already open leaves it open. If `#rm_extensions_block` or the Neo Terra panel
+is missing, the Settings tab shows a visible status message and logs the
+failure.
+
 ---
 
 ## Content gate
@@ -192,8 +227,15 @@ bindings. The runtime never parses SVG.
 - Re-run `npm run build:map` after any SVG change. `--check` fails on missing
   layers, duplicate/empty labels, zero-area geometry, count drift, or stale
   generated files.
+- The map tab and floating window fill the available height, and drag/resize
+  stay inside the map host. Stored geometry from the old 1080×700 default is
+  migrated to the taller default; custom sizes are preserved and re-clamped.
+- `map.closeOnTravel` (default **`true`**) closes the shell after a successful
+  travel so the chat shows the arrival frame. A rejected travel keeps the map
+  open. The toolbar **×** also closes the shell.
 
-See [docs/map-authoring.md](docs/map-authoring.md).
+See [docs/map-authoring.md](docs/map-authoring.md) and
+[docs/scene-output.md](docs/scene-output.md).
 
 ---
 
@@ -280,6 +322,11 @@ SillyTavern chat messages.
   use the manual checklist in the plan for live QA.
 - Imported character cards are not written to the repository by the browser;
   override generation is a download-and-merge workflow.
+- Version drift: `EXTENSION_VERSION` in `src/core/constants.js` currently
+  reports `0.1.0` while `package.json` and `manifest.json` report `1.0.0`. The
+  shell footer/debug API use the constant, so they show the older value.
+  Alignment is pending a check of SillyTavern's manifest compatibility
+  expectations; the manifest is intentionally not changed here.
 
 ---
 

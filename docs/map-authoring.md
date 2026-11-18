@@ -129,6 +129,33 @@ placed manually, or with the dev-only `tools/map-coords.mjs` spike.
    locations with no region, or area outliers.
 7. Run `node tools/build-map.mjs --check` and the map tests.
 
+## Travel handoff and closing the map
+
+Travel uses the bridge graph and keeps the current chat. On a successful move
+the shell posts a travel arrival frame into the chat (see
+[scene-output.md](scene-output.md)), refreshes the map, and then:
+
+- if `map.closeOnTravel` is **on** (the default), closes the Neo Terra shell
+  right after the frame is posted so the chat is visible; the choices request
+  continues in the background. The setting lives in the Settings → Map section
+  (`data-neoterra-path="map.closeOnTravel"`).
+- if it is off, leaves the shell open on the map tab.
+
+A rejected travel (blocked route, combat active, no route) keeps the map open
+and posts nothing. Merely refreshing the map, switching tabs, or re-rendering
+the panel never closes the shell.
+
+The toolbar **×** (`data-neoterra-map-close`) sends `CLOSE` to the map state
+machine and invokes the host's `onClose` callback, which closes the shell.
+Before this, the X only reached the panel's internal `closed` state and hid
+nothing.
+
+The panel's stored geometry is versioned: a value exactly equal to the old
+`1080×700` default is treated as unset and replaced with the taller default;
+custom sizes survive and are re-clamped to the map host. Drag and resize use
+the host box, not the browser window, so the panel cannot be dragged outside
+the shell.
+
 ## Per-chat overrides
 
 Global edits belong in `data/map/overrides.json`. A destroyed bridge, captured
