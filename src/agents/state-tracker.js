@@ -17,6 +17,7 @@ import {
 } from '../core/world-clock.js';
 import { applyWorldEvents } from '../state/reducer.js';
 import { validateWorldState } from '../state/world-state.js';
+import { analyzePacing, recordPacing } from '../flows/pacing.js';
 
 export const PLAYER_TRACKER_PATHS = Object.freeze([
     'stamina.current',
@@ -822,6 +823,33 @@ export async function runTurnPipeline({
         }
     }
 
+    // Stage 1.75: deterministic scene-drift analysis. It writes only
+    // `flags.pacing` and never changes story state.
+    let pacingReport = { ran: false, reason: 'absent' };
+    if (settings?.pacing?.enabled !== false) {
+        try {
+            const analysis = analyzePacing({ state: store.get(), settings });
+            const recorded = recordPacing(store, analysis);
+            pacingReport = {
+                ran: recorded.ok === true,
+                reason: recorded.ok === true ? analysis.level : 'record-failed',
+                level: analysis.level,
+                suggestion: analysis.suggestion,
+                held: analysis.held,
+                canCut: analysis.canCut,
+            };
+            if (recorded.ok !== true) {
+                logWarning(log, 'Could not record the pacing analysis; state unchanged',
+                    recorded.error);
+                errors.push({ stage: 'pacing', error: recorded.error ?? 'record failed' });
+            }
+        } catch (error) {
+            pacingReport = { ran: false, reason: 'failed', error: error?.message ?? String(error) };
+            logWarning(log, 'Pacing analysis failed; state unchanged', error);
+            errors.push({ stage: 'pacing', error: error?.message ?? String(error) });
+        }
+    }
+
     // Stage 2: the player tracker. Disabled means no run call at all; a failed
     // or aborted pass keeps the state and never blocks the later stages.
     const enabled = settings?.agents?.stateTracker?.enabled !== false;
@@ -923,6 +951,7 @@ export async function runTurnPipeline({
         turn,
         clock,
         worldTick: worldTickReport,
+        pacing: pacingReport,
         tracker: trackerReport,
         storyline,
         cast,

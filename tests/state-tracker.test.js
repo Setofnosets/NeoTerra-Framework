@@ -889,3 +889,55 @@ test('an absent world tick keeps the pipeline result shape with reason absent', 
     assert.deepEqual(result.worldTick, { ran: false, reason: 'absent' });
     assert.equal(result.ticked, true);
 });
+
+test('the pipeline records a pacing analysis every turn and never touches story state', async () => {
+    const store = makeStore('s1');
+    const before = store.get();
+    const result = await runTurnPipeline({
+        store,
+        getSettings: () => ({}),
+        log: () => {},
+    });
+    const after = store.get();
+    assert.equal(result.ok, true);
+    assert.equal(result.pacing.ran, true);
+    assert.equal(after.flags.pacing.level, 'ok');
+    assert.equal(after.flags.pacing.lastAnalyzedTurn, after.meta.turn);
+    // Only the clock (and optional tick/pacing flags) moved; the scene did not.
+    assert.equal(after.scene.locationId, before.scene.locationId);
+    assert.equal(after.scene.framing, before.scene.framing);
+});
+
+test('pacing can be disabled without breaking the pipeline', async () => {
+    const store = makeStore('s1');
+    const result = await runTurnPipeline({
+        store,
+        getSettings: () => ({ pacing: { enabled: false } }),
+        log: () => {},
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.pacing, { ran: false, reason: 'absent' });
+    assert.equal(store.get().flags.pacing, undefined);
+});
+
+test('a long scene reaches the cut level through the real pipeline stage', async () => {
+    const store = makeStore('s1');
+    const state = store.get();
+    store.replace({
+        ...state,
+        meta: { ...state.meta, turn: 12 },
+        flags: {
+            ...state.flags,
+            pacing: { sceneStartedTurn: 0, sceneLocationId: state.scene.locationId },
+        },
+    });
+    const result = await runTurnPipeline({
+        store,
+        getSettings: () => ({}),
+        log: () => {},
+    });
+    assert.equal(result.pacing.ran, true);
+    assert.equal(result.pacing.level, 'cut');
+    assert.equal(store.get().flags.pacing.sceneStartedTurn, 0);
+    assert.equal(store.get().flags.pacing.sceneLocationId, store.get().scene.locationId);
+});

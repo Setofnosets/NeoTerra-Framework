@@ -26,6 +26,7 @@ export const SCENE_KINDS = Object.freeze({
     ENCOUNTER: 'encounter',
     COMBAT: 'combat',
     RESOLUTION: 'resolution',
+    CUT: 'cut',
 });
 
 /** Avatar shown next to a scene frame (bundled with the extension). */
@@ -171,6 +172,24 @@ export function buildTravelFrameText({ fromName, toName, from, to, intro } = {})
     const destination = firstNonEmpty(toName, intro?.locationName, to, 'a new location');
     const header = `Location changed: ${origin} → ${destination}`;
     const body = stripContextBlocks(intro?.text);
+    return body.length > 0 ? `${header}\n\n${body}` : header;
+}
+
+/**
+ * Scene-cut frame text. Optional: the cut flow never posts prose by itself, but
+ * a caller may render a visible "meanwhile" frame. Context blocks are stripped
+ * defensively.
+ */
+export function buildCutFrameText({
+    locationName = null,
+    slots = 2,
+    summary = null,
+    reason = null,
+} = {}) {
+    const place = firstNonEmpty(locationName, 'the same place');
+    const count = Number.isInteger(slots) && slots > 0 ? slots : 2;
+    const header = `Meanwhile — ${count} slot${count === 1 ? '' : 's'} later at ${place}`;
+    const body = stripContextBlocks(firstNonEmpty(summary, reason));
     return body.length > 0 ? `${header}\n\n${body}` : header;
 }
 

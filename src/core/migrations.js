@@ -234,6 +234,26 @@ function normalizeWorldTick(worldTick, defaults) {
     };
 }
 
+function normalizePacing(pacing, defaults) {
+    const source = isPlainObject(pacing) ? pacing : {};
+    const clamped = (key, min, max) => asNumber(source[key], defaults[key], {
+        min,
+        max,
+        integer: true,
+    });
+    return {
+        ...source,
+        enabled: asBoolean(source.enabled, defaults.enabled),
+        stallTurns: clamped('stallTurns', 1, 100),
+        sceneMaxTurns: clamped('sceneMaxTurns', 2, 500),
+        threatNudgeTurns: clamped('threatNudgeTurns', 1, 500),
+        cutScore: clamped('cutScore', 1, 20),
+        nudgeScore: clamped('nudgeScore', 1, 20),
+        cutSlots: clamped('cutSlots', 1, 12),
+        snoozeTurns: clamped('snoozeTurns', 1, 100),
+    };
+}
+
 /** Normalize known settings fields after defaults and migrations are applied. */
 export function normalizeSettings(settings) {
     const defaults = DEFAULT_SETTINGS;
@@ -260,6 +280,10 @@ export function normalizeSettings(settings) {
         clock: normalizeClock(
             isPlainObject(settings.clock) ? settings.clock : {},
             defaults.clock,
+        ),
+        pacing: normalizePacing(
+            isPlainObject(settings.pacing) ? settings.pacing : {},
+            defaults.pacing,
         ),
         worldTick: normalizeWorldTick(
             isPlainObject(settings.worldTick) ? settings.worldTick : {},

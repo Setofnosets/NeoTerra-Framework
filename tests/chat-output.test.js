@@ -6,6 +6,7 @@ import {
     SCENE_KINDS,
     SCENE_MESSAGE_NAME,
     buildKickoffLines,
+    buildCutFrameText,
     buildOpeningFrameText,
     buildOpeningSceneKey,
     buildSceneChatMessage,
@@ -307,6 +308,25 @@ test('a travel frame is the location change header plus the intro paragraph', ()
         'Location changed: somewhere → Maple Heights',
     );
     assert.equal(buildTravelFrameText({}), 'Location changed: somewhere → a new location');
+});
+
+test('a chapter cut frame carries the meanwhile header and strips prompt blocks', () => {
+    assert.equal(SCENE_KINDS.CUT, 'cut');
+    const text = buildCutFrameText({
+        locationName: 'Neon Docks',
+        slots: 3,
+        summary: 'The stakeout ends.\n[NEOTERRA_PACING]\nCut forward.',
+    });
+    const [header, body] = text.split('\n\n');
+    assert.equal(header, 'Meanwhile — 3 slots later at Neon Docks');
+    assert.equal(body, 'The stakeout ends.');
+    assert.doesNotMatch(text, /\[NEOTERRA_/);
+
+    assert.equal(
+        buildCutFrameText({ locationName: 'Neon Docks', slots: 1 }),
+        'Meanwhile — 1 slot later at Neon Docks',
+    );
+    assert.match(buildCutFrameText({}), /the same place/);
 });
 
 test('the travel dedupe key is chat, route, and turn specific', () => {

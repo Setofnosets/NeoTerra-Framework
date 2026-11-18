@@ -129,6 +129,46 @@
                 A day passes every five turns by default. The top-bar time chip freezes and unfreezes time.
             </p>
 
+            <h4 class="neoterra-section-title">Pacing / scene director</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="pacing.enabled">
+                    <span>Analyze scene drift (advisory only)</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Stalled after (turns without an event)</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="pacing.stallTurns">
+                </label>
+                <label class="neoterra-field">
+                    <span>Long scene at (turns)</span>
+                    <input type="number" min="2" max="500" step="1" data-neoterra-path="pacing.sceneMaxTurns">
+                </label>
+                <label class="neoterra-field">
+                    <span>Threat nudge after (turns)</span>
+                    <input type="number" min="1" max="500" step="1" data-neoterra-path="pacing.threatNudgeTurns">
+                </label>
+                <label class="neoterra-field">
+                    <span>Nudge score</span>
+                    <input type="number" min="1" max="20" step="1" data-neoterra-path="pacing.nudgeScore">
+                </label>
+                <label class="neoterra-field">
+                    <span>Cut score</span>
+                    <input type="number" min="1" max="20" step="1" data-neoterra-path="pacing.cutScore">
+                </label>
+                <label class="neoterra-field">
+                    <span>Slots advanced by a cut</span>
+                    <input type="number" min="1" max="12" step="1" data-neoterra-path="pacing.cutSlots">
+                </label>
+                <label class="neoterra-field">
+                    <span>Snooze length (turns)</span>
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="pacing.snoozeTurns">
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                A cut is always explicit and never moves the player. Frozen scenes offer
+                <strong>Release time</strong> instead of a cut.
+            </p>
+
             <h4 class="neoterra-section-title">Off-screen world tick</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">

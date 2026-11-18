@@ -55,6 +55,18 @@ export const DEFAULT_SETTINGS = freezeDeep({
         maxHoldTurns: 20,
     },
 
+    // Deterministic scene-drift analyzer plus the explicit cut.
+    pacing: {
+        enabled: true,
+        stallTurns: 3,
+        sceneMaxTurns: 12,
+        threatNudgeTurns: 10,
+        cutScore: 4,
+        nudgeScore: 2,
+        cutSlots: 2,
+        snoozeTurns: 3,
+    },
+
     // Off-screen world tick. A day must pass in fiction time before factions,
     // threats, NPCs, and rumors move; rates are authored in data/agendas.json.
     worldTick: {

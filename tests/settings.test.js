@@ -310,6 +310,38 @@ test('the clock settings normalizer fills defaults, clamps, and keeps unknown ke
     assert.equal(low.clock.slotsPerDay, 1);
 });
 
+test('the pacing settings normalizer fills defaults and clamps', () => {
+    const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.equal(defaults.pacing.enabled, true);
+    assert.equal(defaults.pacing.stallTurns, 3);
+    assert.equal(defaults.pacing.sceneMaxTurns, 12);
+    assert.equal(defaults.pacing.threatNudgeTurns, 10);
+    assert.equal(defaults.pacing.nudgeScore, 2);
+    assert.equal(defaults.pacing.cutScore, 4);
+    assert.equal(defaults.pacing.cutSlots, 2);
+    assert.equal(defaults.pacing.snoozeTurns, 3);
+
+    const clamped = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        pacing: {
+            sceneMaxTurns: 1,
+            cutSlots: 99,
+            snoozeTurns: 0,
+            cutScore: 0,
+            nudgeScore: 99,
+            threatNudgeTurns: 0,
+            custom: 'keep',
+        },
+    });
+    assert.equal(clamped.pacing.sceneMaxTurns, 2);
+    assert.equal(clamped.pacing.cutSlots, 12);
+    assert.equal(clamped.pacing.snoozeTurns, 1);
+    assert.equal(clamped.pacing.cutScore, 1);
+    assert.equal(clamped.pacing.nudgeScore, 20);
+    assert.equal(clamped.pacing.threatNudgeTurns, 1);
+    assert.equal(clamped.pacing.custom, 'keep');
+});
+
 test('the world-tick settings normalizer fills defaults and keeps unknown keys', () => {
     const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
     assert.equal(defaults.worldTick.enabled, true);
