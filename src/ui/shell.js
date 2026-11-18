@@ -375,6 +375,10 @@ function mountShell() {
         }
     }, { signal: abort.signal });
 
+    // Apply authored-data tab visibility once at mount: before a chat exists
+    // the Domain tab must already be hidden, not only after the first click.
+    setActiveTab(activeTab);
+
     root.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             event.stopPropagation();

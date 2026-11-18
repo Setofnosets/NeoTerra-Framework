@@ -7,7 +7,7 @@
 
 export const EXTENSION_ID = 'neoterra';
 export const EXTENSION_NAME = 'Neo Terra Framework';
-export const EXTENSION_VERSION = '0.1.0';
+export const EXTENSION_VERSION = '1.1.0';
 
 /** Depth of the injected context message, measured from the end of the prompt. */
 export const DEFAULT_CONTEXT_DEPTH = 4;

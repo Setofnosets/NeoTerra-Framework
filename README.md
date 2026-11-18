@@ -55,6 +55,11 @@ small schema-constrained agents that never free-write state.
 - **Codex and settings** — searchable cast, live state, form lineage, bad-end
   badges, "Play as", agent routing/prompts/cadence, token budgets, world
   export/import, and card-import override generation.
+- **Living city (V1.1)** — a fiction clock with a one-click time brake, an
+  off-screen world tick, a pacing director, an opt-in in-world newspaper, fog
+  of war, a **Relations** graph tab, and a generic **Domain** sensorium for
+  villain-POV seasons. All state lives under `WorldState.flags.*`; every
+  feature can be switched off without touching a chat.
 
 ---
 
@@ -255,6 +260,7 @@ data/districts.json             # lore districts
 data/factions.json
 data/form-groups.json           # mutually exclusive forms
 data/form-rules.json            # legal transformations
+data/agendas.json               # off-screen faction/threat rates + rumors
 data/map/*                      # generated geometry + authored overrides
 data/schemas/*.schema.json      # published schemas
 ```
@@ -303,6 +309,50 @@ If the Characters tab shows **"The character codex could not be mounted."**:
 
 A missing `data/characters/profiles.json` is non-fatal: the Codex mounts with
 live state only and season start still succeeds.
+
+---
+
+## The living city (V1.1)
+
+These features share one rule: the world is still a single `WorldState`.
+Nothing is authoritative outside it.
+
+| Feature | Default | Turn it off |
+| --- | --- | --- |
+| Fiction clock + time brake | on | `clock.enabled: false` (restores V1: turns only) |
+| Off-screen world tick | on | `worldTick.enabled: false` |
+| Off-screen overlay feed | on | `map.showOffscreen: false` |
+| Pacing nudge / cut | on | `pacing.enabled: false` |
+| Newspaper | off | `newspaper.enabled: false` (no agent, no state) |
+| Fog of war | off | `map.showFogOfWar: false` |
+| Relations graph | available | no setting; the tab is read-only |
+| Domain sensorium | automatic for a villain season with a `domain` block | omit `domain` or play a hero season |
+
+Time flows at **one slot per turn** (`dawn → morning → afternoon → evening →
+night`), so a day passes every five turns. Major scenes, beats, combat, and
+intimate scenes can freeze fiction time with the top-bar time chip; while frozen
+no date, story turn, off-screen tick, newspaper edition, or deadline escalation
+occurs. `meta.turn` keeps moving; beat deadlines use `meta.storyTurn`.
+
+- [docs/world-clock.md](docs/world-clock.md) — pace, `turn` vs `storyTurn`, the
+  brake, and migration.
+- [docs/world-tick.md](docs/world-tick.md) — `data/agendas.json`, rates, NPC
+  movement, rumors, and caps.
+- [docs/pacing.md](docs/pacing.md) — analyzer levels, the explicit cut, and
+  `[NEOTERRA_PACING]`.
+- [docs/newspaper.md](docs/newspaper.md) — editions, deterministic fallback,
+  the agent, and the reader.
+- [docs/fog-of-war.md](docs/fog-of-war.md) — exploration state, travel gating,
+  and render modes.
+- [docs/relationships.md](docs/relationships.md) — graph model, layout, filters,
+  and keyboard behavior.
+- [docs/sensorium.md](docs/sensorium.md) — the generic `domain` block and the
+  Domain tab.
+
+Every new prompt block has a settings toggle and a token budget
+(`context.blocks.domain`, `tokenBudget.domain`, and the existing news/pacing
+controls). The newspaper agent is the only new LLM call, and only when the
+feature is enabled.
 
 ---
 

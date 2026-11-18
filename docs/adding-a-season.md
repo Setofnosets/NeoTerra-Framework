@@ -125,6 +125,57 @@ Locations and factions are global:
 - For map geometry, see `map-authoring.md`; adding a district/bridge requires
   drawing it in the SVG and re-running `build-map`.
 
+## 4b. Villain domain (optional)
+
+A season with `"playerRole": "villain"` can author a domain dashboard. Hero
+seasons and Sandbox omit it; nothing in the code names a specific domain.
+
+```json
+{
+  "domain": {
+    "name": "The Garden",
+    "factionId": "clarity",
+    "description": "One sentence the Domain tab and prompt use.",
+    "loreText": "Flavour the narrator can quote.",
+    "knightFormKind": "knighted",
+    "watchDistricts": ["downtown", "harbor"],
+    "resistanceFactionIds": ["petrabyte"]
+  }
+}
+```
+
+- `name` and `factionId` are required; the faction must resolve.
+- `knightFormKind` matches registry `formKind` values (for example `knighted`).
+  Knights are scoped to this season's registry entries.
+- `watchDistricts` must resolve to `data/districts.json` ids.
+- `resistanceFactionIds` must resolve to `data/factions.json` ids.
+
+The **Domain** tab and `[NEOTERRA_DOMAIN]` appear automatically. See
+`sensorium.md` for the view model.
+
+## 4c. Off-screen pacing (optional)
+
+Add a season block to `data/agendas.json` when the default rates are wrong for
+the season:
+
+```json
+{
+  "seasons": {
+    "newseason": {
+      "factionAgendas": {
+        "clarity": { "influencePerDay": 1.0, "rumorTags": ["patrol"] }
+      },
+      "threatPace": {
+        "newseason.main.threat": { "progressPerDay": 1.5 }
+      }
+    }
+  }
+}
+```
+
+Missing entries fall back to `defaults`, so authoring this file is optional.
+`rumorTags` are extra event tags, not template selectors. See `world-tick.md`.
+
 ## 5. Generate the registry and season manifest
 
 ```bash

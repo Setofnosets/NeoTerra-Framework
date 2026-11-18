@@ -6,8 +6,58 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Fixes grouped by the symptom they address. The underlying flow and state
-contracts are described in [docs/scene-output.md](docs/scene-output.md).
+## [1.1.0] - 2026-11-18
+
+**The Living City.** Six features over the existing `WorldState`; all state is
+additive under `flags.*` and old chats migrate automatically.
+
+### Added
+
+- **World clock and time brake** — one slot per turn (five turns per day), real
+  UTC date arithmetic, `meta.storyTurn` for beat deadlines, and a one-click
+  top-bar brake that freezes date, story turns, the tick, the newspaper, and
+  deadline escalation. Combat auto-holds; travel releases. `clock.enabled:false`
+  restores V1.
+- **Off-screen world tick** — deterministic faction/threat pacing from
+  `data/agendas.json`, capped NPC movement along authored connections, and
+  templated off-screen rumors. No LLM call. A held scene is a no-op.
+- **Off-screen feed** — the world overlay shows recent city activity.
+- **Pacing / Scene Director** — a pure analyzer (`ok`, `nudge`, `cut`,
+  `stalled`) with an explicit, player-triggered cut that never moves the player;
+  a Director card and `[NEOTERRA_PACING]`.
+- **Newspaper** — opt-in editions with a deterministic builder, an optional
+  `newspaper` agent, a reader modal with archive, `[NEOTERRA_NEWS]`, and
+  `tabloid`/`broadsheet`/`underground` styles.
+- **Fog of war** — per-chat exploration, `rumors`/`hard` modes, fog-gated
+  travel with path discovery, masked detail panels, themed rendering, and
+  editor reveal/reset.
+- **Relations tab** — a deterministic SVG relationship graph with filters,
+  legend, directed `owner/servant` edges, badges, and keyboard selection.
+- **Domain sensorium** — a generic optional `domain` season block; S1Dark ships
+  Wonderland with knights, court/corruption, territory, resistance, and a feed.
+  A hidden-by-default Domain tab and `[NEOTERRA_DOMAIN]` for villain POV only.
+- **Card profiles in the Codex** — appearance, attire, personality, speech,
+  background, likes/dislikes/goals, abilities, occupation/faction/gear/weakness,
+  per-form notes, and bundle actor profiles are read from
+  `data/characters/profiles.json`. Sensitive sections are rendered only through
+  `contentGate`/`contentLimits` at render time.
+- **Profile backfill and seeding** — new seasons seed card text into empty
+  character fields; existing chats get **Import card profile** and **Sync card
+  profiles** actions. Both are idempotent and never overwrite a non-empty live
+  value.
+
+### Changed
+
+- Beat `turnRange`/`deadlineTurns`/`finalDeadline.turns` now compare against
+  `meta.storyTurn`. Existing chats migrate `storyTurn = turn`, so behavior is
+  unchanged until a hold is used.
+- The settings panel exposes every new toggle and token budget, including
+  `map.showFogOfWar`.
+
+### Fixed
+
+- Date-based beat deadlines are now reachable because the clock advances the
+  in-game date.
 
 ### Fixed
 
@@ -59,23 +109,8 @@ contracts are described in [docs/scene-output.md](docs/scene-output.md).
   are now parsed at build time into `data/characters/profiles.json`; live
   non-empty values still win.
 
-### Added
-
-- **Card profiles in the Codex** — appearance, attire, personality, speech,
-  background, likes/dislikes/goals, abilities, occupation/faction/gear/weakness,
-  per-form notes, and bundle actor profiles are read from
-  `data/characters/profiles.json`. Sensitive sections are rendered only through
-  `contentGate`/`contentLimits` at render time.
-- **Profile backfill and seeding** — new seasons seed card text into empty
-  character fields; existing chats get **Import card profile** and **Sync card
-  profiles** actions. Both are idempotent and never overwrite a non-empty live
-  value.
-
 ### Notes
 
-- Known issue: `EXTENSION_VERSION` is `0.1.0` while `package.json` and
-  `manifest.json` are `1.0.0`. The shell footer/debug API show the constant.
-  The manifest was left unchanged pending a compatibility check.
 - World state remains prompt-only: the generate interceptor renders it at
   `context.depth` and replaces its own copy on every generation; it is never
   written into `ctx.chat`.

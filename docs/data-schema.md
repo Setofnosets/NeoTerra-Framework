@@ -20,6 +20,7 @@ season scope, map bindings).
 | `data/factions.json` | authored | Faction registry |
 | `data/form-groups.json` | authored | Mutually exclusive form groups |
 | `data/form-rules.json` | authored | Legal transformations and reversals |
+| `data/agendas.json` | authored | Off-screen faction/threat rates and rumor templates |
 | `data/map/*.json` / `*.geojson` | generated | SVG geometry, graph, report |
 | `data/map/overrides.json` | authored | Labels, names, factions, parent districts |
 | `data/schemas/*.schema.json` | authored | Published schemas |
@@ -168,6 +169,7 @@ A season declares:
 | `failureState` | `villain-victory`, `neutral-bad-ending`, or `none` |
 | `manualOnly`, `altFormsAllowed` | Roster/form policy |
 | `postVictory` | Optional post-victory arcs and beats |
+| `domain` | Optional villain-POV domain dashboard (see `sensorium.md`) |
 
 A new season is added by dropping `Chars/<Season>/` and
 `data/seasons/<id>.json`; `data/seasons/index.json` is generated. See
@@ -180,7 +182,7 @@ A new season is added by dropping `Chars/<Season>/` and
 ```text
 WorldState {
   schemaVersion, chatId, seasonId, mode,
-  meta { turn, inGameDate, timeOfDay, sceneId, inCombat, startedAt },
+  meta { turn, storyTurn, inGameDate, timeOfDay, sceneId, inCombat, startedAt },
   arc: 'season' | 'post-victory',
   ending { status, path?, epilogueText?, firedTurn? },
   playerRole: 'hero' | 'villain' | 'neutral',
@@ -207,6 +209,22 @@ Writes go through `applyWorldEvent(state, event)`. Agents emit events, never
 state diffs, so merges are deterministic and replayable. Unknown events are
 rejected. Beat status transitions are monotonic; ending triggers are
 idempotent; bad-end records are keyed by character and `continuityKey`.
+
+### Feature flags
+
+All V1.1 feature state lives under `flags.*` so it exports and imports with the
+world bundle and old chats keep validating:
+
+| Flag | Owner | Shape |
+| --- | --- | --- |
+| `flags.clock` | world clock | `{ hold: { active, reason, sinceTurn, sinceDate } }` |
+| `flags.worldTick` | off-screen tick | `{ lastDate, lastTurn, lastStoryTurn, totalDays, suppressedDays, pendingRumorIds, carry* }` |
+| `flags.pacing` | scene director | `{ level, reasons, codes, score, suggestion, canCut, lastAnalyzedTurn, lastCutTurn, snoozedUntilTurn, suggestedSlots, sceneTurns, sceneStartedTurn, sceneLocationId, held }` |
+| `flags.newsroom` | newspaper | `{ lastEditionDate, lastEditionTurn, editions[] }` |
+| `flags.map.exploration` | fog of war | `{ regions, keyLocations, updatedAt }` |
+
+`meta.storyTurn` is the only structural addition: it tracks in-game elapsed
+turns and is migrated from `meta.turn` for old worlds.
 
 Storage:
 
