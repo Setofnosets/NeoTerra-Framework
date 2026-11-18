@@ -4,7 +4,7 @@ Off-screen world tick, newspaper, pacing/scene director, relationship graph, fog
 
 ## Meta
 - **Slug:** `neoterra-living-city-v1-1`
-- **Status:** in progress — Step 3 complete; next: Step 4
+- **Status:** in progress — Step 4 complete; next: Step 5
 - **Date:** 2026-11-18
 - **Base:** `plans/neoterra-framework-v1.md` (V1 complete, Steps 1–20)
 - **Target:** SillyTavern third-party extension, plain ESM, no bundler, no runtime deps
@@ -546,7 +546,7 @@ without code changes.
 - [x] Step 1 — World clock, fiction time, and the time brake
 - [x] Step 2 — Off-screen world tick engine and agenda data (05b2313)
 - [x] Step 3 — Off-screen activity feed in the world overlay (6996e87)
-- [ ] Step 4 — Pacing analyzer and explicit scene cut
+- [x] Step 4 — Pacing analyzer and explicit scene cut (e4c461a)
 - [ ] Step 5 — Pacing surface: director card and `[NEOTERRA_PACING]`
 - [ ] Step 6 — Newsroom state, reducer event, deterministic publisher
 - [ ] Step 7 — Newspaper agent, reader UI, and `[NEOTERRA_NEWS]`
@@ -606,6 +606,7 @@ without code changes.
 - **Risk:** medium (time jumps interact with deadlines; a bad cut could feel like lost player control)
 - **Model/Effort routing:** standard implementer, medium effort
 - **Commit message sketch:** `feat(pacing): analyze scene drift and add an explicit cut`
+- **Commit:** `e4c461a`
 
 ---
 
