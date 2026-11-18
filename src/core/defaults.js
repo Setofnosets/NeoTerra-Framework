@@ -216,6 +216,14 @@ export const DEFAULT_SETTINGS = freezeDeep({
             maxTokens: 700,
             cadence: 'afterTracker',
         },
+        newspaper: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.7,
+            maxTokens: 900,
+            cadence: 'newspaper',
+        },
     },
 
     tokenBudget: {
@@ -228,6 +236,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
         continuity: 500,
         lore: 900,
         pacing: 350,
+        news: 350,
         characterProfile: 1200,
     },
 
@@ -250,6 +259,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
             continuity: true,
             lore: true,
             pacing: true,
+            news: true,
         },
     },
 

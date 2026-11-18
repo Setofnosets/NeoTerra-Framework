@@ -38,6 +38,7 @@ export const OVERLAY_HEADINGS = Object.freeze({
     factions: 'Factions',
     rumors: 'Rumours',
     headlines: 'Headlines',
+    newspaper: 'Neo Terra Tribune',
     offscreen: 'City Desk / Off-screen',
     divergence: 'Divergence',
     editor: 'Map editor',
@@ -281,8 +282,29 @@ export function renderDirectorCard(card) {
     </section>`;
 }
 
+/** Newspaper teaser: masthead, 1-2 latest headlines, and a reader button. */
+export function renderNewsTeaser(view) {
+    if (!view?.enabled || !view?.hasNews || !view.latest) {
+        return '';
+    }
+    const headlines = (view.latest.headlines ?? []).slice(0, 2);
+    const showHeadlines = view.showHeadlines !== false;
+    return `
+    <section class="neoterra-overlay-section neoterra-news-teaser" data-neoterra-overlay-section="newspaper">
+        <header class="neoterra-news-teaser-head">
+            <h5>${escapeOverlayHtml(view.latest.masthead ?? OVERLAY_HEADINGS.newspaper)}</h5>
+            <button type="button" class="menu_button" data-neoterra-newspaper-open>Read</button>
+        </header>
+        ${showHeadlines
+            ? `<ul class="neoterra-overlay-headlines">
+            ${headlines.map((headline) => `<li><span><strong>${escapeOverlayHtml(headline.title)}</strong></span></li>`).join('')}
+        </ul>`
+            : ''}
+    </section>`;
+}
+
 /** The complete overlay markup. `model` comes from `buildWorldOverlay`. */
-export function renderWorldOverlayMarkup(model, { collapsed = false, director = null } = {}) {
+export function renderWorldOverlayMarkup(model, { collapsed = false, director = null, newspaper = null } = {}) {
     if (!model?.hasWorld) {
         return `
         <section class="neoterra-overlay neoterra-overlay-empty" data-neoterra-overlay>
@@ -311,6 +333,7 @@ export function renderWorldOverlayMarkup(model, { collapsed = false, director = 
                 <h5>${OVERLAY_HEADINGS.rumors}</h5>
                 ${renderBeatOverlay(model.beats)}
             </div>
+            ${renderNewsTeaser(newspaper)}
             <div class="neoterra-overlay-section" data-neoterra-overlay-section="headlines">
                 <h5>${OVERLAY_HEADINGS.headlines}</h5>
                 ${renderHeadlines(model.headlines)}

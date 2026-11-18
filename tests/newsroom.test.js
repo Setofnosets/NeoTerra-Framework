@@ -342,6 +342,65 @@ test('a chat switch during the agent call writes nothing', async () => {
     assert.equal(store.get().flags?.newsroom, undefined);
 });
 
+test('an agent failure or invalid edition falls back to the deterministic source', async () => {
+    const state = withEvents(seed(), Array.from({ length: 6 }, () => ({ summary: 'Something happens.' })));
+    const attempts = [
+        async () => ({ masthead: 'X' }),
+        async () => {
+            throw new Error('invalid json');
+        },
+        async () => ({
+            masthead: 'THE NEO TERRA CHRONICLE',
+            dateline: 'NEO TERRA — EVENING EDITION',
+            headlines: [{ title: 'Graphic violence downtown', lede: 'Graphic violence everywhere.', section: 'crime' }],
+        }),
+    ];
+    for (const run of attempts) {
+        const store = storeOf(state);
+        const flow = createNewsroomFlow({
+            store,
+            getSettings: () => ({ ...SETTINGS, contentGate: 'strict', agents: { newspaper: { enabled: true } } }),
+            agent: { run },
+        });
+        const result = await flow.publish({ isCurrent: () => true });
+        assert.equal(result.ok, true, result.error ?? result.reason);
+        assert.equal(result.source, 'deterministic');
+        assert.equal(store.get().flags.newsroom.editions[0].source, 'deterministic');
+        assert.doesNotMatch(
+            JSON.stringify(store.get().flags.newsroom.editions[0]),
+            /Graphic violence/i,
+        );
+    }
+});
+
+test('a successful agent edition is content-gated before storage', async () => {
+    const state = withEvents(seed(), Array.from({ length: 6 }, () => ({ summary: 'Something happens.' })));
+    const store = storeOf(state);
+    const flow = createNewsroomFlow({
+        store,
+        getSettings: () => ({ ...SETTINGS, contentGate: 'strict', agents: { newspaper: { enabled: true } } }),
+        agent: {
+            run: async () => ({
+                ok: true,
+                edition: {
+                    masthead: 'THE NEO TERRA CHRONICLE',
+                    dateline: 'NEO TERRA — EVENING EDITION',
+                    headlines: [
+                        { title: 'Graphic violence downtown', lede: 'Graphic violence everywhere.' },
+                        { title: 'A quiet market opens', lede: 'Traders return.' },
+                    ],
+                },
+            }),
+        },
+    });
+    const result = await flow.publish({ isCurrent: () => true });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'agent');
+    const stored = store.get().flags.newsroom.editions[0];
+    assert.doesNotMatch(JSON.stringify(stored), /Graphic violence/i);
+    assert.match(JSON.stringify(stored), /A quiet market opens/);
+});
+
 test('the reducer caps the archive at 20 editions and dedupes by date', () => {
     let state = seed();
     for (let index = 0; index < 25; index += 1) {

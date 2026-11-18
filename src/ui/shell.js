@@ -24,7 +24,7 @@ import {
     refreshSettingsPanel,
     revealSettingsPanel,
 } from './settings.js';
-import { disposeMapPanel, mountMapPanel } from './map-panel.js';
+import { disposeMapPanel, disposeNewspaperReader, mountMapPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData } from './codex-data.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
@@ -35,6 +35,7 @@ import { createInitiative } from '../flows/initiative.js';
 import { createWorldTick } from '../flows/world-tick.js';
 import { createPacingFlow } from '../flows/pacing.js';
 import { createNewsroomFlow } from '../flows/newsroom.js';
+import { createNewspaperAgent } from '../agents/newspaper.js';
 import { createStorylineTracker } from '../agents/storyline.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
@@ -833,6 +834,9 @@ async function mountMapPanelComponent(context) {
                 // The director card and the panel's fallback pacing flow must
                 // see the user's pacing settings, not only the map slice.
                 pacing: whole.pacing,
+                // The newspaper teaser/reader and the [NEOTERRA_NEWS] block
+                // need the feature settings; the panel gets the map slice.
+                newspaper: whole.newspaper,
             };
         };
         const panel = await mountMapPanel({
@@ -1119,6 +1123,11 @@ function buildInteractionRuntime(context) {
         store,
         getSeason: () => season,
         getSettings: () => getSettings(context),
+        agent: createNewspaperAgent({
+            runner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        }),
         log: (message, error) => logger.warn(message, error),
     });
     const controller = createChoicesController({
@@ -1577,6 +1586,7 @@ export function closeShell() {
     if (!hasDom()) {
         return false;
     }
+    disposeNewspaperReader();
     const root = document.getElementById(UI_IDS.ROOT);
     if (!root || root.hidden) {
         return false;

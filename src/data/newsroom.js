@@ -290,7 +290,7 @@ export function editionKey(edition) {
  * Validate and sanitize an edition document. Returns
  * `{ ok, edition, errors }`; the reducer rejects an invalid edition.
  */
-export function validateEdition(raw) {
+export function validateEdition(raw, { contentGate = 'full', contentLimits = {} } = {}) {
     const errors = [];
     if (!isObject(raw)) {
         return { ok: false, edition: null, errors: ['edition must be an object'] };
@@ -326,12 +326,30 @@ export function validateEdition(raw) {
             errors.push(`headlines[${index}] must be an object`);
             continue;
         }
-        const title = typeof entry.title === 'string' ? entry.title.trim() : '';
-        if (title.length === 0 || title.length > NEWSROOM_TITLE_MAX) {
+        const title = trimText(
+            gateText(
+                typeof entry.title === 'string' ? entry.title.trim() : '',
+                contentGate,
+                contentLimits,
+            ),
+            NEWSROOM_TITLE_MAX,
+        );
+        if (title.length === 0) {
+            // Fully gated content is dropped, not stored as an empty headline.
+            continue;
+        }
+        if (title.length > NEWSROOM_TITLE_MAX) {
             errors.push(`headlines[${index}].title must be 1-${NEWSROOM_TITLE_MAX} characters`);
             continue;
         }
-        const lede = typeof entry.lede === 'string' ? entry.lede.trim() : '';
+        const lede = trimText(
+            gateText(
+                typeof entry.lede === 'string' ? entry.lede.trim() : '',
+                contentGate,
+                contentLimits,
+            ),
+            NEWSROOM_LEDE_MAX,
+        );
         if (lede.length > NEWSROOM_LEDE_MAX) {
             errors.push(`headlines[${index}].lede must be at most ${NEWSROOM_LEDE_MAX} characters`);
             continue;
@@ -358,6 +376,9 @@ export function validateEdition(raw) {
 
     if (errors.length > 0) {
         return { ok: false, edition: null, errors };
+    }
+    if (headlines.length === 0) {
+        return { ok: false, edition: null, errors: ['headlines filtered to nothing by the content gate'] };
     }
     return {
         ok: true,

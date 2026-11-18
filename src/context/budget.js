@@ -16,6 +16,7 @@ export const CONTEXT_BLOCK_IDS = Object.freeze([
     'continuity',
     'lore',
     'pacing',
+    'news',
 ]);
 
 /**
@@ -27,6 +28,8 @@ export const BLOCK_PRIORITY = Object.freeze({
     player: 2,
     combat: 3,
     world: 4,
+    // Above continuity, below world: headlines are cheaper than the ledger.
+    news: 4.5,
     continuity: 5,
     lore: 6,
     // The pacing nudge is the most disposable block: it is advisory and the
@@ -44,6 +47,7 @@ export const DEFAULT_TOKEN_BUDGET = Object.freeze({
     continuity: 500,
     lore: 900,
     pacing: 350,
+    news: 350,
     characterProfile: 1200,
 });
 

@@ -49,7 +49,13 @@ import {
     supportsChatStatus,
     validateEditorPatch,
     buildDirectorCard,
+    renderNewsTeaser,
 } from '../src/ui/overlay.js';
+import {
+    buildNewsreaderModel,
+    escapeNewsHtml,
+    renderNewsreaderMarkup,
+} from '../src/ui/newspaper.js';
 import { LOCATION_STATUSES } from '../src/data/locations.js';
 import { DEFAULT_SETTINGS } from '../src/core/defaults.js';
 import { migrateSettings } from '../src/core/migrations.js';
@@ -999,4 +1005,87 @@ test('director actions surface refusals and clear the error on success', async (
     handlePacingSnooze(noFlow);
     await handlePacingRelease(noFlow);
     assert.equal(noFlow.pacingError, null);
+});
+
+/* ------------------------------------------------------------------ *
+ * Newspaper teaser and reader
+ * ------------------------------------------------------------------ */
+
+function newsState() {
+    const edition = {
+        id: 'edition:s4:2037-03-06:4',
+        date: '2037-03-06',
+        turn: 4,
+        masthead: 'THE NEO TERRA CHRONICLE',
+        dateline: 'NEO TERRA — EVENING EDITION',
+        style: 'broadsheet',
+        source: 'deterministic',
+        headlines: [
+            { title: 'PATROL VANISHES', lede: 'No trace.', section: 'crime', tone: 'grim' },
+            { title: 'HERO SPOTTED', lede: 'On the tower.', section: 'hero', tone: 'neutral' },
+            { title: 'Third story', lede: 'Later.', section: 'general', tone: 'neutral' },
+        ],
+    };
+    return worldState({
+        flags: {
+            newsroom: {
+                lastEditionDate: '2037-03-06',
+                lastEditionTurn: 4,
+                editions: [edition],
+            },
+        },
+    });
+}
+
+const NEWS_SETTINGS = { newspaper: { enabled: true } };
+
+test('the overlay shows a newspaper teaser only when the feature is on', () => {
+    const view = buildNewsreaderModel(newsState(), NEWS_SETTINGS);
+    assert.equal(view.visible, true);
+    const teaser = renderNewsTeaser(view);
+    assert.match(teaser, /data-neoterra-newspaper-open/);
+    assert.match(teaser, /THE NEO TERRA CHRONICLE/);
+    assert.match(teaser, /PATROL VANISHES/);
+    assert.doesNotMatch(teaser, /Third story/, 'the teaser shows at most two headlines');
+
+    assert.equal(renderNewsTeaser(buildNewsreaderModel(newsState(), { newspaper: { enabled: false } })), '');
+    assert.equal(renderNewsTeaser(null), '');
+    const withoutHeadlines = renderNewsTeaser(
+        { ...buildNewsreaderModel(newsState(), NEWS_SETTINGS), showHeadlines: false },
+    );
+    assert.match(withoutHeadlines, /data-neoterra-newspaper-open/);
+    assert.doesNotMatch(withoutHeadlines, /PATROL VANISHES/);
+});
+
+test('the reader model is newest first and the markup escapes content', () => {
+    const state = newsState();
+    state.flags.newsroom.editions[0].headlines[0].title = '<script>alert(1)</script>';
+    const model = buildNewsreaderModel(state, NEWS_SETTINGS);
+    assert.equal(model.active.id, 'edition:s4:2037-03-06:4');
+    const markup = renderNewsreaderMarkup(model);
+    assert.match(markup, /role="dialog"/);
+    assert.match(markup, /aria-modal="true"/);
+    assert.match(markup, /data-neoterra-news-close/);
+    assert.match(markup, /data-neoterra-news-edition/);
+    assert.doesNotMatch(markup, /<script>alert/);
+    assert.match(markup, /&lt;script&gt;/);
+    assert.equal(escapeNewsHtml('<b>"x"</b>'), '&lt;b&gt;&quot;x&quot;&lt;/b&gt;');
+    assert.equal(renderNewsreaderMarkup({ visible: false }), '');
+});
+
+test('the reader can open a specific archived edition', () => {
+    const state = newsState();
+    state.flags.newsroom.editions.unshift({
+        id: 'edition:old',
+        date: '2037-03-02',
+        turn: 2,
+        masthead: 'THE OLD EDITION',
+        dateline: 'NEO TERRA — EVENING EDITION',
+        style: 'broadsheet',
+        source: 'deterministic',
+        headlines: [{ title: 'OLD NEWS', lede: '', section: 'general', tone: 'neutral' }],
+    });
+    const model = buildNewsreaderModel(state, NEWS_SETTINGS, { activeId: 'edition:old' });
+    assert.equal(model.active.id, 'edition:old');
+    assert.match(renderNewsreaderMarkup(model), /OLD NEWS/);
 });

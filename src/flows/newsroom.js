@@ -207,10 +207,15 @@ export function createNewsroomFlow({
                 });
                 const value = responseValue(response);
                 const candidate = isObject(value?.edition) ? value.edition : value;
-                if (isObject(candidate)) {
+                if (isObject(value) && value.ok === false) {
+                    agentError = value.error ?? value.reason ?? 'agent returned no edition';
+                } else if (isObject(candidate)
+                    && typeof candidate.masthead === 'string'
+                    && typeof candidate.dateline === 'string'
+                    && Array.isArray(candidate.headlines)) {
                     agentPayload = candidate;
                 } else {
-                    agentError = 'agent response was not an object';
+                    agentError = 'agent response did not match the newspaper contract';
                 }
             } catch (error) {
                 agentError = error?.message ?? String(error);
@@ -257,8 +262,14 @@ export function createNewsroomFlow({
                 date: freshBase.date,
                 turn: freshBase.turn,
                 source: 'agent',
+                headlines: Array.isArray(agentPayload.headlines)
+                    ? agentPayload.headlines.slice(0, newspaperSettings(settingsNow).maxHeadlines)
+                    : freshBase.headlines,
             };
-            const validation = validateEdition(merged);
+            const validation = validateEdition(merged, {
+                contentGate: settingsNow.contentGate ?? 'full',
+                contentLimits: settingsNow.contentLimits ?? {},
+            });
             if (validation.ok) {
                 edition = validation.edition;
                 source = 'agent';

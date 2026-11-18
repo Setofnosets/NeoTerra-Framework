@@ -99,3 +99,16 @@ test('the director card is styled with theme tokens', () => {
     assert.ok(actions, 'expected a .neoterra-director-actions rule');
     assert.match(actions, /display:\s*flex/);
 });
+
+test('the newspaper reader modal is themed and scrolls internally', () => {
+    const modal = ruleBody('.neoterra-modal');
+    assert.ok(modal, 'expected a .neoterra-modal rule');
+    assert.match(modal, /position:\s*fixed/);
+    const reader = ruleBody('.neoterra-newsreader');
+    assert.ok(reader, 'expected a .neoterra-newsreader rule');
+    assert.doesNotMatch(reader, /#[0-9a-fA-F]{3,8}\b/);
+    assert.match(reader, /var\(--nt-/);
+    const body = ruleBody('.neoterra-newsreader-body');
+    assert.ok(body, 'expected a .neoterra-newsreader-body rule');
+    assert.match(body, /overflow:\s*hidden/);
+});

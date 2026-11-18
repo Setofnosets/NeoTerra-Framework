@@ -11,6 +11,7 @@ import { applyContentGate } from '../core/content-gate.js';
 import { DEFAULT_SETTINGS } from '../core/defaults.js';
 import { isClockHeld } from '../core/world-clock.js';
 import { buildRegistryIndex } from '../data/registry.js';
+import { buildNewspaperView } from '../data/newsroom.js';
 import {
     selectOpenBeats,
     selectPlayerView,
@@ -32,6 +33,7 @@ export const BLOCK_HEADINGS = Object.freeze({
     continuity: '[NEOTERRA_CONTINUITY]',
     lore: '[NEOTERRA_LORE]',
     pacing: '[NEOTERRA_PACING]',
+    news: '[NEOTERRA_NEWS]',
 });
 
 export const BLOCK_ORDER = Object.freeze(Object.keys(BLOCK_HEADINGS));
@@ -446,6 +448,24 @@ function renderPacing(state, settings) {
     return makeBlock('pacing', lines, settings);
 }
 
+function renderNews(state, settings) {
+    const view = buildNewspaperView(state, settings);
+    const latest = view.latest;
+    if (!view.enabled || !latest) {
+        return null;
+    }
+    const lines = [
+        `Edition: ${latest.masthead} — ${latest.dateline}`,
+    ];
+    if (latest.date) {
+        lines.push(`Date: ${latest.date}`);
+    }
+    for (const headline of (latest.headlines ?? []).slice(0, 2)) {
+        lines.push(`- ${headline.title}${headline.section ? ` [${headline.section}]` : ''}`);
+    }
+    return makeBlock('news', lines, settings);
+}
+
 function renderLore(state, options, settings) {
     const lines = [];
     const beats = selectOpenBeats(state, options.season).slice(0, 3);
@@ -568,6 +588,7 @@ export function renderContext(state, options = {}) {
         renderContinuity(state, renderSettings),
         renderLore(state, options, renderSettings),
         renderPacing(state, renderSettings),
+        renderNews(state, renderSettings),
     ].filter((block) => block && blockEnabled(settings, options, block.id));
 
     const result = applyTokenBudget(candidates, tokenBudget);

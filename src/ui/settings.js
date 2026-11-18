@@ -36,6 +36,7 @@ export const AGENT_LABELS = Object.freeze({
     epilogue: 'Epilogue writer',
     choices: 'Choices agent',
     badEnd: 'Bad-end detector',
+    newspaper: 'Newspaper editor',
 });
 
 /** Default values restored by the per-prompt reset buttons. */

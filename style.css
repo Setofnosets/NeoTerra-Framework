@@ -806,6 +806,160 @@
     margin-top: 0.35rem;
 }
 
+/* ------------------------------------------------------------------ *
+ * Newspaper reader
+ * ------------------------------------------------------------------ */
+
+.neoterra-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.neoterra-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--nt-backdrop);
+}
+
+.neoterra-newsreader {
+    position: relative;
+    width: min(900px, 94vw);
+    max-height: min(82vh, 760px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border-strong);
+    border-radius: var(--nt-radius-lg);
+    box-shadow: var(--nt-shadow), var(--nt-glow);
+    color: var(--nt-text);
+}
+
+.neoterra-newsreader-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--nt-border);
+    background: linear-gradient(120deg, var(--nt-accent-glow), transparent 60%);
+}
+
+.neoterra-newsreader-head h3 {
+    margin: 0;
+    letter-spacing: 0.06em;
+    color: var(--nt-accent-strong);
+}
+
+.neoterra-newsreader-dateline {
+    margin: 0.2rem 0 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-newsreader-body {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.neoterra-news-archive {
+    flex: 0 0 34%;
+    max-width: 280px;
+    padding: 0.6rem;
+    overflow-y: auto;
+    border-right: 1px solid var(--nt-border);
+}
+
+.neoterra-news-archive h4 {
+    margin: 0 0 0.4rem;
+    color: var(--nt-text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.neoterra-news-archive ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.neoterra-news-archive-entry {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.35rem 0.45rem;
+    text-align: left;
+    color: var(--nt-text);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+}
+
+.neoterra-news-archive-entry:hover {
+    background: var(--nt-bg-hover);
+}
+
+.neoterra-news-archive-entry.is-active {
+    border-color: var(--nt-border-strong);
+    color: var(--nt-accent);
+}
+
+.neoterra-news-archive-date {
+    font-size: 0.68rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-newsreader-article {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.7rem 0.9rem;
+    overflow-y: auto;
+}
+
+.neoterra-news-headlines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.neoterra-news-headline-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.neoterra-news-headline p {
+    margin: 0.25rem 0 0;
+    color: var(--nt-text-muted);
+    font-size: 0.82rem;
+}
+
+.neoterra-news-teaser-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
+}
+
 .neoterra-overlay-bar {
     height: 0.35rem;
     margin: 0.2rem 0;

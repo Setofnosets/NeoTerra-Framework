@@ -36,6 +36,7 @@ import {
     updateChatVirtualNode,
 } from '../data/map.js';
 import { loadLocations } from '../data/locations.js';
+import { buildNewspaperView } from '../data/newsroom.js';
 import { loadWorldStateFromMetadata } from '../state/store.js';
 import {
     applyEditorPatch,
@@ -49,6 +50,7 @@ import {
     validateEditorPatch,
 } from './overlay.js';
 import { mountCityMap, mountFallbackMap } from './map.js';
+import { mountNewspaperReader } from './newspaper.js';
 import { createPacingFlow } from '../flows/pacing.js';
 
 const logger = createLogger('map-panel');
@@ -371,6 +373,7 @@ export async function mountMapPanel(options = {}) {
         globalOverrides: null,
         pacing: options.pacing ?? null,
         pacingError: null,
+        newspaperReader: null,
     };
     mounted = state;
 
@@ -497,6 +500,10 @@ export async function mountMapPanel(options = {}) {
         }
         if (event.target.closest?.('[data-neoterra-pacing-release]')) {
             void handlePacingRelease(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-newspaper-open]')) {
+            openNewspaperReader(state);
             return;
         }
         if (event.target.closest?.('[data-neoterra-editor-save]')) {
@@ -1209,6 +1216,34 @@ export {
     handlePacingRelease,
 };
 
+function openNewspaperReader(state) {
+    if (state.newspaperReader) {
+        state.newspaperReader.refresh();
+        return state.newspaperReader;
+    }
+    const reader = mountNewspaperReader({
+        getState: () => readState(state),
+        getSettings: () => state.settings ?? {},
+        onClose: () => {
+            state.newspaperReader = null;
+        },
+    });
+    if (reader) {
+        state.newspaperReader = reader;
+    }
+    return reader;
+}
+
+/** Close the reader from the shell teardown path. */
+export function disposeNewspaperReader() {
+    const state = mounted;
+    if (!state) {
+        return;
+    }
+    state.newspaperReader?.dispose?.();
+    state.newspaperReader = null;
+}
+
 function readState(state) {
     if (state.store && typeof state.store.get === 'function') {
         return state.store.get();
@@ -1248,6 +1283,12 @@ function paintSide() {
     if (!director?.visible) {
         state.pacingError = null;
     }
+    const newspaper = overlayEnabled && worldState
+        ? {
+            ...buildNewspaperView(worldState, state.settings ?? {}),
+            showHeadlines: state.settings?.showHeadlines !== false,
+        }
+        : null;
     const overlay = overlayEnabled && state.viewModel
         ? renderWorldOverlayMarkup(
             state.overlay ?? buildWorldOverlay({
@@ -1256,7 +1297,7 @@ function paintSide() {
                 viewModel: state.viewModel,
                 settings: state.settings ?? {},
             }),
-            { collapsed: state.overlayCollapsed === true, director },
+            { collapsed: state.overlayCollapsed === true, director, newspaper },
         )
         : '';
     const editorEnabled = state.settings?.editorEnabled !== false;
@@ -1446,6 +1487,8 @@ export function disposeMapPanel() {
     const state = mounted;
     mounted = null;
     state.controller?.abort();
+    state.newspaperReader?.dispose?.();
+    state.newspaperReader = null;
     state.cityMap?.destroy?.();
     if (state.root?.isConnected) {
         state.root.innerHTML = '';

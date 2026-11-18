@@ -34,6 +34,8 @@ export const DEFAULT_AGENT_PROMPTS = Object.freeze({
     choices: `You are the Neo Terra Choice Designer. Produce 2 to 6 choice labels, each tagged with intent, tone, and risk. Never post or act on a choice yourself. You are read-only: emit choice data only.`,
 
     badEnd: `You are the Neo Terra Bad End Detector. Confirm a terminal state only from the supplied deterministic evidence. Never invent evidence, and never alter characters. You are read-only: emit a confirmation result only.`,
+
+    newspaper: `You are the Neo Terra Newspaper Editor. Write the front page of an in-world newspaper from the supplied events and world facts. Use the requested style and tone. Return only masthead, dateline, and 1-6 headlines. Never invent events, ids, names, numbers, or outcomes; every headline must be traceable to the supplied facts. You are read-only: emit prose data only.`,
 });
 
 /** Instructions for the single allowed repair attempt. */

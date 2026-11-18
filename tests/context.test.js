@@ -896,3 +896,69 @@ test('the pacing block passes through the content gate', () => {
     assert.match(strict.text, /No development in 4 turns\./);
     assert.match(strict.text, /Directive:/);
 });
+
+/* ------------------------------------------------------------------ *
+ * Newspaper block
+ * ------------------------------------------------------------------ */
+
+function newsState() {
+    return makeState({
+        flags: {
+            newsroom: {
+                lastEditionDate: '2037-03-05',
+                lastEditionTurn: 4,
+                editions: [{
+                    id: 'edition:s1:2037-03-05:4',
+                    date: '2037-03-05',
+                    turn: 4,
+                    masthead: 'THE NEO TERRA CHRONICLE',
+                    dateline: 'NEO TERRA — EVENING EDITION',
+                    style: 'broadsheet',
+                    source: 'deterministic',
+                    headlines: [
+                        { title: 'PATROL VANISHES', lede: 'No trace remains.', section: 'crime', tone: 'grim' },
+                        { title: 'HERO SPOTTED', lede: 'A silhouette on the tower.', section: 'hero', tone: 'neutral' },
+                        { title: 'Third story', lede: 'Ignored by the block cap.', section: 'general', tone: 'neutral' },
+                    ],
+                }],
+            },
+        },
+    });
+}
+
+test('the news block renders only while the feature is on and the block is enabled', () => {
+    const off = settingsWith();
+    off.newspaper = { ...off.newspaper, enabled: false };
+    assert.equal(blockById(renderContext(newsState(), { settings: off, season: SEASON }), 'news'), null);
+
+    const on = settingsWith();
+    on.newspaper = { ...on.newspaper, enabled: true };
+    const block = blockById(renderContext(newsState(), { settings: on, season: SEASON }), 'news');
+    assert.ok(block);
+    assert.equal(block.heading, '[NEOTERRA_NEWS]');
+    assert.match(block.body, /THE NEO TERRA CHRONICLE/);
+    assert.match(block.body, /PATROL VANISHES/);
+    assert.match(block.body, /HERO SPOTTED/);
+    assert.doesNotMatch(block.body, /Third story/);
+
+    const toggled = settingsWith();
+    toggled.newspaper = { ...toggled.newspaper, enabled: true };
+    toggled.context.blocks.news = false;
+    assert.equal(blockById(renderContext(newsState(), { settings: toggled, season: SEASON }), 'news'), null);
+});
+
+test('the news block is content-gated', () => {
+    const state = newsState();
+    state.flags.newsroom.editions[0].headlines.unshift({
+        title: 'Graphic violence downtown',
+        lede: 'Graphic violence spreads through the plaza.',
+        section: 'crime',
+        tone: 'alarmist',
+    });
+    const settings = settingsWith({ contentGate: 'strict' });
+    settings.newspaper = { ...settings.newspaper, enabled: true };
+    const block = blockById(renderContext(state, { settings, season: SEASON }), 'news');
+    assert.ok(block);
+    assert.doesNotMatch(block.text, /Graphic violence/i);
+    assert.match(block.text, /PATROL VANISHES/);
+});
