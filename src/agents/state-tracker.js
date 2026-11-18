@@ -701,4 +701,177 @@ export function createStateTracker({
     return { plan, run, prompt: buildStateTrackerPrompt };
 }
 
+/**
+ * One assistant turn: tick the clock, run the player tracker, advance the
+ * storyline on its cadence, then refresh the present cast. Never throws;
+ * each stage is isolated so one failure cannot skip the next.
+ */
+export async function runTurnPipeline({
+    store,
+    tracker = null,
+    initiative = null,
+    scene = null,
+    getSettings = null,
+    message = '',
+    recentMessages = [],
+    tickTurns = 1,
+    log = null,
+} = {}) {
+    if (!store || typeof store.get !== 'function') {
+        return { ok: false, reason: 'no-store' };
+    }
+    let settings = {};
+    try {
+        settings = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
+    } catch (error) {
+        logWarning(log, 'Could not read settings for the turn pipeline', error);
+    }
+    const errors = [];
+
+    // Stage 1: advance the world clock once per genuine assistant turn.
+    let ticked = false;
+    if (Number.isFinite(tickTurns) && tickTurns > 0) {
+        try {
+            store.dispatch({ type: 'TICK_TIME', turns: tickTurns });
+            ticked = true;
+        } catch (error) {
+            logWarning(log, 'Could not advance the world clock', error);
+            errors.push({ stage: 'tick', error: error?.message ?? String(error) });
+        }
+    }
+
+    // Stage 2: the player tracker. Disabled means no run call at all; a failed
+    // or aborted pass keeps the state and never blocks the later stages.
+    const enabled = settings?.agents?.stateTracker?.enabled !== false;
+    let trackerReport = { ran: false, reason: 'disabled' };
+    if (enabled && typeof tracker?.run === 'function') {
+        try {
+            const result = await tracker.run({
+                state: store.get(),
+                message,
+                recentMessages,
+            });
+            const applied = applyStateTrackerResult(store, result, { log });
+            trackerReport = {
+                ran: true,
+                applied: applied?.ok === true,
+                cleared: applied?.cleared ?? 0,
+                events: Array.isArray(result?.events) ? result.events.length : 0,
+                source: result?.source ?? null,
+                error: applied?.error ?? null,
+            };
+            if (applied?.ok !== true) {
+                errors.push({ stage: 'tracker', error: applied?.error ?? 'tracker apply failed' });
+            }
+        } catch (error) {
+            const aborted = isAbortError(error);
+            trackerReport = {
+                ran: false,
+                reason: aborted ? 'aborted' : 'failed',
+                error: error?.message ?? String(error),
+            };
+            logWarning(log, 'Player tracker pass failed; state unchanged', error);
+            errors.push({
+                stage: 'tracker',
+                error: error?.message ?? String(error),
+            });
+        }
+    } else if (enabled) {
+        trackerReport = { ran: false, reason: 'no-tracker' };
+    }
+
+    // Stage 3: the storyline keeps its own cadence inside `initiative`.
+    let storyline = { ran: false, reason: 'absent' };
+    if (typeof initiative?.afterTurn === 'function') {
+        try {
+            const result = await initiative.afterTurn({ recentProse: message });
+            storyline = {
+                ran: result?.ran === true,
+                reason: result?.reason ?? null,
+            };
+        } catch (error) {
+            const aborted = isAbortError(error);
+            storyline = {
+                ran: false,
+                reason: aborted ? 'aborted' : 'failed',
+                error: error?.message ?? String(error),
+            };
+            logWarning(log, 'Storyline pass failed after a message', error);
+            errors.push({
+                stage: 'storyline',
+                error: error?.message ?? String(error),
+            });
+        }
+    }
+
+    // Stage 4: refresh the present cast; manual pins/removals win in scene.js.
+    let cast = null;
+    if (typeof scene?.refreshCast === 'function') {
+        try {
+            cast = await scene.refreshCast({ runDirector: false });
+        } catch (error) {
+            cast = null;
+            logWarning(log, 'Cast refresh failed after a message', error);
+            errors.push({
+                stage: 'cast',
+                error: error?.message ?? String(error),
+            });
+        }
+    }
+
+    let turn = null;
+    try {
+        turn = store.get()?.meta?.turn ?? null;
+    } catch (error) {
+        logWarning(log, 'Could not read the world clock after the turn', error);
+        errors.push({ stage: 'turn-read', error: error?.message ?? String(error) });
+    }
+
+    return {
+        ok: true,
+        ticked,
+        turn,
+        tracker: trackerReport,
+        storyline,
+        cast,
+        errors,
+    };
+}
+
+/**
+ * Stable identity for one assistant message across swipes. The first swipe's
+ * `send_date` survives a swipe re-render; a genuinely new message that reuses a
+ * deleted index gets a new date and is therefore a new turn.
+ */
+export function messageTurnIdentity(message) {
+    const first = Array.isArray(message?.swipe_info) ? message.swipe_info[0] : null;
+    const date = first?.send_date ?? message?.send_date;
+    if (typeof date === 'string' && date.length > 0) {
+        return date;
+    }
+    return typeof message?.mes === 'string' ? `len:${message.mes.length}` : '';
+}
+
+/**
+ * Accept each (chatId, messageIndex, messageIdentity) once; a swipe re-render
+ * keeps the same identity and is not a new turn.
+ */
+export function createTurnGate() {
+    let last = null;
+    return {
+        accept({ chatId = null, messageIndex = -1, identity = '' } = {}) {
+            const key = [
+                chatId ?? '',
+                Number.isInteger(messageIndex) ? messageIndex : -1,
+                identity ?? '',
+            ].join(':');
+            if (last === key) return false;
+            last = key;
+            return true;
+        },
+        reset() { last = null; },
+        get last() { return last; },
+    };
+}
+
 export { playerView as describePlayerTrackerTarget };

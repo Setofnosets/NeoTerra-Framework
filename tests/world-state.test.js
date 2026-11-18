@@ -19,7 +19,9 @@ import {
     METADATA_KEY,
     WAL_PREFIX,
     createWorldStateStore,
+    getSharedWorldStateStore,
     loadWorldStateFromMetadata,
+    releaseSharedWorldStateStore,
     saveWorldStateToMetadata,
 } from '../src/state/store.js';
 import {
@@ -530,4 +532,45 @@ test('cloneWorldState produces an independent document', () => {
     const cloned = cloneWorldState(state);
     cloned.characters['s1.vaiva.colorgarde'].notes = 'changed';
     assert.notEqual(state.characters['s1.vaiva.colorgarde'].notes, 'changed');
+});
+
+test('the shared store registry returns one store per chat and releases on demand', () => {
+    const options = {
+        metadata: {},
+        storage: null,
+        schedule: () => 1,
+        cancel: () => {},
+        now: () => NOW,
+        context: CONTEXT,
+    };
+    const first = getSharedWorldStateStore({ ...options, chatId: 'shared-a' });
+    first.seed({
+        season: seasons.s1,
+        registry,
+        factions,
+        locations,
+        formGroups,
+        formRules,
+        chatId: 'shared-a',
+        now: NOW,
+    });
+    const second = getSharedWorldStateStore({ ...options, chatId: 'shared-a' });
+    assert.equal(second, first);
+
+    second.dispatch({ type: 'TICK_TIME', turns: 2 });
+    assert.equal(first.get().meta.turn, 2);
+
+    const other = getSharedWorldStateStore({ ...options, chatId: 'shared-b' });
+    assert.notEqual(other, first);
+    assert.equal(other.get(), null);
+
+    assert.equal(releaseSharedWorldStateStore('shared-a'), true);
+    const fresh = getSharedWorldStateStore({ ...options, chatId: 'shared-a' });
+    assert.notEqual(fresh, first);
+    assert.equal(fresh.get(), null);
+
+    releaseSharedWorldStateStore('shared-a');
+    releaseSharedWorldStateStore('shared-b');
+    assert.equal(releaseSharedWorldStateStore(''), false);
+    assert.equal(releaseSharedWorldStateStore('missing-chat'), false);
 });

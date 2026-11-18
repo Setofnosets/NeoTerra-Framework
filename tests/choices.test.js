@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
     CHOICES_SCHEMA,
@@ -18,6 +21,14 @@ import {
     renderChoicesMarkup,
 } from '../src/ui/choices.js';
 import { cloneDefaults } from '../src/core/defaults.js';
+import { normalizeStateTrackerResult, runTurnPipeline } from '../src/agents/state-tracker.js';
+import { createWorldStateStore } from '../src/state/store.js';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+function readJson(path) {
+    return JSON.parse(readFileSync(join(ROOT, path), 'utf8'));
+}
 
 function settingsFor(overrides = {}) {
     const settings = cloneDefaults();
@@ -436,4 +447,74 @@ test('the agent hides the row when the model fails', async () => {
     assert.equal(result.visible, false);
     assert.equal(result.choices.length, 0);
     assert.equal(result.reason, 'agent-failed');
+});
+
+test('choices see the state a turn pipeline just applied', async () => {
+    const registry = readJson('data/characters/index.json');
+    const factions = readJson('data/factions.json');
+    const locations = readJson('data/locations.json');
+    const formGroups = readJson('data/form-groups.json');
+    const formRules = readJson('data/form-rules.json');
+    const season = readJson('data/seasons/s1.json');
+    const store = createWorldStateStore({
+        metadata: {},
+        chatId: 'choices-turn-chat',
+        storage: null,
+        schedule: () => 1,
+        cancel: () => {},
+    });
+    store.seed({
+        season,
+        registry,
+        factions,
+        locations,
+        formGroups,
+        formRules,
+        chatId: 'choices-turn-chat',
+        now: 1_700_000_000_000,
+    });
+
+    const settings = settingsFor();
+    await runTurnPipeline({
+        store,
+        tracker: {
+            run: async ({ state }) => normalizeStateTrackerResult({
+                result: {
+                    changes: [{ path: 'stamina.current', value: 33, reason: 'Wounded' }],
+                    relationships: [],
+                    rationale: '',
+                },
+                state,
+            }),
+        },
+        getSettings: () => settings,
+    });
+    assert.equal(store.get().player.stamina.current, 33);
+    assert.equal(store.get().meta.turn, 1);
+
+    let observed = null;
+    const agent = {
+        run: async ({ state }) => {
+            observed = state;
+            return normalizeChoicesResult({
+                result: resultWith(['Hold the line', 'Fall back', 'Call for help', 'Push forward']),
+                settings,
+                state,
+                count: 4,
+            });
+        },
+    };
+    const controller = createChoicesController({
+        agent,
+        getState: () => store.get(),
+        getSettings: () => settings,
+    });
+    const view = await controller.request({
+        messages: [assistantMessage()],
+        messageIndex: 1,
+        swipeId: 0,
+    });
+    assert.equal(view.visible, true);
+    assert.equal(view.choices.length, 4);
+    assert.equal(observed.player.stamina.current, 33);
 });

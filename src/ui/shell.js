@@ -28,7 +28,7 @@ import { disposeCodex, mountCodex } from './codex.js';
 import { loadRegistry } from '../data/registry.js';
 import { loadFormGroups, loadFormRules } from '../data/forms.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
-import { createWorldStateStore, WAL_PREFIX } from '../state/store.js';
+import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, WAL_PREFIX } from '../state/store.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
@@ -37,6 +37,12 @@ import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
 import { createAgentClient } from '../agents/client.js';
 import { createAgentRunner } from '../agents/runner.js';
+import {
+    createStateTracker,
+    createTurnGate,
+    messageTurnIdentity,
+    runTurnPipeline,
+} from '../agents/state-tracker.js';
 import { createEndingFlow, isEndingScreenActive } from '../flows/ending.js';
 import { mountEndingPanel, disposeEndingPanel } from './ending.js';
 import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
@@ -93,6 +99,10 @@ let registeredCommand = null;
 let activeTab = 'season';
 let previousFocus = null;
 let mapMounted = false;
+
+/** Per-message gate and serialized queue for the assistant-turn pipeline. */
+const turnGate = createTurnGate();
+let turnQueue = Promise.resolve();
 
 function hasDom() {
     return typeof document !== 'undefined' && typeof window !== 'undefined';
@@ -259,6 +269,10 @@ async function handleSeasonEntered(result) {
         return null;
     }
     const freshChat = !hasStoryHistory(live.chat);
+    // `enterSeason` seeded a fresh WorldState into chatMetadata through its own
+    // store; drop the cached runtimes so the map, choices, and turn pipeline
+    // read the new season instead of writing the previous document back.
+    invalidateChatRuntimes(live);
     const key = buildOpeningSceneKey({ chatId, seasonId, turn });
     const message = buildSceneChatMessage({
         kind: SCENE_KINDS.OPENING,
@@ -420,9 +434,19 @@ function buildMapRuntime(context, panelRef) {
         mapRuntime.panelRef = panelRef;
         return mapRuntime;
     }
+    const sharedInteraction = interactionRuntime && interactionRuntime.chatId === chatId
+        ? interactionRuntime
+        : null;
+    // A stale runtime for another chat must not keep its registry entry alive.
+    if (interactionRuntime && interactionRuntime.chatId !== chatId) {
+        releaseSharedWorldStateStore(interactionRuntime.chatId);
+        interactionRuntime = null;
+    }
     let store;
     try {
-        store = createWorldStateStore({
+        // One WorldState per chat: the map, interaction, and turn pipeline all
+        // read and write the same document instead of caching their own copy.
+        store = sharedInteraction?.store ?? getSharedWorldStateStore({
             metadata,
             saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
             storage: readLocalStorage(),
@@ -433,16 +457,26 @@ function buildMapRuntime(context, panelRef) {
         return null;
     }
     if (!store.get()) {
+        // Nothing was seeded: do not leave an unowned store in the registry.
+        if (!sharedInteraction) {
+            releaseSharedWorldStateStore(chatId);
+        }
         return { chatId, store, panelRef, travel: null };
     }
     const season = metadata.neoterra?.seasonDefinition ?? null;
-    const scene = createSceneFlow({
+    const scene = sharedInteraction?.scene ?? createSceneFlow({
         store,
         season,
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
-    const { initiative, ending } = buildStorylineInitiative(context, store, season);
+    const { initiative, ending, runner } = sharedInteraction?.initiative
+        ? {
+            initiative: sharedInteraction.initiative,
+            ending: sharedInteraction.ending,
+            runner: sharedInteraction.runner,
+        }
+        : buildStorylineInitiative(context, store, season);
     const travel = createTravelFlow({
         store,
         season,
@@ -454,7 +488,17 @@ function buildMapRuntime(context, panelRef) {
         now: Date.now,
         log: (message, error) => logger.warn(message, error),
     });
-    mapRuntime = { chatId, store, panelRef, scene, initiative, ending, travel };
+    mapRuntime = {
+        chatId,
+        store,
+        panelRef,
+        scene,
+        initiative,
+        ending,
+        runner,
+        tracker: sharedInteraction?.tracker ?? null,
+        travel,
+    };
     return mapRuntime;
 }
 
@@ -708,16 +752,31 @@ async function mountCodexPanelForActiveChat() {
 }
 
 /**
- * Drop sibling runtimes that cache their own WorldState copy after the codex
- * mutates the shared document. The next activation rebuilds them from metadata.
+ * Drop the chat-bound runtimes and the shared store they were using. The next
+ * activation rebuilds them from metadata; the gate resets so the first turn in
+ * the rebuilt runtime is accepted again.
  */
-function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
-    mapRuntime?.store?.dispose?.();
-    interactionRuntime?.store?.dispose?.();
+function disposeChatRuntimes() {
+    const chatIds = [...new Set(
+        [mapRuntime?.chatId, interactionRuntime?.chatId].filter(Boolean),
+    )];
     mapRuntime = null;
     mountedMapChatId = null;
     interactionRuntime = null;
     choicesBar = null;
+    // The registry is the single disposal point; the two runtimes share a store.
+    for (const chatId of chatIds) {
+        releaseSharedWorldStateStore(chatId);
+    }
+    turnGate.reset();
+}
+
+/**
+ * Drop sibling runtimes that cache their own WorldState copy after the codex
+ * mutates the shared document. The next activation rebuilds them from metadata.
+ */
+function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
+    disposeChatRuntimes();
     disposeMapPanel();
     disposeChoicesBar();
     if (!keepCodex) {
@@ -786,12 +845,22 @@ function buildInteractionRuntime(context) {
     if (interactionRuntime && interactionRuntime.chatId === chatId) {
         return interactionRuntime;
     }
-    let store;
-    // Share the map runtime's store for this chat: travel mutates the map store,
-    // and a second cached copy would give the choices agent the pre-travel world.
+    // A stale runtime for another chat must not keep its registry entry alive.
+    if (interactionRuntime && interactionRuntime.chatId !== chatId) {
+        releaseSharedWorldStateStore(interactionRuntime.chatId);
+        interactionRuntime = null;
+    }
+    // Share the map runtime's store/graph for this chat: travel mutates the map
+    // store, and a second cached copy would give the choices agent (and the
+    // turn pipeline) the pre-travel world.
     const shared = mapRuntime && mapRuntime.chatId === chatId ? mapRuntime : null;
+    if (mapRuntime && mapRuntime.chatId !== chatId) {
+        releaseSharedWorldStateStore(mapRuntime.chatId);
+        mapRuntime = null;
+    }
+    let store;
     try {
-        store = shared?.store ?? createWorldStateStore({
+        store = shared?.store ?? getSharedWorldStateStore({
             metadata,
             saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
             storage: readLocalStorage(),
@@ -802,12 +871,27 @@ function buildInteractionRuntime(context) {
         return null;
     }
     if (!store.get()) {
+        // Nothing was seeded: do not leave an unowned store in the registry.
+        if (!shared) {
+            releaseSharedWorldStateStore(chatId);
+        }
         return null;
     }
     const season = metadata.neoterra?.seasonDefinition ?? null;
+    const scene = shared?.scene ?? createSceneFlow({
+        store,
+        season,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
     const { initiative, ending, runner } = shared?.initiative
         ? { initiative: shared.initiative, ending: shared.ending, runner: shared.runner }
         : buildStorylineInitiative(context, store, season);
+    const tracker = shared?.tracker ?? createStateTracker({
+        runner,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
     const choicesAgent = createChoicesAgent({
         runner,
         getSettings: () => getSettings(context),
@@ -824,8 +908,11 @@ function buildInteractionRuntime(context) {
         chatId,
         store,
         season,
+        scene,
+        tracker,
         initiative,
         ending,
+        runner,
         controller,
         combat: createCombatFlow({
             store,
@@ -868,21 +955,94 @@ async function refreshInteractionUi(context = null) {
     return runtime;
 }
 
+function recentMessagesBefore(messages, messageIndex) {
+    if (!Array.isArray(messages) || !Number.isInteger(messageIndex) || messageIndex <= 0) {
+        return [];
+    }
+    return messages
+        .slice(0, messageIndex)
+        .map((entry) => (typeof entry?.mes === 'string' ? entry.mes : ''))
+        .filter((text) => text.trim().length > 0)
+        .slice(-4);
+}
+
+function chatStillCurrent(chatId) {
+    if (!chatId) {
+        return true;
+    }
+    const current = refreshContext();
+    return !current || currentChatId(current) === chatId;
+}
+
+/** Drop a runtime the queued turn created for a chat that is no longer open. */
+function abortStaleTurnRuntime(chatId) {
+    if (!chatId) {
+        return;
+    }
+    if (mapRuntime?.chatId === chatId) {
+        mapRuntime = null;
+    }
+    if (interactionRuntime?.chatId === chatId) {
+        interactionRuntime = null;
+    }
+    releaseSharedWorldStateStore(chatId);
+    turnGate.reset();
+}
+
 async function handleAssistantMessage(message, messageIndex, context = null) {
     const live = context ?? refreshContext();
+    // A queued turn may run after a chat switch; never apply it to the new chat.
+    const liveChatId = currentChatId(live);
+    if (!chatStillCurrent(liveChatId)) {
+        logger.debug('Chat changed before the assistant turn ran; skipping');
+        return;
+    }
     const runtime = await refreshInteractionUi(live);
     if (!runtime) {
         return;
     }
-    const messages = Array.isArray(live?.chat) ? live.chat : [];
-    try {
-        await runtime.initiative?.afterTurn?.({
-            recentProse: typeof message?.mes === 'string' ? message.mes : '',
-        });
-    } catch (error) {
-        logger.warn('Storyline pass failed after a message', error);
+    const chatId = currentChatId(live);
+    if (!chatStillCurrent(chatId)) {
+        logger.debug('Chat changed while building the turn runtime; skipping');
+        abortStaleTurnRuntime(chatId);
+        return;
     }
-    await refreshInteractionUi(live);
+    // A swipe or a re-render of the same message is not a new turn: only a
+    // genuinely new assistant message ticks the clock and runs the trackers.
+    const isNewTurn = turnGate.accept({
+        chatId,
+        messageIndex,
+        identity: messageTurnIdentity(message),
+    });
+    if (isNewTurn) {
+        const messages = Array.isArray(live?.chat) ? live.chat : [];
+        const result = await runTurnPipeline({
+            store: runtime.store,
+            tracker: runtime.tracker,
+            initiative: runtime.initiative,
+            scene: runtime.scene,
+            getSettings: () => getSettings(live),
+            message: typeof message?.mes === 'string' ? message.mes : '',
+            recentMessages: recentMessagesBefore(messages, messageIndex),
+            tickTurns: 1,
+            log: (m, e) => logger.warn(m, e),
+        });
+        if (!chatStillCurrent(chatId)) {
+            logger.debug('Chat changed during the turn pipeline; skipping the UI handoff');
+            abortStaleTurnRuntime(chatId);
+            return;
+        }
+        bus.emit(EVENTS.MAP_UPDATED, { reason: 'turn', turn: result?.turn ?? null });
+        mapRuntime?.panelRef?.refresh?.();
+        // CYOA is requested only after the new state is written.
+        await refreshInteractionUi(live);
+    }
+    if (!chatStillCurrent(chatId)) {
+        logger.debug('Chat changed before the choices request; skipping');
+        abortStaleTurnRuntime(chatId);
+        return;
+    }
+    const messages = Array.isArray(live?.chat) ? live.chat : [];
     const view = await runtime.controller.request({
         messages,
         messageIndex,
@@ -891,6 +1051,14 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
     if (view?.visible) {
         choicesBar?.refresh?.();
     }
+}
+
+/** Serialize turns so two events for one index cannot interleave a tick. */
+function enqueueAssistantTurn(message, messageIndex, context = null) {
+    turnQueue = turnQueue
+        .then(() => handleAssistantMessage(message, messageIndex, context))
+        .catch((error) => logger.warn('Assistant turn pipeline failed', error));
+    return turnQueue;
 }
 
 function subscribeInteractionEvents(context) {
@@ -910,7 +1078,7 @@ function subscribeInteractionEvents(context) {
         if (!message || message.is_user === true) {
             return;
         }
-        void handleAssistantMessage(message, index, live);
+        void enqueueAssistantTurn(message, index, live);
     };
     try {
         on(messageEvent, handler);
@@ -1143,8 +1311,7 @@ async function resetChatWorld(context = null) {
     }
     // Cancel pending debounced saves from every live store before clearing the
     // document; otherwise a stale timer can write the old world back.
-    mapRuntime?.store?.dispose?.();
-    interactionRuntime?.store?.dispose?.();
+    disposeChatRuntimes();
     disposeCodex();
     if (chatId) {
         try {
@@ -1302,11 +1469,8 @@ function subscribeChatChanges(context) {
         return;
     }
     const handler = () => {
-        mapRuntime = null;
-        mountedMapChatId = null;
+        disposeChatRuntimes();
         mountedCodexChatId = null;
-        interactionRuntime = null;
-        choicesBar = null;
         disposeMapPanel();
         disposeCodex();
         disposeChoicesBar();
@@ -1353,11 +1517,8 @@ export function dispose() {
     unregisterCombatIntegrations({ ctx });
     unsubscribeChatChanges();
     unsubscribeInteractionEvents();
-    mapRuntime = null;
-    mountedMapChatId = null;
+    disposeChatRuntimes();
     mountedCodexChatId = null;
-    interactionRuntime = null;
-    choicesBar = null;
     disposeSeasonMenu();
     disposeMapPanel();
     disposeCodex();

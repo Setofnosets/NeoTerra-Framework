@@ -10,8 +10,11 @@ import {
     applyStateTrackerResult,
     buildStateTrackerPrompt,
     createStateTracker,
+    createTurnGate,
     getManualEditPaths,
+    messageTurnIdentity,
     normalizeStateTrackerResult,
+    runTurnPipeline,
 } from '../src/agents/state-tracker.js';
 import { AgentAbortedError, validateJsonSchema } from '../src/agents/client.js';
 import { buildPlayerSheet, renderPlayerPanelMarkup } from '../src/ui/player-panel.js';
@@ -375,4 +378,285 @@ test('the sheet reflects state without a reload', () => {
     assert.notEqual(before.resources[0].current, after.resources[0].current);
     assert.equal(after.resources[0].current, 12);
     assert.match(renderPlayerPanelMarkup(after), /12\/100/);
+});
+
+test('the turn pipeline ticks, tracks, advances the storyline, then refreshes the cast', async () => {
+    const store = makeStore('s1');
+    const startTurn = store.get().meta.turn;
+    const order = [];
+    const dispatch = store.dispatch.bind(store);
+    store.dispatch = (event) => {
+        if (event?.type === 'TICK_TIME') {
+            order.push('tick');
+        }
+        return dispatch(event);
+    };
+    const tracker = {
+        run: async ({ state }) => {
+            order.push('tracker');
+            assert.equal(state.meta.turn, startTurn + 1);
+            return normalizeStateTrackerResult({
+                result: trackerResult({
+                    changes: [{ path: 'stamina.current', value: 64, reason: 'Took a hit' }],
+                }),
+                state,
+            });
+        },
+    };
+    const initiative = {
+        afterTurn: async ({ recentProse }) => {
+            order.push('initiative');
+            assert.equal(recentProse, 'A blow lands.');
+            return { ran: true };
+        },
+    };
+    const scene = {
+        refreshCast: async ({ runDirector }) => {
+            order.push('cast');
+            assert.equal(runDirector, false);
+            return { applied: [] };
+        },
+    };
+
+    const result = await runTurnPipeline({
+        store,
+        tracker,
+        initiative,
+        scene,
+        getSettings: () => ({}),
+        message: 'A blow lands.',
+    });
+
+    assert.deepEqual(order, ['tick', 'tracker', 'initiative', 'cast']);
+    assert.equal(result.ok, true);
+    assert.equal(result.ticked, true);
+    assert.equal(result.turn, startTurn + 1);
+    assert.equal(store.get().meta.turn, startTurn + 1);
+    assert.equal(store.get().player.stamina.current, 64);
+    assert.equal(result.tracker.ran, true);
+    assert.equal(result.tracker.applied, true);
+    assert.equal(result.storyline.ran, true);
+    assert.deepEqual(result.errors, []);
+});
+
+test('the turn gate accepts each chat/message identity exactly once', () => {
+    const gate = createTurnGate();
+    assert.equal(gate.accept({ chatId: 'c', messageIndex: 4 }), true);
+    assert.equal(gate.accept({ chatId: 'c', messageIndex: 4 }), false);
+    assert.equal(gate.accept({ chatId: 'c', messageIndex: 5 }), true);
+    assert.equal(gate.accept({ chatId: 'other', messageIndex: 5 }), true);
+    assert.equal(gate.last, 'other:5:');
+    gate.reset();
+    assert.equal(gate.accept({ chatId: 'c', messageIndex: 5 }), true);
+    assert.equal(gate.last, 'c:5:');
+});
+
+test('message identity survives a swipe but a new message at the same index is a new turn', () => {
+    const original = {
+        send_date: '2038-01-02',
+        swipe_id: 0,
+        swipe_info: [{ send_date: '2038-01-02' }, { send_date: '2038-01-03' }],
+        mes: 'The first take.',
+    };
+    const swipe = { ...original, swipe_id: 1, send_date: '2038-01-03', mes: 'The second take.' };
+    assert.equal(messageTurnIdentity(original), messageTurnIdentity(swipe));
+
+    const regenerated = {
+        send_date: '2038-01-04',
+        swipe_id: 0,
+        swipe_info: [{ send_date: '2038-01-04' }],
+        mes: 'A fresh reply.',
+    };
+    assert.notEqual(messageTurnIdentity(original), messageTurnIdentity(regenerated));
+
+    const gate = createTurnGate();
+    const chatId = 'c';
+    assert.equal(gate.accept({ chatId, messageIndex: 4, identity: messageTurnIdentity(original) }), true);
+    assert.equal(gate.accept({ chatId, messageIndex: 4, identity: messageTurnIdentity(swipe) }), false);
+    assert.equal(gate.accept({ chatId, messageIndex: 4, identity: messageTurnIdentity(regenerated) }), true);
+
+    // Missing timestamps still produce a stable identity.
+    assert.equal(messageTurnIdentity({ mes: 'hi' }), 'len:2');
+    assert.equal(messageTurnIdentity(null), '');
+});
+
+test('a storyline MOVE_CHARACTER is visible in the cast and encounter after the turn', async () => {
+    const { createSceneFlow } = await import('../src/flows/scene.js');
+    const store = makeStore('s1');
+    const before = store.get();
+    const villainId = Object.values(before.characters)
+        .find((entry) => entry.side === 'villain' && entry.controlledBy === 'npc')?.charId;
+    assert.ok(villainId, 'S1 seeds at least one villain');
+    const playerLocation = before.scene.locationId;
+
+    const scene = createSceneFlow({
+        store,
+        season: seasons.s1,
+        registry,
+        formGroups,
+        formRules,
+        getSettings: () => ({}),
+    });
+    const initiative = {
+        afterTurn: async () => {
+            store.dispatch({ type: 'MOVE_CHARACTER', characterId: villainId, locationId: playerLocation });
+            return { ran: true, reason: 'every-6-turns' };
+        },
+    };
+
+    const result = await runTurnPipeline({
+        store,
+        tracker: null,
+        initiative,
+        scene,
+        getSettings: () => ({ agents: { stateTracker: { enabled: false } } }),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(store.get().characters[villainId].locationId, playerLocation);
+    assert.ok(result.cast?.cast?.present?.includes(villainId), 'the moved NPC is present');
+    assert.ok(result.cast?.cast?.encounter?.characterIds?.includes(villainId));
+
+    // A manual removal still wins over the deterministic cast.
+    store.replace({
+        ...store.get(),
+        flags: {
+            ...(store.get().flags ?? {}),
+            castDirector: {
+                ...(store.get().flags?.castDirector ?? {}),
+                manualRemovals: [villainId],
+            },
+        },
+    });
+    const pinned = await scene.refreshCast({ runDirector: false });
+    assert.equal(pinned.cast.present.includes(villainId), false);
+    assert.equal(pinned.cast.encounter?.characterIds?.includes(villainId) ?? false, false);
+});
+
+test('a throwing settings getter does not abort the turn pipeline', async () => {
+    const store = makeStore('s1');
+    const startTurn = store.get().meta.turn;
+    const result = await runTurnPipeline({
+        store,
+        tracker: { run: async () => { throw new Error('should not run'); } },
+        getSettings: () => { throw new Error('settings down'); },
+        log: () => {},
+    });
+    assert.equal(result.ok, true);
+    assert.equal(store.get().meta.turn, startTurn + 1);
+    assert.equal(result.tracker.ran, false);
+});
+
+test('a disabled player tracker never runs and the rest of the turn still advances', async () => {
+    const store = makeStore('s1');
+    const startTurn = store.get().meta.turn;
+    let calls = 0;
+    let initiativeCalls = 0;
+    let castCalls = 0;
+    const tracker = {
+        run: async () => {
+            calls += 1;
+            return normalizeStateTrackerResult({ result: null, state: store.get() });
+        },
+    };
+
+    const result = await runTurnPipeline({
+        store,
+        tracker,
+        initiative: {
+            afterTurn: async () => {
+                initiativeCalls += 1;
+                return { ran: true };
+            },
+        },
+        scene: {
+            refreshCast: async () => {
+                castCalls += 1;
+                return null;
+            },
+        },
+        getSettings: () => ({ agents: { stateTracker: { enabled: false } } }),
+    });
+
+    assert.equal(calls, 0);
+    assert.equal(result.ticked, true);
+    assert.equal(result.tracker.ran, false);
+    assert.equal(result.tracker.reason, 'disabled');
+    assert.equal(store.get().meta.turn, startTurn + 1);
+    assert.equal(initiativeCalls, 1);
+    assert.equal(castCalls, 1);
+});
+
+test('a throwing player tracker leaves the state unchanged and does not skip later stages', async () => {
+    const store = makeStore('s1');
+    const startTurn = store.get().meta.turn;
+    const stamina = store.get().player.stamina.current;
+    let initiativeCalls = 0;
+    let castCalls = 0;
+
+    const result = await runTurnPipeline({
+        store,
+        tracker: {
+            run: async () => {
+                throw new Error('agent down');
+            },
+        },
+        initiative: {
+            afterTurn: async () => {
+                initiativeCalls += 1;
+                return { ran: true };
+            },
+        },
+        scene: {
+            refreshCast: async () => {
+                castCalls += 1;
+                return null;
+            },
+        },
+        getSettings: () => ({}),
+        log: () => {},
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.tracker.ran, false);
+    assert.equal(result.tracker.reason, 'failed');
+    assert.equal(store.get().player.stamina.current, stamina);
+    assert.equal(store.get().meta.turn, startTurn + 1);
+    assert.equal(initiativeCalls, 1);
+    assert.equal(castCalls, 1);
+    assert.ok(result.errors.some((entry) => entry.stage === 'tracker'));
+});
+
+test('a failed clock tick is recorded and the player tracker still runs', async () => {
+    const store = makeStore('s1');
+    const dispatch = store.dispatch.bind(store);
+    store.dispatch = (event) => {
+        if (event?.type === 'TICK_TIME') {
+            throw new Error('clock jammed');
+        }
+        return dispatch(event);
+    };
+    let calls = 0;
+
+    const result = await runTurnPipeline({
+        store,
+        tracker: {
+            run: async ({ state }) => {
+                calls += 1;
+                return normalizeStateTrackerResult({
+                    result: trackerResult({
+                        changes: [{ path: 'willpower.current', value: 41, reason: 'Pressured' }],
+                    }),
+                    state,
+                });
+            },
+        },
+        getSettings: () => ({}),
+        log: () => {},
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.ticked, false);
+    assert.equal(calls, 1);
+    assert.equal(store.get().player.willpower.current, 41);
+    assert.ok(result.errors.some((entry) => entry.stage === 'tick'));
 });

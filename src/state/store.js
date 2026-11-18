@@ -17,6 +17,12 @@ import { cloneWorldState, createWorldState, validateWorldState } from './world-s
 export const METADATA_KEY = 'neoterra';
 export const WAL_PREFIX = 'neoterra:wal:';
 
+/**
+ * One store per chat so the map, interaction, and turn pipeline cannot diverge;
+ * `createWorldStateStore` stays the raw constructor.
+ */
+const sharedStores = new Map(); // chatId -> store
+
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -60,6 +66,45 @@ export function saveWorldStateToMetadata(metadata, state, savedAt = Date.now()) 
         savedAt,
     };
     return metadata;
+}
+
+/**
+ * Return the one store shared by every runtime in a chat. Without a chat id
+ * this falls back to a fresh, unshared store.
+ *
+ * @param {object} [options]
+ * @returns {ReturnType<typeof createWorldStateStore>}
+ */
+export function getSharedWorldStateStore(options = {}) {
+    const chatId = typeof options.chatId === 'string' && options.chatId.length > 0
+        ? options.chatId
+        : null;
+    if (!chatId) {
+        return createWorldStateStore(options);
+    }
+    const existing = sharedStores.get(chatId);
+    if (existing) {
+        return existing;
+    }
+    const store = createWorldStateStore(options);
+    sharedStores.set(chatId, store);
+    return store;
+}
+
+/**
+ * Drop and dispose a chat's shared store. Returns false when the chat has none.
+ *
+ * @param {string} chatId
+ * @returns {boolean}
+ */
+export function releaseSharedWorldStateStore(chatId) {
+    const key = typeof chatId === 'string' && chatId.length > 0 ? chatId : null;
+    if (!key) return false;
+    const store = sharedStores.get(key);
+    if (!store) return false;
+    try { store.dispose?.(); } catch { /* ignore */ }
+    sharedStores.delete(key);
+    return true;
 }
 
 /**
