@@ -11,7 +11,7 @@
 - [x] 3. Make the map tab and map window fit vertically — done (733bbac)
 - [x] 4. Add a reusable in-chat scene message writer — done (49ca616)
 - [x] 5. Add an explicit season kickoff in the main chat — done (49ca616)
-- [x] 6. Detect and persist a location encounter — done (08cd77f)
+- [x] 6. Detect and persist a location encounter — done (d484b29)
 - [ ] 7. Hand a location change back to the chat (arrival + encounter)
 - [ ] 8. Run the per-turn trackers, advance the clock, refresh map state, then offer CYOA
 - [ ] 9. Give encounters explicit Engage/Talk/Avoid actions
