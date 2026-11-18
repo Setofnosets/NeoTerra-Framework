@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `neoterra-experience-audit`
-- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`.
+- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`.
 - Date: 2026-11-18
 - Audit basis: full static read of `src/`, `data/`, `docs/`, and `tools/`; live inspection of SillyTavern at `http://127.0.0.1:8000/` against the installed extension (664 installed character cards, one existing S1 Director chat); DOM/computed-style inspection of the shell, Season tab, identity step, Map, and Codex.
 - Not verified in this session: `npm run check` and the full Node test suite were not executed. Treat test health as unverified until the first implementation step runs them.
@@ -267,7 +267,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** fast implementer #low
 - **Commit:** `docs(audit): record the Neo Terra experience audit and proposal set`
 
-#### 2. Fix the Director card status and setup strip
+#### 2. Fix the Director card status and setup strip — ✅ done (`f76e7fe`)
 - **Files:** `src/ui/season-menu.js`, `src/ui/director-card.js`, `tests/season-start.test.js` or `tests/director-card.test.js`
 - **Depends on:** none
 - **Parallelizable:** yes
