@@ -226,6 +226,19 @@
                 deterministically from events. A held scene publishes nothing.
             </p>
 
+            <h4 class="neoterra-section-title">Domain sensorium</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="context.blocks.domain">
+                    <span>Send the <code>[NEOTERRA_DOMAIN]</code> framing to the narrator (villain seasons only)</span>
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                The Domain tab and the block appear only when a season authors a
+                <code>domain</code> block and plays as the villain. The domain follows
+                the season, not the played identity.
+            </p>
+
             <h4 class="neoterra-section-title">CYOA choices</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">
@@ -428,6 +441,10 @@
                 <label class="neoterra-field">
                     <span>Newspaper block</span>
                     <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.news">
+                </label>
+                <label class="neoterra-field">
+                    <span>Domain sensorium block</span>
+                    <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.domain">
                 </label>
             </div>
 

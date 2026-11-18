@@ -464,5 +464,21 @@
         "goal": "Conquer the neighbouring districts and city."
       }
     }
+  },
+  "domain": {
+    "name": "Wonderland",
+    "factionId": "clarity",
+    "description": "The city as Bleeding Heart has remade it: Clarity's order, her knights on the streets, and every alley taught to fear her name.",
+    "loreText": "They call it Wonderland now. The Queen of Hearts keeps the courts, the cards keep the streets, and mercy is a story the resistance tells itself in the dark.",
+    "knightFormKind": "knighted",
+    "watchDistricts": [
+      "downtown",
+      "fashion-row",
+      "harbor"
+    ],
+    "resistanceFactionIds": [
+      "petrabyte",
+      "crisis-coalition"
+    ]
   }
 }

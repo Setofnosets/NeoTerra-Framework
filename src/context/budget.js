@@ -17,6 +17,7 @@ export const CONTEXT_BLOCK_IDS = Object.freeze([
     'lore',
     'pacing',
     'news',
+    'domain',
 ]);
 
 /**
@@ -31,6 +32,9 @@ export const BLOCK_PRIORITY = Object.freeze({
     // Above continuity, below world: headlines are cheaper than the ledger.
     news: 4.5,
     continuity: 5,
+    // The villain sensorium sits just above continuity: useful framing, but
+    // the scene and cast always win the budget.
+    domain: 3.5,
     lore: 6,
     // The pacing nudge is the most disposable block: it is advisory and the
     // next turn regenerates it, so it is dropped before narrative context.
@@ -48,6 +52,7 @@ export const DEFAULT_TOKEN_BUDGET = Object.freeze({
     lore: 900,
     pacing: 350,
     news: 350,
+    domain: 350,
     characterProfile: 1200,
 });
 

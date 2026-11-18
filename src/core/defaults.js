@@ -237,6 +237,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
         lore: 900,
         pacing: 350,
         news: 350,
+        domain: 350,
         characterProfile: 1200,
     },
 
@@ -260,6 +261,9 @@ export const DEFAULT_SETTINGS = freezeDeep({
             lore: true,
             pacing: true,
             news: true,
+            // Villain-POV domain sensorium. Hero seasons render nothing even
+            // when this is on.
+            domain: true,
         },
     },
 

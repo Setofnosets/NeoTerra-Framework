@@ -132,6 +132,24 @@ test('the relations tab is a live flex panel with themed graph styles', () => {
     }
 });
 
+test('the domain sensorium is a themed live panel', () => {
+    const host = ruleBody('.neoterra-domain-host');
+    assert.ok(host, 'expected a .neoterra-domain-host rule');
+    assert.match(host, /display:\s*flex/);
+    assert.match(host, /flex:\s*1 1 auto/);
+
+    for (const selector of ['.neoterra-domain-section', '.neoterra-domain-row', '.neoterra-domain-meter-track']) {
+        const rule = ruleBody(selector);
+        assert.ok(rule, `expected a ${selector} rule`);
+        assert.doesNotMatch(rule, /#[0-9a-fA-F]{3,8}\b/);
+        assert.match(rule, /var\(--nt-/);
+    }
+
+    const hidden = ruleBody('.neoterra-tabs [hidden]');
+    assert.ok(hidden, 'expected a hidden-tab rule');
+    assert.match(hidden, /display:\s*none\s*!important/);
+});
+
 test('fog editor controls are themed', () => {
     const controls = ruleBody('.neoterra-fog-controls');
     assert.ok(controls, 'expected a .neoterra-fog-controls rule');

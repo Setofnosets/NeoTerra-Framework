@@ -28,6 +28,11 @@ import { disposeMapPanel, disposeNewspaperReader, mountMapPanel } from './map-pa
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData, resolveCodexRegistry } from './codex-data.js';
 import { mountRelationships } from './relationships.js';
+import { mountSensorium } from './sensorium.js';
+import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
+import { loadRegistry } from '../data/registry.js';
+import { loadLocations } from '../data/locations.js';
+import { loadDistricts } from '../data/map.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
 import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
@@ -98,6 +103,10 @@ const TAB_PLACEHOLDERS = Object.freeze({
         title: 'Relations',
         body: 'The relationship graph will appear here.',
     },
+    domain: {
+        title: 'Domain',
+        body: 'The villain domain sensorium appears for villain-POV seasons.',
+    },
     player: {
         title: 'Player',
         body: 'The player sheet, identity, and current form will appear here.',
@@ -109,7 +118,7 @@ const TAB_PLACEHOLDERS = Object.freeze({
 });
 
 /** Tabs whose panel is a live mountable component instead of a placeholder. */
-const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'settings']);
+const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'domain', 'settings']);
 
 let ctx = null;
 let abort = null;
@@ -166,6 +175,7 @@ function shellMarkup() {
             ${tab.id === 'season' ? '<div class="neoterra-season-host" data-neoterra-season-host></div>' : ''}
             ${tab.id === 'characters' ? '<div class="neoterra-codex-host" data-neoterra-codex-host></div>' : ''}
             ${tab.id === 'relations' ? '<div class="neoterra-relations-host" data-neoterra-relations-host></div>' : ''}
+            ${tab.id === 'domain' ? '<div class="neoterra-domain-host" data-neoterra-domain-host></div>' : ''}
             ${tab.id === 'settings' ? `
             <div class="neoterra-settings-tab">
                 <p class="neoterra-hint">Neo Terra settings live in SillyTavern's <strong>Extensions</strong>
@@ -372,7 +382,7 @@ function mountShell() {
             return;
         }
         if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-            const tabs = [...root.querySelectorAll('[role="tab"]')];
+            const tabs = [...root.querySelectorAll('[role="tab"]:not([hidden])')];
             const index = tabs.findIndex(element => element.dataset.neoterraTab === activeTab);
             if (index === -1) {
                 return;
@@ -1010,6 +1020,82 @@ async function mountRelationsPanelComponent(context) {
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* Domain sensorium (villain POV)                                      */
+/* ------------------------------------------------------------------ */
+
+let domainPanel = null;
+let mountedDomainChatId = null;
+
+function currentSeasonDefinition(context = refreshContext()) {
+    return context?.chatMetadata?.neoterra?.seasonDefinition ?? null;
+}
+
+function disposeDomainPanel() {
+    domainPanel?.dispose?.();
+    domainPanel = null;
+}
+
+async function mountDomainPanelForActiveChat() {
+    return mountDomainPanelComponent(refreshContext());
+}
+
+async function mountDomainPanelComponent(context) {
+    if (!hasDom()) {
+        return null;
+    }
+    const host = document.querySelector('[data-neoterra-domain-host]');
+    if (!host) {
+        return null;
+    }
+    const chatId = currentChatId(context);
+    const season = currentSeasonDefinition(context);
+    if (!isDomainTabVisible(liveWorldState(), season)) {
+        disposeDomainPanel();
+        host.innerHTML = '<p class="neoterra-empty">This season has no domain view.</p>';
+        return null;
+    }
+    if (mountedDomainChatId && mountedDomainChatId !== chatId) {
+        disposeDomainPanel();
+    }
+    mountedDomainChatId = chatId;
+    if (domainPanel && chatId) {
+        domainPanel.refresh();
+        return domainPanel;
+    }
+    try {
+        const metadata = context?.chatMetadata;
+        const registrySource = resolveCodexRegistry(metadata).registry;
+        const [registry, locations, districts] = await Promise.all([
+            Promise.resolve(registrySource).catch(() => null),
+            loadLocations().catch(() => null),
+            loadDistricts().catch(() => null),
+        ]);
+        if (mountedDomainChatId !== chatId) {
+            return null;
+        }
+        const fullRegistry = await loadRegistry().catch(() => registry);
+        if (mountedDomainChatId !== chatId) {
+            return null;
+        }
+        disposeDomainPanel();
+        domainPanel = mountSensorium({
+            root: host,
+            getState: () => liveWorldState(),
+            getSeason: () => currentSeasonDefinition(),
+            getRegistry: () => fullRegistry ?? registry,
+            getLocations: () => locations,
+            getDistricts: () => districts,
+            getSettings: () => getSettings(refreshContext() ?? context),
+        });
+        return domainPanel;
+    } catch (error) {
+        logger.warn('Could not mount the domain sensorium', error);
+        host.innerHTML = '<p class="neoterra-error" role="alert">The domain view could not be mounted.</p>';
+        return null;
+    }
+}
+
 /**
  * Drop the chat-bound runtimes and the shared store they were using. The next
  * activation rebuilds them from metadata; the gate resets so the first turn in
@@ -1606,6 +1692,14 @@ export function setActiveTab(tabId) {
     if (!SHELL_TABS.some(tab => tab.id === tabId)) {
         return false;
     }
+    // Domain is authored-data conditional. Resolve against the live chat so a
+    // hidden domain falls back to Characters instead of trapping focus on a
+    // nav button the user cannot see.
+    const season = currentSeasonDefinition();
+    const state = liveWorldState();
+    const visible = resolveVisibleTabs(state, season);
+    const visibleIds = new Set(visible.map(tab => tab.id));
+    tabId = resolveActiveTab(tabId, state, season);
     activeTab = tabId;
     if (!hasDom()) {
         return true;
@@ -1616,7 +1710,10 @@ export function setActiveTab(tabId) {
     }
     root.dataset.activeTab = tabId;
     for (const tab of root.querySelectorAll('[role="tab"]')) {
-        const selected = tab.dataset.neoterraTab === tabId;
+        const id = tab.dataset.neoterraTab;
+        const isVisible = visibleIds.has(id);
+        tab.hidden = !isVisible;
+        const selected = id === tabId;
         tab.setAttribute('aria-selected', selected ? 'true' : 'false');
         tab.tabIndex = selected ? 0 : -1;
     }
@@ -1632,6 +1729,9 @@ export function setActiveTab(tabId) {
     }
     if (tabId === 'relations') {
         void mountRelationsPanelForActiveChat();
+    }
+    if (tabId === 'domain') {
+        void mountDomainPanelForActiveChat();
     }
     bus.emit(EVENTS.TAB_CHANGED, { tab: tabId });
     return true;
@@ -1789,11 +1889,13 @@ async function resetChatWorld(context = null) {
     mountedMapChatId = null;
     mountedCodexChatId = null;
     mountedRelationsChatId = null;
+    mountedDomainChatId = null;
     interactionRuntime = null;
     choicesBar = null;
     disposeMapPanel();
     disposeCodex();
     disposeRelationsPanel();
+    disposeDomainPanel();
     disposeChoicesBar();
     disposeEndingPanel();
     if (isShellOpen() && getActiveTab() === 'map') {
@@ -1804,6 +1906,9 @@ async function resetChatWorld(context = null) {
     }
     if (isShellOpen() && getActiveTab() === 'relations') {
         void mountRelationsPanelForActiveChat();
+    }
+    if (isShellOpen() && getActiveTab() === 'domain') {
+        void mountDomainPanelForActiveChat();
     }
     void refreshInteractionUi(live);
     bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-reset' });
@@ -1930,6 +2035,8 @@ function subscribeChatChanges(context) {
         disposeCodex();
         mountedRelationsChatId = null;
         disposeRelationsPanel();
+        mountedDomainChatId = null;
+        disposeDomainPanel();
         disposeChoicesBar();
         disposeEncounterBar();
         encounterBar = null;
@@ -1942,6 +2049,16 @@ function subscribeChatChanges(context) {
         }
         if (isShellOpen() && getActiveTab() === 'relations') {
             void mountRelationsPanelForActiveChat();
+        }
+        if (isShellOpen() && getActiveTab() === 'domain') {
+            void mountDomainPanelForActiveChat();
+        }
+        // A chat switch can hide the Domain tab; move focus to Characters
+        // rather than leaving an invisible tab selected. Visible tabs keep
+        // the mount above, so this never triggers a second concurrent mount.
+        if (isShellOpen() && getActiveTab() === 'domain'
+            && !isDomainTabVisible(liveWorldState(), currentSeasonDefinition())) {
+            setActiveTab('characters');
         }
         refreshSettingsPanel();
         clockChip?.refresh?.();
@@ -1987,10 +2104,12 @@ export function dispose() {
     disposeChatRuntimes();
     mountedCodexChatId = null;
     mountedRelationsChatId = null;
+    mountedDomainChatId = null;
     disposeSeasonMenu();
     disposeMapPanel();
     disposeCodex();
     disposeRelationsPanel();
+    disposeDomainPanel();
     disposeSettingsPanel();
     disposeChoicesBar();
     disposeEncounterBar();

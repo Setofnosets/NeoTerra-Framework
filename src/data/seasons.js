@@ -462,6 +462,50 @@ export function validateSeasonDefinition(season, context = {}) {
         }
     }
 
+    // --- optional villain domain ------------------------------------------
+    if (season.domain !== undefined) {
+        if (!isObject(season.domain)) {
+            add(errors, 'domain', 'must be an object when present');
+        } else {
+            const domain = season.domain;
+            for (const field of ['name', 'factionId']) {
+                if (typeof domain[field] !== 'string' || domain[field].trim().length === 0) {
+                    add(errors, `domain.${field}`, 'must be a non-empty string');
+                }
+            }
+            if (typeof domain.factionId === 'string' && factionIndex && !factionIds.has(domain.factionId)) {
+                add(errors, 'domain.factionId', `unresolved faction "${domain.factionId}"`);
+            }
+            for (const field of ['description', 'loreText', 'knightFormKind']) {
+                if (domain[field] !== undefined && typeof domain[field] !== 'string') {
+                    add(errors, `domain.${field}`, 'must be a string when present');
+                }
+            }
+            if (domain.watchDistricts !== undefined) {
+                if (!isStringArray(domain.watchDistricts)) {
+                    add(errors, 'domain.watchDistricts', 'must be an array of district ids');
+                } else if (districtIndex) {
+                    domain.watchDistricts.forEach((districtId, index) => {
+                        if (!districtIds.has(districtId)) {
+                            add(errors, `domain.watchDistricts[${index}]`, `unresolved district "${districtId}"`);
+                        }
+                    });
+                }
+            }
+            if (domain.resistanceFactionIds !== undefined) {
+                if (!isStringArray(domain.resistanceFactionIds)) {
+                    add(errors, 'domain.resistanceFactionIds', 'must be an array of faction ids');
+                } else if (factionIndex) {
+                    domain.resistanceFactionIds.forEach((factionId, index) => {
+                        if (!factionIds.has(factionId)) {
+                            add(errors, `domain.resistanceFactionIds[${index}]`, `unresolved faction "${factionId}"`);
+                        }
+                    });
+                }
+            }
+        }
+    }
+
     // --- deadline, failure state, and season-specific rules ---------------
     const deadline = season.finalDeadline;
     if (!isObject(deadline)) {

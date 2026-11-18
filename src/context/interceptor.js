@@ -11,6 +11,7 @@
 import { DEFAULT_CONTEXT_DEPTH } from '../core/constants.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings } from '../core/settings.js';
+import { loadRegistry } from '../data/registry.js';
 import { renderContext } from './renderer.js';
 
 export const INTERCEPTOR_GLOBAL_NAME = 'neoTerraGenerateInterceptor';
@@ -39,9 +40,27 @@ function defaultGetSeason(ctx) {
     return metadata?.seasonDefinition ?? metadata?.season ?? null;
 }
 
-function defaultGetRegistry(ctx) {
+/**
+ * The chat slice only contains roster forms. A villain season's knights are
+ * alternate forms, so the domain block needs the full registry to name them.
+ * The full registry is normally already cached by the codex/tab mount.
+ */
+async function defaultGetRegistry(ctx) {
     const metadata = ctx?.chatMetadata?.neoterra;
-    return metadata?.registry ?? null;
+    const slice = metadata?.registry ?? null;
+    const season = metadata?.seasonDefinition ?? metadata?.season ?? null;
+    const knightFormKind = season?.domain?.knightFormKind ?? null;
+    if (knightFormKind && Array.isArray(slice?.entries)) {
+        const hasKnight = slice.entries.some((entry) => entry?.formKind === knightFormKind);
+        if (!hasKnight) {
+            try {
+                return await loadRegistry();
+            } catch {
+                return slice;
+            }
+        }
+    }
+    return slice;
 }
 
 /** True for messages this extension injected into a prompt copy. */
@@ -138,10 +157,11 @@ export function createGenerationInterceptor(options = {}) {
                 stripContextPrompt(chat);
                 return;
             }
+            const registry = await getRegistry(ctx);
             const result = render(state, {
                 settings,
                 season: getSeason(ctx),
-                registry: getRegistry(ctx),
+                registry,
             });
             const depth = settings?.context?.depth ?? DEFAULT_CONTEXT_DEPTH;
             injectContextPrompt(chat, result?.text ?? '', {

@@ -2342,3 +2342,164 @@ body.neoterra-dialog-open {
         max-height: 46vh;
     }
 }
+
+/* ---------- Domain sensorium ---------- */
+
+.neoterra-tabs [hidden] {
+    display: none !important;
+}
+
+.neoterra-domain-host {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.neoterra-domain {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    width: 100%;
+    min-height: 0;
+}
+
+.neoterra-domain-head h3 {
+    margin: 0 0 4px;
+    color: var(--nt-danger);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.neoterra-domain-flavor {
+    margin: 8px 0 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--nt-danger);
+    background: var(--nt-danger-soft);
+    border-radius: var(--nt-radius-sm);
+    color: var(--nt-text);
+    font-style: italic;
+}
+
+.neoterra-domain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+}
+
+.neoterra-domain-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    min-width: 0;
+}
+
+.neoterra-domain-title {
+    margin: 0;
+    color: var(--nt-accent);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.neoterra-domain-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.neoterra-domain-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.neoterra-domain-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px;
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+}
+
+.neoterra-domain-row.is-active {
+    border-color: var(--nt-danger);
+    box-shadow: var(--nt-glow);
+}
+
+.neoterra-domain-row.is-controlled {
+    border-left: 3px solid var(--nt-danger);
+}
+
+.neoterra-domain-row.is-contested {
+    border-left: 3px solid var(--nt-warning);
+}
+
+.neoterra-domain-row-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.neoterra-domain-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.neoterra-domain-meter {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 90px auto;
+    align-items: center;
+    gap: 8px;
+    color: var(--nt-text-muted);
+    font-size: 0.8rem;
+}
+
+.neoterra-domain-meter-track {
+    display: block;
+    height: 6px;
+    overflow: hidden;
+    background: var(--nt-bg-deep);
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+}
+
+.neoterra-domain-meter-track > span {
+    display: block;
+    height: 100%;
+    background: var(--nt-danger);
+}
+
+.neoterra-domain-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.neoterra-domain-feed-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border-left: 2px solid var(--nt-border-strong);
+    color: var(--nt-text);
+    font-size: 0.85rem;
+}

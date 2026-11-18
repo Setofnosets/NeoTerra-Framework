@@ -115,6 +115,21 @@
         "resistance": { "$ref": "#/$defs/postVictoryPath" },
         "join-villain": { "$ref": "#/$defs/postVictoryPath" }
       }
+    },
+    "domain": {
+      "description": "Optional villain-POV domain dashboard. Any season with playerRole 'villain' may author one; hero seasons and Sandbox omit it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "factionId"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "factionId": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "loreText": { "type": "string" },
+        "knightFormKind": { "type": "string" },
+        "watchDistricts": { "type": "array", "items": { "type": "string" } },
+        "resistanceFactionIds": { "type": "array", "items": { "type": "string" } }
+      }
     }
   },
   "$defs": {

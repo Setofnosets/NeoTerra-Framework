@@ -59,6 +59,7 @@ export const SHELL_TABS = Object.freeze([
     { id: 'map', label: 'Map' },
     { id: 'characters', label: 'Characters' },
     { id: 'relations', label: 'Relations' },
+    { id: 'domain', label: 'Domain' },
     { id: 'player', label: 'Player' },
     { id: 'settings', label: 'Settings' },
 ]);

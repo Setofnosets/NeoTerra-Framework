@@ -12,6 +12,7 @@ import { DEFAULT_SETTINGS } from '../core/defaults.js';
 import { isClockHeld } from '../core/world-clock.js';
 import { buildRegistryIndex } from '../data/registry.js';
 import { buildNewspaperView } from '../data/newsroom.js';
+import { buildDomainView } from '../data/domain.js';
 import {
     selectOpenBeats,
     selectPlayerView,
@@ -34,6 +35,7 @@ export const BLOCK_HEADINGS = Object.freeze({
     lore: '[NEOTERRA_LORE]',
     pacing: '[NEOTERRA_PACING]',
     news: '[NEOTERRA_NEWS]',
+    domain: '[NEOTERRA_DOMAIN]',
 });
 
 export const BLOCK_ORDER = Object.freeze(Object.keys(BLOCK_HEADINGS));
@@ -466,6 +468,60 @@ function renderNews(state, settings) {
     return makeBlock('news', lines, settings);
 }
 
+/**
+ * Villain-POV domain framing. Only the season's authored `domain` block can
+ * activate it; hero seasons and Sandbox render nothing.
+ */
+function renderDomain(state, options, settings) {
+    const view = buildDomainView({
+        state,
+        season: options.season ?? null,
+        registry: options.registry ?? options.registryIndex ?? null,
+    });
+    if (!view.active) {
+        return null;
+    }
+    const lines = [`Domain: ${view.wonderland.name}`];
+    if (view.wonderland.description) {
+        lines.push(view.wonderland.description);
+    }
+    if (view.knights.length > 0) {
+        lines.push('Knights:');
+        for (const knight of view.knights.slice(0, 4)) {
+            const facts = [
+                knight.active ? 'on duty' : 'latent',
+                knight.locationName ?? 'location unknown',
+                `corruption ${knight.corruptionStage}`,
+                `affinity ${knight.affinity}`,
+            ].join(', ');
+            lines.push(`- ${knight.name} — ${facts}`);
+        }
+    }
+    const spread = Object.entries(view.corruptionSpread.byStage ?? {})
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([stage, count]) => `stage ${stage}: ${count}`);
+    if (spread.length > 0) {
+        lines.push(`Corruption: ${spread.join(', ')}`);
+    }
+    const counts = view.territory.counts ?? {};
+    lines.push(
+        `Territory: ${counts.controlled ?? 0} controlled, ${counts.contested ?? 0} contested, `
+        + `${counts.hostile ?? 0} hostile of ${counts.districts ?? 0} districts`
+        + (view.territory.headquartersName ? `; seat: ${view.territory.headquartersName}` : ''),
+    );
+    if (view.resistance.length > 0) {
+        lines.push('Resistance:');
+        for (const threat of view.resistance.slice(0, 3)) {
+            const stage = threat.stageCount > 0
+                ? ` (stage ${threat.stageIndex + 1}/${threat.stageCount})`
+                : '';
+            lines.push(`- ${threat.name} — ${threat.stageLabel}${stage}, ${threat.progress}%`);
+        }
+    }
+    lines.push('The player rules this domain as its villain. Treat the player as the city\'s antagonist; the resistance is the danger, not the protagonist.');
+    return makeBlock('domain', lines, settings);
+}
+
 function renderLore(state, options, settings) {
     const lines = [];
     const beats = selectOpenBeats(state, options.season).slice(0, 3);
@@ -589,6 +645,7 @@ export function renderContext(state, options = {}) {
         renderLore(state, options, renderSettings),
         renderPacing(state, renderSettings),
         renderNews(state, renderSettings),
+        renderDomain(state, options, renderSettings),
     ].filter((block) => block && blockEnabled(settings, options, block.id));
 
     const result = applyTokenBudget(candidates, tokenBudget);
