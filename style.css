@@ -2132,3 +2132,213 @@
 body.neoterra-dialog-open {
     overflow: hidden;
 }
+
+/* ---------- Relations graph ---------- */
+
+.neoterra-relations-host {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.neoterra-relations {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    min-height: 0;
+}
+
+.neoterra-relations-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    padding: 10px 12px;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+}
+
+.neoterra-relations-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.neoterra-relations-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 360px;
+    padding: 12px;
+    background: var(--nt-bg-deep);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    overflow: auto;
+}
+
+.neoterra-graph-svg {
+    width: 100%;
+    height: auto;
+    max-height: 64vh;
+}
+
+.neoterra-graph-edge {
+    opacity: 0.55;
+    transition: opacity var(--nt-transition), stroke-width var(--nt-transition);
+}
+
+.neoterra-graph-edge.is-highlighted {
+    opacity: 1;
+    stroke-width: 4;
+}
+
+.neoterra-graph-node {
+    cursor: pointer;
+    outline: none;
+}
+
+.neoterra-graph-node circle {
+    fill: var(--nt-bg-elevated);
+    stroke: var(--nt-text-muted);
+    stroke-width: 2;
+    transition: stroke var(--nt-transition), fill var(--nt-transition);
+}
+
+.neoterra-graph-node.is-side-villain circle {
+    stroke: var(--nt-danger);
+}
+
+.neoterra-graph-node.is-side-hero circle {
+    stroke: var(--nt-success);
+}
+
+.neoterra-graph-node.is-side-neutral circle {
+    stroke: var(--nt-warning);
+}
+
+.neoterra-graph-node.is-player circle {
+    fill: var(--nt-accent-soft);
+    stroke: var(--nt-accent);
+    stroke-width: 3;
+}
+
+.neoterra-graph-node.is-present:not(.is-player) circle {
+    fill: var(--nt-bg-hover);
+}
+
+.neoterra-graph-node.is-hovered circle,
+.neoterra-graph-node:focus-visible circle {
+    stroke: var(--nt-accent);
+    fill: var(--nt-accent-soft);
+}
+
+.neoterra-graph-node:focus-visible {
+    outline: var(--nt-focus-ring);
+    outline-offset: 2px;
+}
+
+.neoterra-graph-label {
+    fill: var(--nt-text);
+    font-family: var(--nt-font);
+    font-size: 11px;
+    pointer-events: none;
+}
+
+.neoterra-graph-badge {
+    fill: var(--nt-warning);
+    font-size: 10px;
+}
+
+.neoterra-graph-badge.is-bad-end {
+    fill: var(--nt-danger);
+}
+
+.neoterra-relations-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    overflow: auto;
+}
+
+.neoterra-relations-detail-title {
+    margin: 0;
+    color: var(--nt-text);
+    font-size: 1rem;
+}
+
+.neoterra-relation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.neoterra-relation-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    border-left: 3px solid var(--nt-graph-edge, var(--nt-border));
+    background: var(--nt-bg-panel);
+    border-radius: var(--nt-radius-sm);
+}
+
+.neoterra-relation-type {
+    color: var(--nt-graph-edge, var(--nt-text-muted));
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.neoterra-graph-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--nt-border);
+    padding-top: 10px;
+}
+
+.neoterra-graph-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--nt-text-muted);
+    font-size: 0.8rem;
+}
+
+.neoterra-graph-legend-line {
+    width: 22px;
+    height: 0;
+    border-top: 3px solid var(--nt-graph-edge, var(--nt-text-muted));
+}
+
+.neoterra-graph-legend-item.is-dashed .neoterra-graph-legend-line {
+    border-top-style: dashed;
+}
+
+@media (max-width: 900px) {
+    .neoterra-relations-body {
+        grid-template-columns: 1fr;
+    }
+
+    .neoterra-graph-svg {
+        max-height: 46vh;
+    }
+}

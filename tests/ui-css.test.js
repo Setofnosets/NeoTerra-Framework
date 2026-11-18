@@ -113,6 +113,25 @@ test('the newspaper reader modal is themed and scrolls internally', () => {
     assert.match(body, /overflow:\s*hidden/);
 });
 
+test('the relations tab is a live flex panel with themed graph styles', () => {
+    const host = ruleBody('.neoterra-relations-host');
+    assert.ok(host, 'expected a .neoterra-relations-host rule');
+    assert.match(host, /display:\s*flex/);
+    assert.match(host, /flex:\s*1 1 auto/);
+    assert.match(host, /min-height:\s*0/);
+
+    const body = ruleBody('.neoterra-relations-body');
+    assert.ok(body, 'expected a .neoterra-relations-body rule');
+    assert.match(body, /grid-template-columns/);
+
+    for (const selector of ['.neoterra-relations-side', '.neoterra-graph-edge', '.neoterra-graph-label']) {
+        const rule = ruleBody(selector);
+        assert.ok(rule, `expected a ${selector} rule`);
+        assert.doesNotMatch(rule, /#[0-9a-fA-F]{3,8}\b/);
+        assert.match(rule, /var\(--nt-/);
+    }
+});
+
 test('fog editor controls are themed', () => {
     const controls = ruleBody('.neoterra-fog-controls');
     assert.ok(controls, 'expected a .neoterra-fog-controls rule');

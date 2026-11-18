@@ -26,7 +26,8 @@ import {
 } from './settings.js';
 import { disposeMapPanel, disposeNewspaperReader, mountMapPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
-import { loadCodexData } from './codex-data.js';
+import { loadCodexData, resolveCodexRegistry } from './codex-data.js';
+import { mountRelationships } from './relationships.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
 import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
@@ -93,6 +94,10 @@ const TAB_PLACEHOLDERS = Object.freeze({
         title: 'Characters',
         body: 'The character codex and live cast will appear here.',
     },
+    relations: {
+        title: 'Relations',
+        body: 'The relationship graph will appear here.',
+    },
     player: {
         title: 'Player',
         body: 'The player sheet, identity, and current form will appear here.',
@@ -104,7 +109,7 @@ const TAB_PLACEHOLDERS = Object.freeze({
 });
 
 /** Tabs whose panel is a live mountable component instead of a placeholder. */
-const LIVE_PANELS = new Set(['season', 'map', 'characters', 'settings']);
+const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'settings']);
 
 let ctx = null;
 let abort = null;
@@ -160,6 +165,7 @@ function shellMarkup() {
             ${tab.id === 'map' ? '<div class="neoterra-map-host" data-neoterra-map-host></div>' : ''}
             ${tab.id === 'season' ? '<div class="neoterra-season-host" data-neoterra-season-host></div>' : ''}
             ${tab.id === 'characters' ? '<div class="neoterra-codex-host" data-neoterra-codex-host></div>' : ''}
+            ${tab.id === 'relations' ? '<div class="neoterra-relations-host" data-neoterra-relations-host></div>' : ''}
             ${tab.id === 'settings' ? `
             <div class="neoterra-settings-tab">
                 <p class="neoterra-hint">Neo Terra settings live in SillyTavern's <strong>Extensions</strong>
@@ -947,6 +953,63 @@ async function mountCodexPanelForActiveChat() {
     return mountCodexPanelComponent(refreshContext());
 }
 
+/* ------------------------------------------------------------------ */
+/* Relations graph                                                     */
+/* ------------------------------------------------------------------ */
+
+let relationsPanel = null;
+let mountedRelationsChatId = null;
+
+function disposeRelationsPanel() {
+    relationsPanel?.dispose?.();
+    relationsPanel = null;
+}
+
+async function mountRelationsPanelForActiveChat() {
+    return mountRelationsPanelComponent(refreshContext());
+}
+
+async function mountRelationsPanelComponent(context) {
+    if (!hasDom()) {
+        return null;
+    }
+    const host = document.querySelector('[data-neoterra-relations-host]');
+    if (!host) {
+        return null;
+    }
+    const chatId = currentChatId(context);
+    if (mountedRelationsChatId && mountedRelationsChatId !== chatId) {
+        disposeRelationsPanel();
+    }
+    mountedRelationsChatId = chatId;
+    if (relationsPanel && chatId) {
+        // Re-activating the tab must keep the user's selection and filters.
+        relationsPanel.refresh();
+        return relationsPanel;
+    }
+    try {
+        const metadata = context?.chatMetadata;
+        const resolved = resolveCodexRegistry(metadata);
+        const registry = chatId ? await resolved.registry : null;
+        // A chat switch during the fetch must not paint into the new chat.
+        if (mountedRelationsChatId !== chatId) {
+            return null;
+        }
+        disposeRelationsPanel();
+        relationsPanel = mountRelationships({
+            root: host,
+            getState: () => liveWorldState(),
+            getRegistry: () => registry,
+            getSettings: () => getSettings(refreshContext() ?? context),
+        });
+        return relationsPanel;
+    } catch (error) {
+        logger.warn('Could not mount the relationship graph', error);
+        host.innerHTML = '<p class="neoterra-error" role="alert">The relationship graph could not be mounted.</p>';
+        return null;
+    }
+}
+
 /**
  * Drop the chat-bound runtimes and the shared store they were using. The next
  * activation rebuilds them from metadata; the gate resets so the first turn in
@@ -1567,6 +1630,9 @@ export function setActiveTab(tabId) {
     if (tabId === 'characters') {
         void mountCodexPanelForActiveChat();
     }
+    if (tabId === 'relations') {
+        void mountRelationsPanelForActiveChat();
+    }
     bus.emit(EVENTS.TAB_CHANGED, { tab: tabId });
     return true;
 }
@@ -1722,10 +1788,12 @@ async function resetChatWorld(context = null) {
     mapRuntime = null;
     mountedMapChatId = null;
     mountedCodexChatId = null;
+    mountedRelationsChatId = null;
     interactionRuntime = null;
     choicesBar = null;
     disposeMapPanel();
     disposeCodex();
+    disposeRelationsPanel();
     disposeChoicesBar();
     disposeEndingPanel();
     if (isShellOpen() && getActiveTab() === 'map') {
@@ -1733,6 +1801,9 @@ async function resetChatWorld(context = null) {
     }
     if (isShellOpen() && getActiveTab() === 'characters') {
         void mountCodexPanelForActiveChat();
+    }
+    if (isShellOpen() && getActiveTab() === 'relations') {
+        void mountRelationsPanelForActiveChat();
     }
     void refreshInteractionUi(live);
     bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-reset' });
@@ -1857,6 +1928,8 @@ function subscribeChatChanges(context) {
         mountedCodexChatId = null;
         disposeMapPanel();
         disposeCodex();
+        mountedRelationsChatId = null;
+        disposeRelationsPanel();
         disposeChoicesBar();
         disposeEncounterBar();
         encounterBar = null;
@@ -1866,6 +1939,9 @@ function subscribeChatChanges(context) {
         }
         if (isShellOpen() && getActiveTab() === 'characters') {
             void mountCodexPanelForActiveChat();
+        }
+        if (isShellOpen() && getActiveTab() === 'relations') {
+            void mountRelationsPanelForActiveChat();
         }
         refreshSettingsPanel();
         clockChip?.refresh?.();
@@ -1910,9 +1986,11 @@ export function dispose() {
     disposeClockChip();
     disposeChatRuntimes();
     mountedCodexChatId = null;
+    mountedRelationsChatId = null;
     disposeSeasonMenu();
     disposeMapPanel();
     disposeCodex();
+    disposeRelationsPanel();
     disposeSettingsPanel();
     disposeChoicesBar();
     disposeEncounterBar();
