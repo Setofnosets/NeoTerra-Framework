@@ -46,6 +46,7 @@ import {
     renderLayerToggles,
 } from '../src/ui/map.js';
 import {
+    GEOMETRY_VERSION,
     buildLayerToggleState,
     buildPanelViewModel,
     clampPanelGeometry,
@@ -650,6 +651,7 @@ test('panel geometry is clamped, persisted, and restored', () => {
     };
     assert.equal(loadPanelGeometry(null).x, null);
     assert.equal(savePanelGeometry(storage, { x: 40, y: 60, width: 900, height: 600 }), true);
+    assert.equal(JSON.parse(stored.get('neoterra:map:panel')).geometryVersion, GEOMETRY_VERSION);
     const restored = loadPanelGeometry(storage);
     assert.deepEqual(restored, { x: 40, y: 60, width: 900, height: 600 });
     stored.set('neoterra:map:panel', '{bad json');
@@ -666,8 +668,81 @@ test('panel geometry fits 1080p and 1440p viewports', () => {
     }
 });
 
-test('layer visibility persists per user and sanitizes bad input', () => {
+test('legacy 1080x700 storage migrates to the taller default; custom sizes survive', () => {
     const stored = new Map();
+    const storage = {
+        getItem: (key) => stored.get(key) ?? null,
+        setItem: (key, value) => stored.set(key, value),
+    };
+
+    // Exactly the old default with no version marker: treated as unset.
+    stored.set('neoterra:map:panel', JSON.stringify({ x: null, y: null, width: 1080, height: 700 }));
+    const migrated = loadPanelGeometry(storage);
+    assert.deepEqual(migrated, { x: null, y: null, width: 1080, height: 820 });
+
+    // A custom size is the user's choice and is preserved.
+    stored.set('neoterra:map:panel', JSON.stringify({ x: 40, y: 60, width: 900, height: 640 }));
+    assert.deepEqual(loadPanelGeometry(storage), { x: 40, y: 60, width: 900, height: 640 });
+
+    // The v1 default at a saved position still migrates: positions are
+    // re-clamped on load, so the user only loses the offset, not a size.
+    stored.set('neoterra:map:panel', JSON.stringify({ x: 100, y: 80, width: 1080, height: 700 }));
+    assert.deepEqual(loadPanelGeometry(storage), { x: null, y: null, width: 1080, height: 820 });
+
+    // A versioned 1080x700 is a deliberate choice made after the migration.
+    stored.set('neoterra:map:panel', JSON.stringify({ x: null, y: null, width: 1080, height: 700, geometryVersion: GEOMETRY_VERSION }));
+    assert.deepEqual(loadPanelGeometry(storage), { x: null, y: null, width: 1080, height: 700 });
+
+    // Round-trip: saving the migrated default persists the version.
+    savePanelGeometry(storage, migrated);
+    assert.equal(JSON.parse(stored.get('neoterra:map:panel')).geometryVersion, GEOMETRY_VERSION);
+    assert.deepEqual(loadPanelGeometry(storage), migrated);
+});
+
+test('the panel grows with the host instead of staying at the old 396px clamp', () => {
+    // 1296x894 shell -> ~1182x600 host (the live-measured map tab).
+    const host = { width: 1182, height: 600 };
+    const wide = clampPanelGeometry({ x: null, y: null, width: 1080, height: 820 }, host);
+    assert.equal(wide.width, 1080);
+    assert.equal(wide.height, 600 - 24);
+    assert.ok(wide.height > 396, 'panel must be taller than the old 396px clamp');
+
+    // 1920x1080 viewport -> ~750px host.
+    const tall = clampPanelGeometry({ width: 1080, height: 820 }, { width: 1200, height: 750 });
+    assert.equal(tall.height, 750 - 24);
+
+    // Drag and resize both use `clampPanelGeometry` with the host box, so a
+    // host-sized viewport can never yield a panel taller than viewHeight - 24.
+    for (const viewport of [{ width: 1182, height: 600 }, { width: 900, height: 500 }, { width: 2000, height: 1200 }]) {
+        const dragged = clampPanelGeometry({ x: 5000, y: 5000, width: 5000, height: 5000 }, viewport);
+        assert.equal(dragged.height, Math.max(300, viewport.height - 24));
+        assert.ok(dragged.height <= Math.max(300, viewport.height - 24));
+        assert.ok(dragged.width <= Math.max(360, viewport.width - 24));
+        assert.ok(dragged.x + dragged.width <= Math.max(372, viewport.width), 'drag stays inside the host');
+        assert.ok(dragged.y + dragged.height <= Math.max(312, viewport.height), 'drag stays inside the host');
+    }
+
+    // Narrow/short host: the minimum still wins and the panel stays inside
+    // the host horizon where the host allows it.
+    const narrow = clampPanelGeometry({ width: 1080, height: 820 }, { width: 900, height: 700 });
+    assert.equal(narrow.width, 900 - 24);
+    assert.equal(narrow.height, 700 - 24);
+    assert.ok(narrow.x >= 12 && narrow.x + narrow.width <= 900);
+    assert.ok(narrow.y >= 12 && narrow.y + narrow.height <= 700);
+    assert.ok(narrow.x + narrow.width - 12 > 0, 'resize handle stays reachable');
+});
+
+test('drag and resize clamp to the map host, never the window', () => {
+    const source = readFileSync(join(ROOT, 'src/ui/map-panel.js'), 'utf8');
+    const start = source.indexOf('function mountDragResize');
+    const end = source.indexOf('export function refreshMapPanel');
+    const body = source.slice(start, end);
+    assert.ok(start > -1 && end > start);
+    assert.equal((body.match(/clampToHost\(state\)/g) ?? []).length, 2, 'both handlers clamp via clampToHost');
+    assert.doesNotMatch(body, /window\.innerWidth|window\.innerHeight/);
+});
+
+test('layer visibility persists per user and sanitizes bad input', () => {    const stored = new Map();
     const storage = {
         getItem: (key) => stored.get(key) ?? null,
         setItem: (key, value) => stored.set(key, value),

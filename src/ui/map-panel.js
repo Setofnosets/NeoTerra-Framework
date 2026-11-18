@@ -58,7 +58,15 @@ const STORAGE_KEY = 'neoterra:map:panel';
  * editor's "Export overrides" button for committing to the repo.
  */
 const OVERRIDES_KEY = 'neoterra:map:overrides';
-const DEFAULT_GEOMETRY = Object.freeze({ x: null, y: null, width: 1080, height: 700 });
+/** Bumped when the geometry storage shape changes. */
+export const GEOMETRY_VERSION = 2;
+const DEFAULT_GEOMETRY = Object.freeze({ x: null, y: null, width: 1080, height: 820 });
+/**
+ * The v1 default. A stored geometry that still equals it was never chosen by
+ * the user: it is the value the old code wrote on every clamp, so it must not
+ * defeat the taller v2 default. Any other stored size is preserved.
+ */
+const LEGACY_DEFAULT_GEOMETRY = Object.freeze({ width: 1080, height: 700 });
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 300;
 
@@ -92,13 +100,17 @@ function safeLocalStorage() {
 export function clampPanelGeometry(geometry, viewport = { width: 1920, height: 1080 }) {
     const viewWidth = Math.max(MIN_WIDTH, Number(viewport?.width) || 1920);
     const viewHeight = Math.max(MIN_HEIGHT, Number(viewport?.height) || 1080);
+    // When the viewport is shorter than the minimum, the minimum wins (and
+    // may overflow) instead of producing a negative clamp range.
+    const maxWidth = Math.max(MIN_WIDTH, viewWidth - 24);
+    const maxHeight = Math.max(MIN_HEIGHT, viewHeight - 24);
     const width = Math.min(
         Math.max(Number(geometry?.width) || DEFAULT_GEOMETRY.width, MIN_WIDTH),
-        Math.max(MIN_WIDTH, viewWidth - 24),
+        maxWidth,
     );
     const height = Math.min(
         Math.max(Number(geometry?.height) || DEFAULT_GEOMETRY.height, MIN_HEIGHT),
-        Math.max(MIN_HEIGHT, viewHeight - 24),
+        maxHeight,
     );
     const maxX = Math.max(12, viewWidth - width - 12);
     const maxY = Math.max(12, viewHeight - height - 12);
@@ -112,6 +124,22 @@ export function clampPanelGeometry(geometry, viewport = { width: 1920, height: 1
     };
 }
 
+function isLegacyDefaultGeometry(parsed) {
+    if (parsed?.geometryVersion >= GEOMETRY_VERSION) {
+        return false;
+    }
+    // The v1 code always persisted the clamped geometry, so a legacy record
+    // always carries finite x/y. Only the *size* identifies the untouched
+    // default; positions are re-clamped (or re-centered) on load anyway.
+    return Number(parsed?.width) === LEGACY_DEFAULT_GEOMETRY.width
+        && Number(parsed?.height) === LEGACY_DEFAULT_GEOMETRY.height;
+}
+
+/**
+ * Read the persisted panel geometry. Storage written before
+ * `GEOMETRY_VERSION` that still holds the old 1080×700 default is treated as
+ * unset; any other stored size is preserved and re-clamped on load.
+ */
 export function loadPanelGeometry(storage = null) {
     if (!storage) {
         return { ...DEFAULT_GEOMETRY };
@@ -119,6 +147,9 @@ export function loadPanelGeometry(storage = null) {
     try {
         const parsed = JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null');
         if (!parsed || typeof parsed !== 'object') {
+            return { ...DEFAULT_GEOMETRY };
+        }
+        if (isLegacyDefaultGeometry(parsed)) {
             return { ...DEFAULT_GEOMETRY };
         }
         return {
@@ -138,7 +169,7 @@ export function savePanelGeometry(storage, geometry) {
         return false;
     }
     try {
-        storage.setItem(STORAGE_KEY, JSON.stringify(geometry));
+        storage.setItem(STORAGE_KEY, JSON.stringify({ ...geometry, geometryVersion: GEOMETRY_VERSION }));
         return true;
     } catch (error) {
         logger.warn('Could not persist map panel geometry', error);
@@ -537,6 +568,12 @@ function layerLabel(layer) {
     return layer[0].toUpperCase() + layer.slice(1);
 }
 
+/**
+ * The panel is positioned inside `.neoterra-map-host`, so every clamp (initial
+ * placement, drag, and resize) must use the host's box. Clamping to the window
+ * while placing inside the host is what let the panel be dragged out of the
+ * shell and clipped.
+ */
 function viewportSize(element) {
     const host = element?.parentElement;
     const rect = host?.getBoundingClientRect?.();
@@ -549,6 +586,16 @@ function viewportSize(element) {
     };
 }
 
+/** Clamp the current geometry to the panel's host (shared by drag and resize). */
+function clampToHost(state) {
+    if (!hasDom()) {
+        return state.geometry;
+    }
+    const element = state.root?.querySelector?.('[data-neoterra-map]');
+    state.geometry = clampPanelGeometry(state.geometry, viewportSize(element));
+    return state.geometry;
+}
+
 function applyGeometry(state) {
     if (!hasDom()) {
         return;
@@ -557,7 +604,7 @@ function applyGeometry(state) {
     if (!element) {
         return;
     }
-    state.geometry = clampPanelGeometry(state.geometry, viewportSize(element));
+    clampToHost(state);
     element.style.left = `${state.geometry.x}px`;
     element.style.top = `${state.geometry.y}px`;
     element.style.width = `${state.geometry.width}px`;
@@ -566,7 +613,7 @@ function applyGeometry(state) {
 
 function persistGeometry(state) {
     const element = state.root.querySelector('[data-neoterra-map]');
-    state.geometry = clampPanelGeometry(state.geometry, viewportSize(element));
+    clampToHost(state);
     savePanelGeometry(state.storage, state.geometry);
 }
 
@@ -1182,11 +1229,13 @@ function mountDragResize(state) {
         const start = { x: event.clientX, y: event.clientY, left: state.geometry.x, top: state.geometry.y };
         dragHandle.setPointerCapture?.(event.pointerId);
         const move = (moveEvent) => {
-            state.geometry = clampPanelGeometry({
+            state.geometry = {
                 ...state.geometry,
                 x: start.left + (moveEvent.clientX - start.x),
                 y: start.top + (moveEvent.clientY - start.y),
-            }, { width: window.innerWidth, height: window.innerHeight });
+            };
+            // Same host-aware clamp as the initial placement, never the window.
+            clampToHost(state);
             applyGeometry(state);
         };
         const end = () => {
@@ -1203,11 +1252,12 @@ function mountDragResize(state) {
         const start = { x: event.clientX, y: event.clientY, width: state.geometry.width, height: state.geometry.height };
         resizeHandle.setPointerCapture?.(event.pointerId);
         const move = (moveEvent) => {
-            state.geometry = clampPanelGeometry({
+            state.geometry = {
                 ...state.geometry,
                 width: start.width + (moveEvent.clientX - start.x),
                 height: start.height + (moveEvent.clientY - start.y),
-            }, { width: window.innerWidth, height: window.innerHeight });
+            };
+            clampToHost(state);
             applyGeometry(state);
         };
         const end = () => {

@@ -685,6 +685,139 @@ async function importWorld(ctx, root, file) {
     return true;
 }
 
+/**
+ * Ordered actions that reveal the settings panel inside SillyTavern's
+ * extensions drawer. Pure so the ST DOM contract stays testable: the caller
+ * maps each action onto a DOM call.
+ *
+ * @param {{ drawerPresent?: boolean, drawerOpen?: boolean, panelPresent?: boolean,
+ *           panelExpanded?: boolean }} state
+ * @returns {Array<'open-drawer'|'expand-panel'|'scroll-panel'|'warn-missing'>}
+ */
+export function planSettingsReveal({
+    drawerPresent = false,
+    drawerOpen = false,
+    panelPresent = false,
+    panelExpanded = false,
+} = {}) {
+    if (!drawerPresent || !panelPresent) {
+        return ['warn-missing'];
+    }
+    const actions = [];
+    // Never toggle: clicking an open drawer's toggle would close it.
+    if (!drawerOpen) {
+        actions.push('open-drawer');
+    }
+    if (!panelExpanded) {
+        actions.push('expand-panel');
+    }
+    actions.push('scroll-panel');
+    return actions;
+}
+
+/** Human-readable reason for a `warn-missing` reveal plan. */
+export function describeMissingSettingsHost({ drawerPresent, panelPresent } = {}) {
+    if (!drawerPresent && !panelPresent) {
+        return 'The SillyTavern extensions drawer and the Neo Terra settings panel are not available. Reload the page, then try again.';
+    }
+    if (!drawerPresent) {
+        return 'The SillyTavern extensions drawer (#rm_extensions_block) was not found. Reload the page, then try again.';
+    }
+    return 'The Neo Terra settings panel is not mounted yet. Reload the page, then try again.';
+}
+
+function isDrawerOpen(drawer) {
+    if (!drawer?.classList) {
+        return false;
+    }
+    return drawer.classList.contains('openDrawer');
+}
+
+function isPanelExpanded(content) {
+    if (!content) {
+        return false;
+    }
+    if (content.classList?.contains('closedDrawer')) {
+        return false;
+    }
+    if (content.classList?.contains('openDrawer')) {
+        return true;
+    }
+    // The inline-drawer template ships with `.inline-drawer-content.hidden`;
+    // check the computed style last because it needs a layout.
+    if (content.hidden === true || content.classList?.contains('hidden')) {
+        return false;
+    }
+    if (typeof getComputedStyle === 'function') {
+        try {
+            return getComputedStyle(content).display !== 'none';
+        } catch {
+            return true;
+        }
+    }
+    return true;
+}
+
+/**
+ * Close the shell, open SillyTavern's extensions drawer, expand the Neo Terra
+ * panel, and scroll it into view. Returns `{ ok: true }` or
+ * `{ ok: false, reason }`; never throws.
+ *
+ * `deps` exists for tests: `{ doc, requestFrame }`.
+ */
+export function revealSettingsPanel({ deps = {}, ctx = null } = {}) {
+    const doc = deps.doc ?? (hasDom() ? document : null);
+    const requestFrame = deps.requestFrame
+        ?? (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null);
+    if (!doc) {
+        return { ok: false, reason: 'no-dom' };
+    }
+    if (mountedCtx) {
+        refreshSettingsPanel();
+    } else {
+        const live = resolveWorldContext(ctx);
+        void ensureCharacterLimits(live, doc, panelAbort?.signal);
+        refreshNarratorStatus(doc, live);
+    }
+
+    const drawer = doc.getElementById('rm_extensions_block');
+    const panel = doc.getElementById(UI_IDS.SETTINGS_PANEL);
+    const actions = planSettingsReveal({
+        drawerPresent: Boolean(drawer),
+        drawerOpen: isDrawerOpen(drawer),
+        panelPresent: Boolean(panel),
+        panelExpanded: isPanelExpanded(panel?.querySelector('.inline-drawer-content')),
+    });
+
+    for (const action of actions) {
+        if (action === 'warn-missing') {
+            // The caller owns logging and the visible status message.
+            return { ok: false, reason: 'missing-host' };
+        }
+        if (action === 'open-drawer') {
+            const toggle = doc.querySelector('#extensions-settings-button .drawer-toggle')
+                ?? drawer?.querySelector('.drawer-toggle');
+            if (!toggle) {
+                return { ok: false, reason: 'missing-host' };
+            }
+            toggle.click?.();
+        }
+        if (action === 'expand-panel') {
+            panel.querySelector('.inline-drawer-toggle')?.click?.();
+        }
+    }
+
+    const scroll = () => panel?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    if (actions.includes('scroll-panel')) {
+        scroll();
+        // The drawer animates open; scroll once more after the first frame.
+        if (typeof requestFrame === 'function') {
+            requestFrame(() => scroll());
+        }
+    }
+    return { ok: true };
+}
+
 async function ensureCardSeasonOptions(root, signal = null) {
     const select = root.querySelector('[data-neoterra-card-season]');
     if (!select) {
@@ -1101,12 +1234,14 @@ export function refreshSettingsPanel() {
     if (!hasDom() || !mountedCtx) {
         return;
     }
+    // Repaint from the live context so a chat switch never leaves stale values.
+    const live = resolveWorldContext(mountedCtx);
     const root = document.getElementById(UI_IDS.SETTINGS_PANEL);
     if (root) {
-        const settings = paintSettingsPanel(mountedCtx, root);
+        const settings = paintSettingsPanel(live, root);
         syncDependentFields(root, settings);
-        refreshNarratorStatus(root, mountedCtx);
-        void ensureCharacterLimits(mountedCtx, root, panelAbort?.signal);
+        refreshNarratorStatus(root, live);
+        void ensureCharacterLimits(live, root, panelAbort?.signal);
         void ensureCardSeasonOptions(root, panelAbort?.signal);
     }
 }

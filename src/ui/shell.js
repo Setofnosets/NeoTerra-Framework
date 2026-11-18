@@ -16,7 +16,13 @@ import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
-import { disposeSettingsPanel, mountSettingsPanel, refreshSettingsPanel } from './settings.js';
+import {
+    describeMissingSettingsHost,
+    disposeSettingsPanel,
+    mountSettingsPanel,
+    refreshSettingsPanel,
+    revealSettingsPanel,
+} from './settings.js';
 import { disposeMapPanel, mountMapPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadRegistry } from '../data/registry.js';
@@ -61,12 +67,12 @@ const TAB_PLACEHOLDERS = Object.freeze({
     },
     settings: {
         title: 'Settings',
-        body: 'Global Neo Terra settings live in the Extensions settings panel. Chat worlds keep their own state.',
+        body: 'Global Neo Terra settings live in SillyTavern’s Extensions drawer.',
     },
 });
 
 /** Tabs whose panel is a live mountable component instead of a placeholder. */
-const LIVE_PANELS = new Set(['season', 'map', 'characters']);
+const LIVE_PANELS = new Set(['season', 'map', 'characters', 'settings']);
 
 let ctx = null;
 let abort = null;
@@ -118,7 +124,14 @@ function shellMarkup() {
             ${tab.id === 'map' ? '<div class="neoterra-map-host" data-neoterra-map-host></div>' : ''}
             ${tab.id === 'season' ? '<div class="neoterra-season-host" data-neoterra-season-host></div>' : ''}
             ${tab.id === 'characters' ? '<div class="neoterra-codex-host" data-neoterra-codex-host></div>' : ''}
-            ${tab.id === 'settings' ? '<button type="button" class="menu_button" data-neoterra-open-settings>Open settings panel</button>' : ''}
+            ${tab.id === 'settings' ? `
+            <div class="neoterra-settings-tab">
+                <p class="neoterra-hint">Neo Terra settings live in SillyTavern's <strong>Extensions</strong>
+                    drawer (the plug icon), collapsed under <strong>Neo Terra Framework</strong>.
+                    Use the button to close this window, open the drawer, and scroll to the panel.</p>
+                <button type="button" class="menu_button" data-neoterra-open-settings>Open settings panel</button>
+                <p class="neoterra-status" role="status" aria-live="polite" data-neoterra-settings-status hidden></p>
+            </div>` : ''}
         </section>`;
     }).join('');
 
@@ -742,16 +755,44 @@ function unsubscribeInteractionEvents() {
     }
 }
 
+/**
+ * Hand off to SillyTavern's Extensions drawer. The shell is a full-screen
+ * modal, so it must close first or it keeps occluding the page behind it.
+ * A missing host is reported inside the still-open tab; a late failure
+ * re-opens the shell so the status stays visible.
+ */
 function openSettingsPanel() {
-    refreshSettingsPanel();
-    const panel = document.getElementById(UI_IDS.SETTINGS_PANEL);
-    const host = document.getElementById('extensions_settings2') ?? document.getElementById('extensions_settings');
-    host?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    const content = panel?.querySelector('.inline-drawer-content');
-    if (content && getComputedStyle(content).display === 'none') {
-        panel.querySelector('.inline-drawer-toggle')?.click();
+    const live = refreshContext();
+    const drawerPresent = Boolean(document.getElementById('rm_extensions_block'));
+    const panelPresent = Boolean(document.getElementById(UI_IDS.SETTINGS_PANEL));
+    if (!drawerPresent || !panelPresent) {
+        failSettingsReveal({ drawerPresent, panelPresent });
+        return;
     }
-    panel?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    closeShell();
+    const result = revealSettingsPanel({ ctx: live });
+    if (!result.ok) {
+        openShell('settings');
+        failSettingsReveal({ drawerPresent, panelPresent });
+        return;
+    }
+    globalThis.toastr?.info?.('Neo Terra settings are open in the Extensions drawer.');
+}
+
+function failSettingsReveal({ drawerPresent, panelPresent }) {
+    const reason = describeMissingSettingsHost({ drawerPresent, panelPresent });
+    logger.warn(reason);
+    setSettingsStatus(reason, 'error');
+}
+
+function setSettingsStatus(text, tone = 'info') {
+    const host = document.querySelector('[data-neoterra-settings-status]');
+    if (!host) {
+        return;
+    }
+    host.textContent = text ?? '';
+    host.dataset.tone = tone;
+    host.hidden = !text;
 }
 
 export function isShellOpen() {
@@ -981,6 +1022,7 @@ function exposeDebugApi(context) {
             return settings;
         },
         resetWorld: () => resetChatWorld(context),
+        openSettings: openSettingsPanel,
         refreshWorld: () => {
             invalidateChatRuntimes(context);
             bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-refresh' });

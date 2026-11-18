@@ -42,6 +42,14 @@
 .neoterra-root {
     position: fixed;
     inset: 0;
+    /* SillyTavern sets a transform on <html>, which makes it the containing
+       block for fixed children; <html> has no height, so `inset: 0` alone
+       collapses the overlay to its padding and centered children overflow
+       upward. An explicit viewport height keeps the overlay honest. */
+    height: 100vh;
+    height: 100dvh;
+    /* The overlay padding must not add to that height. */
+    box-sizing: border-box;
     z-index: 4000;
     display: flex;
     align-items: center;
@@ -76,10 +84,14 @@
     overflow: hidden;
 }
 
-/* The map needs a wider, taller canvas than the reading panes. */
+/* The map needs a wider, taller canvas than the reading panes. A definite
+   height (not content height) lets the flex chain below give the map host the
+   remaining space; max-height keeps it on screen on short viewports. */
 .neoterra-root[data-active-tab='map'] .neoterra-shell {
     width: min(1360px, 96vw);
-    max-height: 92vh;
+    height: min(92vh, calc(100vh - 2rem));
+    min-height: min(560px, calc(100vh - 2rem));
+    max-height: calc(100vh - 2rem);
 }
 
 .neoterra-shell-header {
@@ -184,6 +196,35 @@
     max-width: 60ch;
     color: var(--nt-text-muted);
     line-height: 1.6;
+}
+
+/* ---------- Settings tab ---------- */
+
+.neoterra-settings-tab {
+    max-width: 60ch;
+}
+
+.neoterra-settings-tab .neoterra-hint {
+    line-height: 1.6;
+}
+
+.neoterra-settings-tab [data-neoterra-open-settings] {
+    margin: 0.25rem 0 0.75rem;
+}
+
+.neoterra-status {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid var(--nt-accent);
+    border-radius: 0.25rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--nt-text);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.neoterra-status[data-tone='error'] {
+    border-left-color: var(--nt-danger);
 }
 
 /* ---------- Settings panel ---------- */
@@ -335,7 +376,9 @@
 .neoterra-map-host {
     position: relative;
     flex: 1 1 auto;
-    min-height: 420px;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
 .neoterra-map {
@@ -1593,6 +1636,8 @@
     overflow-y: auto;
     pointer-events: auto;
 }
+
+/* ---------- Choices bar ---------- */
 
 .neoterra-choices-host {
     display: flex;

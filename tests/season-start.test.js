@@ -22,7 +22,12 @@ import {
     selectNarratorCard,
     startSeason,
 } from '../src/flows/season-start.js';
-import { escapeHtml, renderSeasonMenuMarkup } from '../src/ui/season-menu.js';
+import {
+    escapeHtml,
+    readIdentityRadio,
+    renderIdentityStep,
+    renderSeasonMenuMarkup,
+} from '../src/ui/season-menu.js';
 import { buildOpeningScene, getPovLabel } from '../src/flows/scene.js';
 import { selectNpcPool } from '../src/state/selectors.js';
 import { createWorldStateStore } from '../src/state/store.js';
@@ -436,6 +441,52 @@ test('character focus preselects a canon identity and survives the confirm step'
     assert.equal(confirmed.identity, 'canon');
     assert.equal(confirmed.characterId, 's1.vaiva.colorgarde');
     assert.equal(confirmed.personaNotes, 'notes');
+});
+
+test('the selected canon radio yields a characterId that resolveIdentitySelection accepts', () => {
+    // Mirrors the DOM: the radio carries the registry id in data-character-id.
+    const radio = {
+        value: 'canon',
+        dataset: { characterId: 's1.vaiva.colorgarde' },
+    };
+    const selection = readIdentityRadio(radio);
+    assert.deepEqual(selection, { identity: 'canon', characterId: 's1.vaiva.colorgarde' });
+    const resolved = resolveIdentitySelection(seasonDocuments.s1, selection, { registry });
+    assert.equal(resolved.identity, 'canon');
+    assert.equal(resolved.characterId, 's1.vaiva.colorgarde');
+
+    const customRadio = { value: 'custom', dataset: { characterId: '' } };
+    assert.deepEqual(readIdentityRadio(customRadio), { identity: 'custom', characterId: null });
+    assert.equal(resolveIdentitySelection(seasonDocuments.s1, readIdentityRadio(customRadio), { registry }).identity, 'custom');
+
+    // A radio that only exposes the rendered attribute is still readable.
+    const attributeOnly = {
+        value: 'canon',
+        getAttribute: (name) => (name === 'data-character-id' ? 's1.claire.atropos' : null),
+    };
+    assert.deepEqual(readIdentityRadio(attributeOnly), { identity: 'canon', characterId: 's1.claire.atropos' });
+
+    assert.deepEqual(readIdentityRadio(null), { identity: undefined, characterId: null });
+});
+
+test('the identity step renders canon radios with data-character-id and keeps the default selected', () => {
+    for (const season of [seasonDocuments.s1, seasonDocuments.s1dark]) {
+        const choices = buildIdentityChoices(season, { registry });
+        const markup = renderIdentityStep({ entry: season, choices, error: null });
+        const radios = [...markup.matchAll(/<input[^>]*data-neoterra-identity[^>]*>/g)].map((match) => match[0]);
+        assert.equal(radios.length, choices.options.length);
+        const canonRadios = radios.filter((tag) => tag.includes('value="canon"'));
+        assert.ok(canonRadios.length > 0);
+        for (const tag of canonRadios) {
+            const match = tag.match(/data-character-id="([^"]*)"/);
+            assert.ok(match, `canon radio is missing data-character-id: ${tag}`);
+            assert.notEqual(match[1], '', `canon radio has an empty data-character-id: ${tag}`);
+        }
+        assert.equal(radios.filter((tag) => tag.includes('checked')).length, 1);
+        const checked = radios.find((tag) => tag.includes('checked'));
+        const checkedId = checked.match(/data-character-id="([^"]*)"/)?.[1] ?? '';
+        assert.equal(checkedId, choices.defaultIdentity === 'canon' ? choices.defaultCharacterId : '');
+    }
 });
 
 test('season menu markup escapes registry-sourced labels', () => {

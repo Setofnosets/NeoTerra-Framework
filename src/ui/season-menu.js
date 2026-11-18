@@ -87,7 +87,25 @@ function renderSeasonCard(entry) {
     </article>`;
 }
 
-function renderIdentityStep({ entry, choices, error }) {
+/**
+ * Pure reader for the selected identity radio. `value` carries the identity
+ * kind and `data-character-id` carries the registry id for canon options; the
+ * `neoterraCharacterId` dataset key never existed, so reading it always
+ * produced `INVALID_IDENTITY`.
+ */
+export function readIdentityRadio(radio) {
+    if (!radio || typeof radio !== 'object') {
+        return { identity: undefined, characterId: null };
+    }
+    const raw = radio.dataset?.characterId ?? radio.getAttribute?.('data-character-id') ?? '';
+    const characterId = String(raw).trim();
+    return {
+        identity: radio.value || undefined,
+        characterId: characterId.length > 0 ? characterId : null,
+    };
+}
+
+export function renderIdentityStep({ entry, choices, error }) {
     const options = choices.options.map((option) => {
         const checked = option.isDefault ? 'checked' : '';
         const detail = option.identity === 'canon'
@@ -402,7 +420,7 @@ export async function mountSeasonMenu(options = {}) {
     const beginSeason = async (confirmReplace) => {
         const entry = state.selectedEntry;
         const radio = selectedRadio();
-        const characterId = radio?.dataset?.neoterraCharacterId ?? null;
+        const { identity: radioIdentity, characterId } = readIdentityRadio(radio);
         const nameInput = root.querySelector('[data-neoterra-persona-name]');
         const notesInput = root.querySelector('[data-neoterra-persona-notes]');
         // The confirmation view has no identity inputs: carry the captured
@@ -410,7 +428,7 @@ export async function mountSeasonMenu(options = {}) {
         const identity = mergePendingIdentity(
             state.view === VIEW.CONFIRM ? state.identity : null,
             {
-                identity: radio?.value,
+                identity: radioIdentity,
                 characterId: characterId || undefined,
                 displayName: nameInput?.value?.trim() || undefined,
                 personaNotes: notesInput?.value?.trim() || undefined,

@@ -36,5 +36,44 @@ test('the map tab opts into a larger shell', () => {
     const body = ruleBody(".neoterra-root[data-active-tab='map'] .neoterra-shell");
     assert.ok(body, 'expected a map-specific shell size rule');
     assert.match(body, /width:\s*min\(1360px,\s*96vw\)/);
-    assert.match(body, /max-height:\s*92vh/);
+    assert.match(body, /max-height:\s*calc\(100vh - 2rem\)/);
+});
+
+test('the map tab shell has a definite height and keeps a floor', () => {
+    const body = ruleBody(".neoterra-root[data-active-tab='map'] .neoterra-shell");
+    assert.ok(body, 'expected a map-specific shell size rule');
+    // Content height is what collapsed the host to its 420px minimum.
+    assert.match(body, /(^|[^-])height:\s*min\(92vh,\s*calc\(100vh - 2rem\)\)/);
+    assert.match(body, /min-height:\s*min\(560px,\s*calc\(100vh - 2rem\)\)/);
+});
+
+test('the shell overlay keeps a viewport height (SillyTavern transforms <html>)', () => {
+    const body = ruleBody('.neoterra-root');
+    assert.ok(body, 'expected a .neoterra-root rule');
+    assert.match(body, /position:\s*fixed/);
+    assert.match(body, /inset:\s*0/);
+    // ST sets `transform` on <html> (a zero-height containing block), so an
+    // `inset: 0`-only overlay collapses and centers its shell off-screen.
+    assert.match(body, /height:\s*100vh/);
+    assert.match(body, /height:\s*100dvh/);
+    // The overlay's own padding must not push it past the viewport.
+    assert.match(body, /box-sizing:\s*border-box/);
+});
+
+test('the map flex chain passes the host a definite height', () => {
+    const panels = ruleBody('.neoterra-tabpanels');
+    assert.ok(panels, 'expected a .neoterra-tabpanels rule');
+    assert.match(panels, /flex:\s*1/);
+    assert.match(panels, /flex-direction:\s*column/);
+
+    const live = ruleBody('.neoterra-panel.is-live');
+    assert.match(live, /flex:\s*1 1 auto/);
+    assert.match(live, /min-height:\s*0/);
+
+    const host = ruleBody('.neoterra-map-host');
+    assert.ok(host, 'expected a .neoterra-map-host rule');
+    assert.match(host, /flex:\s*1 1 auto/);
+    // A 420px floor kept the panel at 396px after the 24px clamp margin.
+    assert.doesNotMatch(host, /min-height:\s*420px/);
+    assert.match(host, /min-height:\s*0/);
 });
