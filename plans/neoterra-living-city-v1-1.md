@@ -4,7 +4,7 @@ Off-screen world tick, newspaper, pacing/scene director, relationship graph, fog
 
 ## Meta
 - **Slug:** `neoterra-living-city-v1-1`
-- **Status:** in progress — Step 10 complete; next: Step 11
+- **Status:** in progress — Step 11 complete; next: Step 12
 - **Date:** 2026-11-18
 - **Base:** `plans/neoterra-framework-v1.md` (V1 complete, Steps 1–20)
 - **Target:** SillyTavern third-party extension, plain ESM, no bundler, no runtime deps
@@ -553,7 +553,7 @@ without code changes.
 - [x] Step 8 — Exploration state, fog rules, travel discovery and gating (f7be1fb)
 - [x] Step 9 — Fog rendering, submenu gating, and editor reveal (667f127)
 - [x] Step 10 — Relationship graph model and Relations tab (b3261b4)
-- [ ] Step 11 — Domain sensorium (generic): data, tab, and `[NEOTERRA_DOMAIN]`
+- [x] Step 11 — Domain sensorium (generic): data, tab, and `[NEOTERRA_DOMAIN]` (b2379d5)
 - [ ] Step 12 — Docs, settings surface completion, changelog, and smoke QA
 
 ---
@@ -696,6 +696,7 @@ without code changes.
 - **Risk:** medium–high (villain framing is easy to get wrong, and the tab is conditional)
 - **Model/Effort routing:** implement-hard, high effort
 - **Commit message sketch:** `feat(domain): add the generic domain sensorium`
+- **Commit:** `b2379d5`
 
 ---
 
