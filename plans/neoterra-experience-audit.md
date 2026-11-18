@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `neoterra-experience-audit`
-- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`.
+- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`; steps 3–6 (mount the Player, add Session Home, make the Map self-sufficient, style the Season/Identity screens) are complete in `aac320c`.
 - Date: 2026-11-18
 - Audit basis: full static read of `src/`, `data/`, `docs/`, and `tools/`; live inspection of SillyTavern at `http://127.0.0.1:8000/` against the installed extension (664 installed character cards, one existing S1 Director chat); DOM/computed-style inspection of the shell, Season tab, identity step, Map, and Codex.
 - Not verified in this session: `npm run check` and the full Node test suite were not executed. Treat test health as unverified until the first implementation step runs them.
@@ -280,7 +280,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** fast implementer #low
 - **Commit:** `fix(season): report the installed Director card correctly`
 
-#### 3. Mount the Player tab
+#### 3. Mount the Player tab — ✅ done (`aac320c`)
 - **Files:** `src/ui/shell.js`, `src/ui/player-panel.js`, `style.css`, `tests/player-panel.test.js`
 - **Depends on:** none
 - **Parallelizable:** yes
@@ -294,7 +294,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(player): mount the live player sheet in the Player tab`
 
-#### 4. Add Session Home and per-chat last-tab memory
+#### 4. Add Session Home and per-chat last-tab memory — ✅ done (`aac320c`)
 - **Files:** `src/ui/session-home.js` (new), `src/flows/new-chat.js` (new), `src/ui/shell.js`, `src/ui/season-menu.js`, `src/core/constants.js` (tab metadata if needed), `tests/session-home.test.js`
 - **Depends on:** 3 (the home links to the Player tab)
 - **Parallelizable:** no
@@ -309,7 +309,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(shell): add a session home and remember the last tab per chat`
 
-#### 5. Make the Map self-sufficient and travel-friendly
+#### 5. Make the Map self-sufficient and travel-friendly — ✅ done (`aac320c`)
 - **Files:** `src/ui/shell.js`, `src/ui/map-panel.js`, `src/ui/overlay.js`, `src/core/defaults.js`, `src/ui/settings.html`, `docs/map-authoring.md`, `tests/travel.test.js`
 - **Depends on:** 4 (Session Home links)
 - **Parallelizable:** yes
@@ -324,7 +324,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** fast implementer #low
 - **Commit:** `feat(map): open without a season and keep the travel loop coherent`
 
-#### 6. Style the Season and Identity screens
+#### 6. Style the Season and Identity screens — ✅ done (`aac320c`)
 - **Files:** `style.css`, `src/ui/season-menu.js` (markup hooks only), `tests/ui-css.test.js`
 - **Depends on:** none
 - **Parallelizable:** yes
