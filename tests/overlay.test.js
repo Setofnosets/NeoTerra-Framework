@@ -806,6 +806,8 @@ test('editor markup includes save, reset, delete, export, and import controls', 
     for (const hook of ['editor-save', 'editor-reset', 'editor-delete', 'editor-export', 'editor-import', 'editor-reset-chat']) {
         assert.match(markup, new RegExp(`data-neoterra-${hook}`));
     }
+    assert.match(markup, /data-neoterra-exploration-reveal/);
+    assert.match(markup, /data-neoterra-exploration-reset/);
     assert.match(renderVirtualNodeForm({ defaultPoint: { x: 10, y: 20 } }), /data-neoterra-node-add/);
     assert.match(renderVirtualNodeForm({}), /data-neoterra-node-field="connections"/);
     assert.match(renderVirtualNodeForm({ defaultPoint: { x: 10, y: 20 } }), /value="10"/);

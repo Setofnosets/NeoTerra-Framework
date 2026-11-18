@@ -960,6 +960,12 @@
     gap: 0.4rem;
 }
 
+.neoterra-fog-controls {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px dashed var(--nt-border);
+}
+
 .neoterra-overlay-bar {
     height: 0.35rem;
     margin: 0.2rem 0;

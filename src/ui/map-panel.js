@@ -366,6 +366,7 @@ export async function mountMapPanel(options = {}) {
         loading: true,
         geometry: loadPanelGeometry(storage),
         toggles: loadLayerVisibility(storage, settings),
+        fogOverride: null,
         loadSources: options.loadSources ?? loadMapSources,
         leaflet: options.leaflet ?? null,
         onTravel,
@@ -375,6 +376,7 @@ export async function mountMapPanel(options = {}) {
         onClose: typeof onClose === 'function' ? onClose : null,
         onMapStateChange: options.onMapStateChange ?? null,
         getSettings: typeof options.getSettings === 'function' ? options.getSettings : null,
+        onFogChange: typeof options.onFogChange === 'function' ? options.onFogChange : null,
         season: options.season ?? null,
         flow: null,
         overlay: null,
@@ -386,6 +388,12 @@ export async function mountMapPanel(options = {}) {
         newspaperReader: null,
     };
     mounted = state;
+    // The layer toggle is the on/off switch. A stored toggle wins over the
+    // saved setting so fog survives reload without writing global settings.
+    state.fogOverride = state.toggles.fog === true;
+    if (state.settings && typeof state.settings === 'object') {
+        state.settings.showFogOfWar = state.fogOverride;
+    }
 
     if (!state.pacing && state.store && typeof state.store.get === 'function') {
         try {
@@ -464,12 +472,28 @@ export async function mountMapPanel(options = {}) {
             const layer = toggle.dataset.neoterraMapToggle;
             state.toggles[layer] = !state.toggles[layer];
             if (layer === 'fog') {
-                state.settings.showFogOfWar = state.toggles[layer];
+                if (!state.generated) {
+                    state.toggles.fog = false;
+                    toggle.checked = false;
+                    state.error = 'Fog of war needs the generated map; the single-image fallback cannot mask districts.';
+                    paintSide();
+                    return;
+                }
+                state.fogOverride = state.toggles.fog;
+                state.settings.showFogOfWar = state.fogOverride;
+                try {
+                    state.onFogChange?.(state.fogOverride);
+                } catch (error) {
+                    logger.warn('Could not persist the fog toggle', error);
+                }
             } else {
                 state.settings[layer] = state.toggles[layer];
             }
             saveLayerVisibility(state.storage, state.toggles);
             state.cityMap?.setVisibility?.(layer, state.toggles[layer]);
+            if (layer === 'fog') {
+                refreshMapPanel();
+            }
             return;
         }
         if (event.target.closest?.('[data-neoterra-map-clear]')) {
@@ -538,6 +562,14 @@ export async function mountMapPanel(options = {}) {
         }
         if (event.target.closest?.('[data-neoterra-editor-reset-chat]')) {
             handleChatMapReset(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-exploration-reveal]')) {
+            handleExplorationReveal(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-exploration-reset]')) {
+            handleExplorationReset(state);
             return;
         }
         if (event.target.closest?.('[data-neoterra-node-add]')) {
@@ -641,6 +673,27 @@ function layerLabel(layer) {
     if (layer === 'keyLocations') return 'Key locations';
     if (layer === 'namedLocations') return 'Named locations';
     return layer[0].toUpperCase() + layer.slice(1);
+}
+
+/** The fallback image cannot mask districts: disable the fog control. */
+function syncFogControl(state) {
+    const input = state.root?.querySelector?.('[data-neoterra-map-toggle="fog"]');
+    if (!input) {
+        return;
+    }
+    const disabled = state.generated !== true;
+    input.disabled = disabled;
+    const label = input.closest?.('label');
+    if (label) {
+        label.title = disabled
+            ? 'Fog of war needs the generated map; the single-image fallback cannot mask districts.'
+            : '';
+    }
+    if (disabled) {
+        state.toggles.fog = false;
+        input.checked = false;
+        state.fogOverride = false;
+    }
 }
 
 /**
@@ -870,6 +923,11 @@ function refreshMapLayers(state) {
             layer.setStyle({ color: visual.color, weight: visual.weight, dashArray: visual.dashArray });
         }
     }
+    // Fog wins over faction/status tint: hidden and rumoured features must not
+    // be repainted by the overlay pass.
+    cityMap.applyFog?.(state.viewModel, {
+        fogEnabled: state.settings?.showFogOfWar === true,
+    });
 }
 
 const BRIDGE_VISUALS = Object.freeze({
@@ -1124,6 +1182,77 @@ function handleChatMapReset(state) {
     rebuildAfterMapChange(state, next);
 }
 
+function selectedRegionId(state, worldState) {
+    const feature = state.submenu?.feature ?? null;
+    if (!feature) {
+        return null;
+    }
+    if (feature.kind === 'region') {
+        return feature.id;
+    }
+    if (typeof feature.regionId === 'string' && feature.regionId.length > 0) {
+        return feature.regionId;
+    }
+    if (feature.kind === 'bridge' && Array.isArray(feature.connects)) {
+        return feature.connects.find((id) => typeof id === 'string') ?? null;
+    }
+    if (feature.kind === 'namedLocation') {
+        const live = worldState?.locations?.[feature.id] ?? null;
+        return typeof live?.regionId === 'string' ? live.regionId : null;
+    }
+    return null;
+}
+
+function applyExplorationEvent(state, event) {
+    if (!state.store || typeof state.store.dispatch !== 'function') {
+        state.editorError = 'This chat has no world state to store fog edits.';
+        paintSide();
+        return false;
+    }
+    try {
+        state.store.dispatch(event);
+    } catch (error) {
+        state.editorError = error?.message ?? String(error);
+        paintSide();
+        return false;
+    }
+    state.editorError = null;
+    rebuildAfterMapChange(state, readState(state));
+    return true;
+}
+
+function handleExplorationReveal(state) {
+    const worldState = readState(state);
+    const regionId = selectedRegionId(state, worldState);
+    if (!regionId) {
+        state.editorError = 'Select a district, location, or bridge with a known district first.';
+        paintSide();
+        return;
+    }
+    applyExplorationEvent(state, {
+        type: 'REVEAL_REGION',
+        regionId,
+        source: 'editor',
+    });
+}
+
+function handleExplorationReset(state) {
+    const worldState = readState(state);
+    // Reset restores the seed, which is anchored on the season's start
+    // location, not wherever the player currently is.
+    const startLocationId = state.season?.startLocationId
+        ?? worldState?.scene?.locationId
+        ?? null;
+    const startRegion = startLocationId
+        ? (state.viewModel?.index?.namedLocationById?.get?.(startLocationId)?.regionId ?? null)
+        : null;
+    applyExplorationEvent(state, {
+        type: 'RESET_EXPLORATION',
+        regionIds: startRegion ? [startRegion] : [],
+        source: 'editor',
+    });
+}
+
 function handleAddVirtualNode(state) {
     const values = {};
     for (const input of state.root?.querySelectorAll?.('[data-neoterra-node-field]') ?? []) {
@@ -1345,6 +1474,17 @@ async function loadAndMount(state) {
         if (state.globalOverrides && state.globalOverrides !== sources.overrides) {
             state.sources = { ...sources, overrides: state.globalOverrides };
         }
+        state.generated = Boolean(sources.generated);
+        if (!state.generated) {
+            // The single-image fallback cannot mask districts: fog must be off
+            // before the view model is built, not after the first paint.
+            state.toggles.fog = false;
+            state.fogOverride = false;
+            if (state.settings && typeof state.settings === 'object') {
+                state.settings.showFogOfWar = false;
+            }
+            saveLayerVisibility(state.storage, state.toggles);
+        }
         state.viewModel = buildPanelViewModel(state.sources, readState(state), state.settings ?? {});
         state.overlay = buildWorldOverlay({
             state: readState(state),
@@ -1352,8 +1492,8 @@ async function loadAndMount(state) {
             viewModel: state.viewModel,
             settings: state.settings ?? {},
         });
-        state.generated = Boolean(sources.generated);
         state.loading = false;
+        syncFogControl(state);
         paintSide();
 
         const container = state.root.querySelector('[data-neoterra-map-canvas]');
@@ -1385,6 +1525,8 @@ async function loadAndMount(state) {
         logger.warn('Could not load the city map', error);
         state.loading = false;
         state.error = error?.message ?? String(error);
+        state.generated = false;
+        syncFogControl(state);
         paintSide();
     }
 }
@@ -1465,7 +1607,12 @@ export function refreshMapPanel() {
         try {
             const next = state.getSettings();
             if (next && typeof next === 'object') {
-                state.settings = next;
+                state.settings = {
+                    ...next,
+                    // A fog toggle in this panel is a live per-user override; the
+                    // settings getter would otherwise reset it on every refresh.
+                    showFogOfWar: state.fogOverride === true,
+                };
             }
         } catch {
             // A settings read failure keeps the last known map settings.

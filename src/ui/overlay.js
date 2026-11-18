@@ -588,6 +588,11 @@ export function renderMapEditor(schema, { globalOverrides = null, chat = null, v
             <div class="neoterra-editor-actions">
                 <button type="button" class="menu_button" data-neoterra-editor-reset-chat>Reset this chat's map</button>
             </div>
+            <div class="neoterra-editor-actions neoterra-fog-controls">
+                <button type="button" class="menu_button" data-neoterra-exploration-reveal>Reveal region</button>
+                <button type="button" class="menu_button" data-neoterra-exploration-reset>Reset fog</button>
+            </div>
+            <p class="neoterra-hint">Fog edits are stored in this chat's exploration state, never in the authored map files.</p>
         </details>
         ${virtual
             ? '<p class="neoterra-hint">Chat-only virtual node. It exists in this timeline only.</p>'

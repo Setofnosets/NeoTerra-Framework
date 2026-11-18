@@ -14,7 +14,7 @@ import {
 } from '../core/constants.js';
 import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
-import { getSettings, resetSettings } from '../core/settings.js';
+import { getSettings, resetSettings, setSetting } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
 import { mountClockChip } from './clock-chip.js';
 import {
@@ -850,6 +850,13 @@ async function mountMapPanelComponent(context) {
             pacing: runtime?.pacing ?? null,
             scene: runtime?.scene ?? null,
             initiative: runtime?.initiative ?? null,
+            onFogChange: (enabled) => {
+                try {
+                    setSetting(refreshContext() ?? context, 'map.showFogOfWar', enabled === true);
+                } catch (error) {
+                    logger.warn('Could not save the fog setting', error);
+                }
+            },
             onTravel,
             // The toolbar X used to only send CLOSE to the panel's own state
             // machine, so nothing visible happened. The host closes the shell.

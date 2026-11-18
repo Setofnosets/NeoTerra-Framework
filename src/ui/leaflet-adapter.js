@@ -152,6 +152,71 @@ const BRIDGE_STYLE = Object.freeze({
     destroyed: { color: '#64748b', dashArray: '1 8', weight: 2 },
 });
 
+export const FOG_REGION_STYLE = Object.freeze({
+    unknown: {
+        color: '#0b1020',
+        fillColor: '#0b1020',
+        fillOpacity: 0.95,
+        opacity: 1,
+        weight: 1,
+        dashArray: null,
+    },
+    rumored: {
+        color: '#475569',
+        fillColor: '#475569',
+        fillOpacity: 0.06,
+        opacity: 0.55,
+        weight: 1,
+        dashArray: '4 4',
+    },
+});
+
+/** Leaflet style for a region, including fog visibility. */
+export function regionLeafletStyle(feature) {
+    const visibility = feature?.visibility ?? 'discovered';
+    if (visibility === 'unknown') {
+        return { ...FOG_REGION_STYLE.unknown };
+    }
+    if (visibility === 'rumored') {
+        return { ...FOG_REGION_STYLE.rumored };
+    }
+    const color = feature?.color ?? '#5eead4';
+    return {
+        color,
+        weight: 1,
+        opacity: 0.5,
+        fillColor: color,
+        fillOpacity: 0.12,
+        dashArray: null,
+    };
+}
+
+/** Leaflet style for a bridge; an unknown bridge is not drawn at all. */
+export function bridgeLeafletStyle(feature) {
+    if ((feature?.visibility ?? 'discovered') === 'unknown') {
+        return { color: '#0b1020', weight: 0, opacity: 0, dashArray: null };
+    }
+    const style = BRIDGE_STYLE[feature?.status] ?? BRIDGE_STYLE.open;
+    return { ...style };
+}
+
+/** True when the feature's name may appear as a DOM label/tooltip. */
+export function featureLabelVisible(feature) {
+    return feature?.labelHidden !== true
+        && (feature?.visibility ?? 'discovered') !== 'unknown';
+}
+
+function markerOpacity(feature) {
+    const visibility = feature?.visibility ?? 'discovered';
+    if (visibility === 'unknown') {
+        return 0;
+    }
+    if (visibility === 'rumored') {
+        return 0.55;
+    }
+    return 1;
+}
+
 /**
  * Build the Leaflet map. Returns an object with the map plus the layer groups
  * so the UI can toggle visibility and re-render on state changes.
@@ -206,18 +271,28 @@ export function createCityMap({
     const labelsById = new Map();
 
     for (const region of viewModel?.regions ?? []) {
+        const baseStyle = regionLeafletStyle(region);
         const polygon = L.polygon(polygonLatLngs(region.geometry, L), {
-            color: region.color ?? '#5eead4',
-            weight: 1,
-            opacity: 0.5,
-            fillColor: region.color ?? '#5eead4',
-            fillOpacity: 0.12,
+            ...baseStyle,
             className: 'neoterra-map-region',
         });
-        polygon.on('mouseover', () => polygon.setStyle({ fillOpacity: 0.26, weight: 2 }));
-        polygon.on('mouseout', () => polygon.setStyle({ fillOpacity: 0.12, weight: 1 }));
+        polygon.on('mouseover', () => {
+            const current = featureState.get(region.id) ?? region;
+            if ((current.visibility ?? 'discovered') === 'discovered') {
+                const base = regionLeafletStyle(current);
+                polygon.setStyle({ ...base, fillOpacity: 0.26, weight: 2 });
+            }
+        });
+        polygon.on('mouseout', () => {
+            const current = featureState.get(region.id) ?? region;
+            if ((current.visibility ?? 'discovered') !== 'unknown') {
+                polygon.setStyle(regionLeafletStyle(current));
+            }
+        });
         polygon.on('click', () => onSelect({ kind: 'region', id: region.id }));
-        polygon.bindTooltip(escapeLabel(region.name), { sticky: true, direction: 'top', className: 'neoterra-map-tooltip' });
+        if (featureLabelVisible(region)) {
+            polygon.bindTooltip(escapeLabel(region.name), { sticky: true, direction: 'top', className: 'neoterra-map-tooltip' });
+        }
         polygon.addTo(layers.districts);
         layersById.set(region.id, polygon);
         if (region.centroid) {
@@ -235,18 +310,27 @@ export function createCityMap({
     }
 
     for (const bridge of viewModel?.bridges ?? []) {
-        const style = BRIDGE_STYLE[bridge.status] ?? BRIDGE_STYLE.open;
+        const style = bridgeLeafletStyle(bridge);
         const line = L.polyline(
             (bridge.centerline ?? bridge.endpoints ?? []).map((point) => toLatLng(point, L)),
             {
                 color: style.color,
                 weight: style.weight,
+                opacity: style.opacity ?? 1,
                 dashArray: style.dashArray,
                 className: 'neoterra-map-bridge',
             },
         );
-        line.on('click', () => onSelect({ kind: 'bridge', id: bridge.id }));
-        line.bindTooltip(escapeLabel(bridge.name), { sticky: true, className: 'neoterra-map-tooltip' });
+        line.on('click', () => {
+            const current = featureState.get(bridge.id) ?? bridge;
+            if ((current.visibility ?? 'discovered') === 'unknown') {
+                return;
+            }
+            onSelect({ kind: 'bridge', id: bridge.id });
+        });
+        if (featureLabelVisible(bridge)) {
+            line.bindTooltip(escapeLabel(bridge.name), { sticky: true, className: 'neoterra-map-tooltip' });
+        }
         line.addTo(layers.bridges);
         layersById.set(bridge.id, line);
     }
@@ -257,12 +341,15 @@ export function createCityMap({
             radius: dimmed ? 4 : 6,
             color: dimmed ? '#64748b' : '#5eead4',
             weight: 1.5,
+            opacity: markerOpacity(key),
             fillColor: dimmed ? '#1e293b' : '#0f766e',
-            fillOpacity: 0.85,
+            fillOpacity: 0.85 * markerOpacity(key),
             className: 'neoterra-map-key',
         });
         marker.on('click', () => onSelect({ kind: 'keyLocation', id: key.id }));
-        marker.bindTooltip(escapeLabel(key.name), { direction: 'top', className: 'neoterra-map-tooltip' });
+        if (featureLabelVisible(key)) {
+            marker.bindTooltip(escapeLabel(key.name), { direction: 'top', className: 'neoterra-map-tooltip' });
+        }
         marker.addTo(layers.keyLocations);
         layersById.set(key.id, marker);
         if (!dimmed) {
@@ -280,20 +367,24 @@ export function createCityMap({
     }
 
     for (const location of viewModel?.namedLocations ?? []) {
+        const opacity = markerOpacity(location);
         const marker = L.circleMarker(toLatLng({ x: location.x, y: location.y }, L), {
             radius: 7,
             color: '#f8fafc',
             weight: 2,
+            opacity,
             fillColor: location.virtual ? '#7c3aed' : '#38bdf8',
-            fillOpacity: 0.95,
+            fillOpacity: 0.95 * opacity,
             className: 'neoterra-map-location',
         });
         marker.on('click', () => onSelect({ kind: 'namedLocation', id: location.id }));
-        marker.bindTooltip(escapeLabel(location.name), { direction: 'top', className: 'neoterra-map-tooltip' });
-        marker.bindPopup(
-            `<strong>${escapeLabel(location.name)}</strong><br>${escapeLabel(location.status ?? '')}`,
-            { className: 'neoterra-map-popup', closeButton: true },
-        );
+        if (featureLabelVisible(location)) {
+            marker.bindTooltip(escapeLabel(location.name), { direction: 'top', className: 'neoterra-map-tooltip' });
+            marker.bindPopup(
+                `<strong>${escapeLabel(location.name)}</strong><br>${escapeLabel(location.status ?? '')}`,
+                { className: 'neoterra-map-popup', closeButton: true },
+            );
+        }
         marker.addTo(layers.namedLocations);
         layersById.set(location.id, marker);
     }
@@ -321,16 +412,121 @@ export function createCityMap({
         }
     }
 
+    const featureState = new Map();
+    for (const feature of [
+        ...(viewModel?.regions ?? []),
+        ...(viewModel?.bridges ?? []),
+        ...(viewModel?.keyLocations ?? []),
+        ...(viewModel?.namedLocations ?? []),
+    ]) {
+        featureState.set(feature.id, feature);
+    }
+
+    function labelIcon(feature, kind) {
+        const visible = featureLabelVisible(feature);
+        const className = kind === 'region'
+            ? 'neoterra-map-label neoterra-map-label-region'
+            : 'neoterra-map-label neoterra-map-label-key';
+        return L.divIcon({
+            className,
+            html: visible ? `<span>${escapeLabel(feature.name)}</span>` : '',
+            iconSize: [0, 0],
+        });
+    }
+
+    function syncFeatureLabel(feature, kind) {
+        const label = labelsById.get(feature.id);
+        if (!label) {
+            return;
+        }
+        label.setIcon?.(labelIcon(feature, kind));
+        const labelElement = label.getElement?.();
+        if (labelElement?.style) {
+            labelElement.style.display = featureLabelVisible(feature) ? '' : 'none';
+        }
+    }
+
+    function syncFeatureTooltip(layer, feature, kind) {
+        if (typeof layer?.unbindTooltip === 'function') {
+            layer.unbindTooltip();
+        }
+        if (featureLabelVisible(feature) && typeof layer?.bindTooltip === 'function') {
+            layer.bindTooltip(escapeLabel(feature.name), {
+                sticky: kind === 'region' || kind === 'bridge',
+                direction: 'top',
+                className: 'neoterra-map-tooltip',
+            });
+        }
+        if (kind === 'named' && typeof layer?.unbindPopup === 'function') {
+            layer.unbindPopup();
+            if (featureLabelVisible(feature) && typeof layer?.bindPopup === 'function') {
+                layer.bindPopup(
+                    `<strong>${escapeLabel(feature.name)}</strong><br>${escapeLabel(feature.status ?? '')}`,
+                    { className: 'neoterra-map-popup', closeButton: true },
+                );
+            }
+        }
+    }
+
+    function applyFog(nextViewModel, { fogEnabled = false } = {}) {
+        const models = [
+            ...(nextViewModel?.regions ?? []).map((entry) => ['region', entry]),
+            ...(nextViewModel?.bridges ?? []).map((entry) => ['bridge', entry]),
+            ...(nextViewModel?.keyLocations ?? []).map((entry) => ['key', entry]),
+            ...(nextViewModel?.namedLocations ?? []).map((entry) => ['named', entry]),
+        ];
+        for (const [kind, feature] of models) {
+            featureState.set(feature.id, feature);
+            const layer = layersById.get(feature.id);
+            if (!layer) {
+                continue;
+            }
+            if (kind === 'region' && layer.setStyle) {
+                // With fog on, discovered regions keep whatever the overlay
+                // tint painted; only fog states override the fill. With fog
+                // off, every region returns to its V1 style.
+                if (!fogEnabled || (feature.visibility ?? 'discovered') !== 'discovered') {
+                    layer.setStyle(regionLeafletStyle(feature));
+                }
+            } else if (kind === 'bridge' && layer.setStyle) {
+                const style = bridgeLeafletStyle(feature);
+                layer.setStyle({
+                    color: style.color,
+                    weight: style.weight,
+                    opacity: style.opacity ?? 1,
+                    dashArray: style.dashArray,
+                });
+            } else if ((kind === 'key' || kind === 'named') && layer.setStyle) {
+                const opacity = markerOpacity(feature);
+                layer.setStyle({
+                    opacity,
+                    fillOpacity: (kind === 'key' ? 0.85 : 0.95) * opacity,
+                });
+                const element = layer.getElement?.();
+                if (element?.style) {
+                    element.style.pointerEvents = opacity === 0 ? 'none' : '';
+                }
+            }
+            syncFeatureLabel(feature, kind);
+            syncFeatureTooltip(layer, feature, kind);
+        }
+    }
+
     function highlight(selection) {
         for (const [id, layer] of layersById) {
             const selected = selection && id === selection.id;
             if (typeof layer.setStyle !== 'function') {
                 continue;
             }
+            const feature = featureState.get(id);
+            if ((feature?.visibility ?? 'discovered') === 'unknown') {
+                continue;
+            }
             if (layer instanceof L.Polygon) {
+                // Colour-neutral: fog and the overlay own the fill colour.
                 layer.setStyle(selected
-                    ? { weight: 3, opacity: 0.95, fillOpacity: 0.3 }
-                    : { weight: 1, opacity: 0.5, fillOpacity: 0.12 });
+                    ? { weight: 3, opacity: 0.95 }
+                    : { weight: 1, opacity: 0.5 });
             } else if (layer instanceof L.Polyline) {
                 layer.setStyle({ weight: selected ? 5 : 3 });
             } else if (layer instanceof L.CircleMarker) {
@@ -346,6 +542,8 @@ export function createCityMap({
         map.setView(toLatLng(point, L), zoom);
     }
 
+    applyFog(viewModel, { fogEnabled: (settings.fog ?? settings.showFogOfWar) === true });
+
     return {
         map,
         layers,
@@ -353,6 +551,7 @@ export function createCityMap({
         labelsById,
         setLayerVisible,
         highlight,
+        applyFog,
         focus,
         fitBounds: () => map.fitBounds(bounds),
         dispose() {

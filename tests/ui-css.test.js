@@ -112,3 +112,10 @@ test('the newspaper reader modal is themed and scrolls internally', () => {
     assert.ok(body, 'expected a .neoterra-newsreader-body rule');
     assert.match(body, /overflow:\s*hidden/);
 });
+
+test('fog editor controls are themed', () => {
+    const controls = ruleBody('.neoterra-fog-controls');
+    assert.ok(controls, 'expected a .neoterra-fog-controls rule');
+    assert.doesNotMatch(controls, /#[0-9a-fA-F]{3,8}\b/);
+    assert.match(controls, /var\(--nt-/);
+});

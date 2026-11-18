@@ -13,6 +13,7 @@ import {
     buildOffscreenFeed,
     buildMapViewModel,
     clearGeneratedMapCaches,
+    applyMapFog,
     loadBridges,
     loadDistricts,
     loadGeneratedMapData,
@@ -37,7 +38,12 @@ import {
     validateLocationMapBindings,
 } from '../src/data/locations.js';
 import { createMachine } from '../src/core/machine.js';
-import { createCityMap } from '../src/ui/leaflet-adapter.js';
+import {
+    bridgeLeafletStyle,
+    createCityMap,
+    featureLabelVisible,
+    regionLeafletStyle,
+} from '../src/ui/leaflet-adapter.js';
 import {
     MAP_LAYER_LABELS,
     bridgeStatusClass,
@@ -418,12 +424,34 @@ class FakeLayer {
         Object.assign(this.style, style);
     }
 
-    bindTooltip() {
+    bindTooltip(text) {
+        this.tooltip = text;
         return this;
     }
 
-    bindPopup() {
+    unbindTooltip() {
+        this.tooltip = null;
         return this;
+    }
+
+    bindPopup(html) {
+        this.popup = html;
+        return this;
+    }
+
+    unbindPopup() {
+        this.popup = null;
+        return this;
+    }
+
+    setIcon(icon) {
+        this.icon = icon;
+        return this;
+    }
+
+    getElement() {
+        this.element = this.element ?? { style: {} };
+        return this.element;
     }
 
     addTo(parent) {
@@ -1099,4 +1127,65 @@ test('the off-screen feed model is snapshot-stable for a fixture state', () => {
     ]);
     // Rebuilding from the same state yields the same snapshot.
     assert.deepEqual(buildOffscreenFeed(state), feed);
+});
+
+test('fog render styles distinguish discovered, rumoured, and unknown features', () => {
+    const discovered = regionLeafletStyle({ visibility: 'discovered', color: '#f43f5e' });
+    assert.equal(discovered.fillColor, '#f43f5e');
+    assert.equal(discovered.fillOpacity, 0.12);
+
+    const rumored = regionLeafletStyle({ visibility: 'rumored' });
+    assert.equal(rumored.dashArray, '4 4');
+    assert.ok(rumored.fillOpacity < discovered.fillOpacity);
+
+    const unknown = regionLeafletStyle({ visibility: 'unknown' });
+    assert.ok(unknown.fillOpacity > 0.9);
+    assert.equal(unknown.color, unknown.fillColor);
+
+    const bridge = bridgeLeafletStyle({ visibility: 'unknown' });
+    assert.equal(bridge.opacity, 0);
+    assert.equal(bridge.weight, 0);
+    assert.equal(bridgeLeafletStyle({ status: 'open' }).weight, 3);
+
+    assert.equal(featureLabelVisible({ visibility: 'discovered', labelHidden: false }), true);
+    assert.equal(featureLabelVisible({ visibility: 'rumored', labelHidden: false }), true);
+    assert.equal(featureLabelVisible({ visibility: 'rumored', labelHidden: true }), false);
+    assert.equal(featureLabelVisible({ visibility: 'unknown', labelHidden: false }), false);
+});
+
+test('applyFog restyles layers and rewrites labels/tooltips both ways', () => {
+    const L = fakeLeaflet();
+    const base = vm;
+    const cityMap = createCityMap({
+        L,
+        container: {},
+        viewModel: base,
+        settings: { ...defaultLayerVisibility(), fog: false },
+    });
+    const airportName = base.regions.find((region) => region.id === 'region:airport').name;
+    const exploration = {
+        regions: { 'region:center': { state: 'discovered', turn: 0, source: 'start' } },
+        keyLocations: {},
+        updatedAt: 0,
+    };
+    const fogged = applyMapFog(base, exploration, { mode: 'hard', showRumoredLabels: false });
+    cityMap.applyFog(fogged, { fogEnabled: true });
+
+    const region = cityMap.layersById.get('region:airport');
+    assert.ok(region.style.fillOpacity > 0.9, 'unknown district is masked');
+    const label = cityMap.labelsById.get('region:airport');
+    assert.equal(label.icon.options.html, '', 'hidden labels carry no authored name');
+    assert.equal(label.getElement().style.display, 'none');
+    assert.equal(region.tooltip, null, 'hidden tooltips do not carry the name');
+
+    const named = cityMap.layersById.get('neon-docks');
+    assert.equal(named.style.opacity, 0);
+    assert.equal(named.getElement().style.pointerEvents, 'none');
+
+    cityMap.applyFog(base, { fogEnabled: false });
+    assert.equal(region.style.fillOpacity, 0.12, 'fog off restores the V1 fill');
+    assert.match(label.icon.options.html, new RegExp(airportName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(label.getElement().style.display, '');
+    assert.match(region.tooltip, new RegExp(airportName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(cityMap.layersById.get('neon-docks').style.opacity, 1);
 });
