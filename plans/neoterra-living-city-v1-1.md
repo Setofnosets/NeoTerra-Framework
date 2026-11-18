@@ -4,7 +4,7 @@ Off-screen world tick, newspaper, pacing/scene director, relationship graph, fog
 
 ## Meta
 - **Slug:** `neoterra-living-city-v1-1`
-- **Status:** approved — decisions locked 2026-11-18; ready for Step 1
+- **Status:** in progress — Step 1 complete (319e3fb); next: Step 2
 - **Date:** 2026-11-18
 - **Base:** `plans/neoterra-framework-v1.md` (V1 complete, Steps 1–20)
 - **Target:** SillyTavern third-party extension, plain ESM, no bundler, no runtime deps
@@ -543,7 +543,7 @@ without code changes.
 > All paths are relative to the repo root.
 
 ### Progress
-- [ ] Step 1 — World clock, fiction time, and the time brake
+- [x] Step 1 — World clock, fiction time, and the time brake
 - [ ] Step 2 — Off-screen world tick engine and agenda data
 - [ ] Step 3 — Off-screen activity feed in the world overlay
 - [ ] Step 4 — Pacing analyzer and explicit scene cut
@@ -567,6 +567,7 @@ without code changes.
 - **Risk:** high (adds a second time counter, changes beat deadline semantics, and introduces a brake that can hide escalation)
 - **Model/Effort routing:** implement-hard, high effort
 - **Commit message sketch:** `feat(time): add fiction clock, story turns, and the time brake`
+- **Commit:** `319e3fb`
 
 ---
 
