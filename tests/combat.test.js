@@ -20,6 +20,12 @@ import {
     outcomeEvents,
 } from '../src/combat/outcome.js';
 import { createCombatFlow } from '../src/combat/combat-state.js';
+import { detectEncounter } from '../src/flows/encounter.js';
+import {
+    endEncounterCombat,
+    encounterActorId,
+    startEncounterCombat,
+} from '../src/ui/encounter-bar.js';
 import { applyWorldEvents } from '../src/state/reducer.js';
 import { createWorldStateStore } from '../src/state/store.js';
 import { cloneDefaults } from '../src/core/defaults.js';
@@ -51,6 +57,8 @@ const CONTEXT = { registry, factions, locations, formGroups, formRules };
 
 const HERO = 's1.vaiva.colorgarde';
 const VILLAIN = 's1.aurelia.longshot';
+// Aurelia is a hero card; encounters need an opposing-side (villain) NPC.
+const ENCOUNTER_VILLAIN = 's1.claire.atropos';
 
 function makeStore({ seasonId = 's1', player = { identity: 'custom' }, settings = null } = {}) {
     const metadata = {};
@@ -432,6 +440,49 @@ test('the state tracker suppresses engine-owned resources during combat only', (
     assert.equal(normal.suppressed.length, 0);
     assert.equal(normal.events[0].type, 'SET_PLAYER_STAT');
     assert.equal(normal.events[0].value, 42);
+});
+
+test('Engage from a detected encounter starts combat, blocks travel, and End clears it', () => {
+    const { store, flow } = makeStore();
+    const state = store.get();
+    store.dispatch({
+        type: 'MOVE_CHARACTER',
+        characterId: ENCOUNTER_VILLAIN,
+        locationId: state.scene.locationId,
+    });
+    const moved = store.get();
+    const encounter = detectEncounter({ state: moved, present: [ENCOUNTER_VILLAIN] });
+    assert.ok(encounter, 'the villain at the player location is an encounter');
+
+    const result = startEncounterCombat({ flow, state: moved, encounter });
+    assert.equal(result.ok, true);
+    assert.ok(flow.activeCombat(), 'the conflict is active');
+    assert.equal(flow.activeCombat().id, result.combat.id);
+    assert.equal(isTravelBlockedByCombat(store.get()), true);
+
+    const ended = endEncounterCombat(flow, { reason: 'scene-end' });
+    assert.equal(ended.ok, true);
+    assert.equal(store.get().scene.combat, null);
+    assert.equal(isTravelBlockedByCombat(store.get()), false);
+});
+
+test('a canon player engages as the canon character id', () => {
+    const { store, flow } = makeCanonStore(HERO);
+    const state = store.get();
+    store.dispatch({
+        type: 'MOVE_CHARACTER',
+        characterId: ENCOUNTER_VILLAIN,
+        locationId: state.scene.locationId,
+    });
+    const moved = store.get();
+    const encounter = detectEncounter({ state: moved, present: [ENCOUNTER_VILLAIN] });
+    assert.ok(encounter);
+    assert.equal(encounterActorId(moved), HERO);
+
+    const result = startEncounterCombat({ flow, state: moved, encounter });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.participants, [HERO, ENCOUNTER_VILLAIN]);
+    assert.deepEqual(flow.activeCombat().participants, [HERO, ENCOUNTER_VILLAIN]);
 });
 
 test('choices re-exports the resolver vocabulary by identity', () => {

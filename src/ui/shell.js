@@ -47,10 +47,22 @@ import { createEndingFlow, isEndingScreenActive } from '../flows/ending.js';
 import { mountEndingPanel, disposeEndingPanel } from './ending.js';
 import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
 import {
+    avoidEncounter,
+    buildCombatResolutionFrameText,
+    buildEncounterBarModel,
+    disposeEncounterBar,
+    encounterFromCombat,
+    endEncounterCombat,
+    engageEncounter,
+    mountEncounterBar,
+    surrenderEncounterCombat,
+} from './encounter-bar.js';
+import {
     SCENE_KINDS,
     buildOpeningFrameText,
     buildOpeningSceneKey,
     buildSceneChatMessage,
+    buildSceneKey,
     buildTravelFrameText,
     buildTravelSceneKey,
     hasStoryHistory,
@@ -321,7 +333,7 @@ async function handleSeasonEntered(result) {
     return posted;
 }
 
-async function requestChoicesFor(live, messageIndex) {
+async function requestChoicesFor(live, messageIndex, { mode = null } = {}) {
     if (!Number.isInteger(messageIndex) || messageIndex < 0) {
         return null;
     }
@@ -334,6 +346,7 @@ async function requestChoicesFor(live, messageIndex) {
         messages,
         messageIndex,
         swipeId: 0,
+        mode,
     });
     if (view?.visible) {
         choicesBar?.refresh?.();
@@ -764,6 +777,8 @@ function disposeChatRuntimes() {
     mountedMapChatId = null;
     interactionRuntime = null;
     choicesBar = null;
+    disposeEncounterBar();
+    encounterBar = null;
     // The registry is the single disposal point; the two runtimes share a store.
     for (const chatId of chatIds) {
         releaseSharedWorldStateStore(chatId);
@@ -779,6 +794,8 @@ function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
     disposeChatRuntimes();
     disposeMapPanel();
     disposeChoicesBar();
+    disposeEncounterBar();
+    encounterBar = null;
     if (!keepCodex) {
         disposeCodex();
     }
@@ -795,6 +812,30 @@ function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
 let interactionRuntime = null;
 let interactionSubscription = null;
 let choicesBar = null;
+let encounterBar = null;
+
+function ensureEncounterHost() {
+    let host = document.getElementById('neoterra-encounter-host');
+    if (host) {
+        return host;
+    }
+    host = document.createElement('div');
+    host.id = 'neoterra-encounter-host';
+    host.className = 'neoterra-encounter-host';
+    const form = document.getElementById('send_form');
+    if (form) {
+        // Directly above the CYOA host (and therefore above the input).
+        const choicesHost = document.getElementById('neoterra-choices-host');
+        if (choicesHost?.parentNode === form) {
+            form.insertBefore(host, choicesHost);
+        } else {
+            form.prepend(host);
+        }
+    } else {
+        document.body.append(host);
+    }
+    return host;
+}
 
 function ensureChoicesHost() {
     let host = document.getElementById('neoterra-choices-host');
@@ -924,6 +965,127 @@ function buildInteractionRuntime(context) {
     return interactionRuntime;
 }
 
+/**
+ * Mount (once per chat runtime) and paint the encounter bar. A malformed model
+ * must never break the interaction UI: log at debug and hide the bar.
+ */
+function paintEncounterBar(runtime, live) {
+    try {
+        const model = buildEncounterBarModel({
+            state: runtime.store.get(),
+            settings: getSettings(live),
+        });
+        if (!model?.visible) {
+            encounterBar?.refresh({ visible: false });
+            return;
+        }
+        const host = ensureEncounterHost();
+        // ST may re-render `#send_form`; remount instead of painting into a
+        // detached node.
+        if (encounterBar && encounterBar.root !== host) {
+            disposeEncounterBar();
+            encounterBar = null;
+        }
+        encounterBar ??= mountEncounterBar({
+            root: host,
+            onAction: (id) => handleEncounterAction(id),
+        });
+        encounterBar?.refresh(model);
+    } catch (error) {
+        logger.debug('Could not refresh the encounter bar', error);
+        encounterBar?.refresh({ visible: false });
+    }
+}
+
+/**
+ * One delegated action from the encounter bar. Every branch re-reads the live
+ * context and the shared runtime: the bar is UI-only, the frames carry prose.
+ */
+async function handleEncounterAction(actionId) {
+    const live = refreshContext();
+    const runtime = buildInteractionRuntime(live);
+    if (!runtime) {
+        return;
+    }
+    const state = runtime.store.get();
+    const model = buildEncounterBarModel({
+        state,
+        settings: getSettings(live),
+    });
+
+    if (actionId === 'talk') {
+        document.getElementById('send_textarea')?.focus?.();
+        const index = (Array.isArray(live?.chat) ? live.chat.length : 0) - 1;
+        const view = runtime.controller?.getView?.();
+        if (index >= 0 && !view?.visible) {
+            await requestChoicesFor(live, index);
+        }
+        return;
+    }
+
+    if (actionId === 'avoid') {
+        avoidEncounter(runtime.store, state.scene?.encounter ?? model.encounter);
+        bus.emit(EVENTS.MAP_UPDATED, { reason: 'encounter-avoided' });
+        await refreshInteractionUi(live);
+        return;
+    }
+
+    if (actionId === 'engage') {
+        const outcome = await engageEncounter({
+            flow: runtime.combat,
+            state,
+            encounter: model.encounter,
+            chatId: runtime.chatId,
+            post: (message, key) => postSceneMessage(live, message, { dedupeKey: key }),
+            requestChoices: (index) => requestChoicesFor(live, index, { mode: 'combat' }),
+            onPosted: () => {
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-start' });
+            },
+        });
+        if (!outcome.ok) {
+            encounterBar?.setStatus(outcome.message, 'error');
+            return;
+        }
+        // Paint the combat controls (Surrender/End) before the choices round-trip.
+        await refreshInteractionUi(live);
+        return;
+    }
+
+    if (actionId === 'surrender' || actionId === 'end') {
+        // Capture the encounter before resolving: the bar belongs to it, and
+        // `detectEncounter` clears scene.encounter while combat runs.
+        const encounter = state.scene?.encounter
+            ?? encounterFromCombat(state)
+            ?? model.encounter;
+        const result = actionId === 'surrender'
+            ? surrenderEncounterCombat(runtime.combat)
+            : endEncounterCombat(runtime.combat, { reason: 'scene-end' });
+        if (!result?.ok) {
+            encounterBar?.setStatus(
+                result?.message ?? 'The conflict could not be closed.',
+                'error',
+            );
+            return;
+        }
+        avoidEncounter(runtime.store, encounter);
+        const ended = runtime.store.get();
+        const key = buildSceneKey(
+            'resolution',
+            runtime.chatId,
+            ended?.flags?.lastCombat?.id ?? result.combatId ?? 'ended',
+            result.endReason ?? 'ended',
+        );
+        const message = buildSceneChatMessage({
+            kind: SCENE_KINDS.RESOLUTION,
+            text: buildCombatResolutionFrameText({ state: ended, result }),
+            key,
+        });
+        await postSceneMessage(live, message, { dedupeKey: key });
+        bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-end' });
+        await refreshInteractionUi(live);
+    }
+}
+
 async function refreshInteractionUi(context = null) {
     if (!hasDom()) {
         return null;
@@ -933,6 +1095,8 @@ async function refreshInteractionUi(context = null) {
     if (!runtime) {
         choicesBar = null;
         disposeChoicesBar();
+        disposeEncounterBar();
+        encounterBar = null;
         disposeEndingPanel();
         return null;
     }
@@ -952,6 +1116,7 @@ async function refreshInteractionUi(context = null) {
     } else {
         disposeEndingPanel();
     }
+    paintEncounterBar(runtime, live);
     return runtime;
 }
 
@@ -1474,6 +1639,8 @@ function subscribeChatChanges(context) {
         disposeMapPanel();
         disposeCodex();
         disposeChoicesBar();
+        disposeEncounterBar();
+        encounterBar = null;
         disposeEndingPanel();
         if (isShellOpen() && getActiveTab() === 'map') {
             void mountMapPanelForActiveChat();
@@ -1524,8 +1691,11 @@ export function dispose() {
     disposeCodex();
     disposeSettingsPanel();
     disposeChoicesBar();
+    disposeEncounterBar();
+    encounterBar = null;
     disposeEndingPanel();
     document.getElementById('neoterra-choices-host')?.remove();
+    document.getElementById('neoterra-encounter-host')?.remove();
     document.getElementById('neoterra-ending-host')?.remove();
 
     if (hasDom()) {

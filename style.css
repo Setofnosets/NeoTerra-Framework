@@ -1714,6 +1714,45 @@
     gap: 0.35rem;
 }
 
+/* ---------- Encounter bar ---------- */
+
+.neoterra-encounter-host {
+    display: contents;
+}
+
+.neoterra-encounter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    border-left: 3px solid var(--neoterra-accent, #c9a227);
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.neoterra-encounter-title {
+    font-weight: 600;
+}
+
+.neoterra-encounter-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.neoterra-encounter-status {
+    margin: 0;
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+.neoterra-encounter-status[data-tone="error"] {
+    color: #f28b82;
+}
+
+.neoterra-encounter-bar[hidden] {
+    display: none;
+}
+
 /* ---------- Agent config ---------- */
 
 .neoterra-agent-config {

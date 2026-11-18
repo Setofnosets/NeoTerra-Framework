@@ -13,6 +13,17 @@ import {
     isCombatActive,
     playerSideFor,
 } from '../src/flows/encounter.js';
+import {
+    avoidEncounter,
+    buildCombatResolutionFrameText,
+    buildEncounterBarModel,
+    encounterActorId,
+    encounterFromCombat,
+    engageEncounter,
+    endEncounterCombat,
+    startEncounterCombat,
+    surrenderEncounterCombat,
+} from '../src/ui/encounter-bar.js';
 import { buildLocationIntro, createSceneFlow } from '../src/flows/scene.js';
 import { renderContext } from '../src/context/renderer.js';
 import { validateWorldState } from '../src/state/world-state.js';
@@ -336,6 +347,340 @@ test('the scene flow reports the encounter source it was given', async () => {
     assert.ok(result.cast.encounter, 'the villain triggers an encounter');
     assert.equal(result.cast.encounter.characterIds.includes(villainId), true);
     assert.equal(result.cast.encounter.source, 'travel');
+});
+
+test('the encounter bar model offers Engage, Talk, and Avoid for hostile characters', () => {
+    const encounter = {
+        locationId: 'loc.a',
+        characterIds: ['c.villain'],
+        threatNames: [],
+        source: 'travel',
+    };
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain') },
+        encounter,
+    });
+    const model = buildEncounterBarModel({ state });
+    assert.equal(model.visible, true);
+    assert.equal(model.mode, 'encounter');
+    assert.equal(model.key, encounterKey(encounter));
+    assert.equal(model.locationId, 'loc.a');
+    assert.equal(model.encounter, encounter);
+    assert.deepEqual(model.actions.map((action) => action.id), ['engage', 'talk', 'avoid']);
+    assert.equal(model.actions[0].enabled, true);
+    assert.equal(model.actions[0].reason, null);
+    assert.equal(model.actions[1].enabled, true);
+    assert.equal(model.actions[2].enabled, true);
+});
+
+test('a threat-only encounter disables Engage with a reason', () => {
+    const encounter = {
+        locationId: 'loc.a',
+        characterIds: [],
+        threatNames: ['Glass Cartel'],
+        source: 'scene',
+    };
+    const model = buildEncounterBarModel({ state: makeState({ encounter }) });
+    assert.equal(model.visible, true);
+    assert.equal(model.mode, 'encounter');
+    assert.equal(model.actions[0].id, 'engage');
+    assert.equal(model.actions[0].enabled, false);
+    assert.match(model.actions[0].reason, /prose/);
+});
+
+test('active combat shows Surrender and End immediately; no encounter hides the bar', () => {
+    const combat = { id: 'combat-1', participants: ['player', 'c.villain'], round: 1 };
+    const combatState = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain') },
+        encounter: { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] },
+        combat,
+    });
+    const combatModel = buildEncounterBarModel({ state: combatState });
+    assert.equal(combatModel.visible, true);
+    assert.equal(combatModel.mode, 'combat');
+    assert.equal(combatModel.encounter, null);
+    assert.equal(combatModel.key, null);
+    assert.equal(combatModel.combat, combat);
+    assert.deepEqual(combatModel.actions.map((action) => action.id), ['surrender', 'end']);
+
+    assert.equal(buildEncounterBarModel({ state: makeState({}) }).visible, false);
+    assert.deepEqual(buildEncounterBarModel(null), { visible: false });
+    assert.deepEqual(buildEncounterBarModel(undefined), { visible: false });
+    assert.deepEqual(buildEncounterBarModel({ state: null }), { visible: false });
+});
+
+test('an avoided key hides the same encounter and a different key shows it again', () => {
+    const encounter = {
+        locationId: 'loc.a',
+        characterIds: ['c.villain'],
+        threatNames: [],
+        source: 'travel',
+    };
+    const key = encounterKey(encounter);
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain') },
+        encounter,
+    });
+    state.flags.encounter = { avoidedKey: key };
+    const avoided = buildEncounterBarModel({ state });
+    assert.equal(avoided.visible, false);
+    assert.equal(avoided.reason, 'avoided');
+    assert.equal(avoided.key, key);
+
+    state.flags.encounter = { avoidedKey: 'loc.b|other|' };
+    assert.equal(buildEncounterBarModel({ state }).visible, true);
+});
+
+test('the encounter actor is the canon id for a canon player and "player" otherwise', () => {
+    assert.equal(encounterActorId(makeState({})), 'player');
+    const canon = makeState({
+        player: {
+            identity: 'canon',
+            characterId: 'c.player',
+            displayName: 'Vaiva',
+            side: 'hero',
+            controlledBy: 'player',
+            alive: true,
+        },
+    });
+    assert.equal(encounterActorId(canon), 'c.player');
+});
+
+test('avoidEncounter records the avoided key immutably and never throws', () => {
+    const encounter = { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] };
+    const state = makeState({});
+    let current = state;
+    const store = {
+        get: () => current,
+        replace: (next) => {
+            current = next;
+        },
+    };
+    const next = avoidEncounter(store, encounter);
+    assert.ok(next);
+    assert.equal(current.flags.encounter.avoidedKey, encounterKey(encounter));
+    assert.equal(typeof current.flags.encounter.avoidedAt, 'number');
+    assert.equal(state.flags.encounter, undefined, 'the previous state is untouched');
+
+    assert.equal(avoidEncounter(store, null), null);
+    assert.equal(avoidEncounter(null, encounter), null);
+    assert.equal(avoidEncounter({
+        get() {
+            throw new Error('read-failed');
+        },
+        replace() {},
+    }, encounter), null);
+    assert.equal(avoidEncounter({
+        get: () => current,
+        replace() {
+            throw new Error('write-failed');
+        },
+    }, encounter), null);
+});
+
+test('startEncounterCombat calls the flow once with player and hostiles', () => {
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain', { displayName: 'Claire' }) },
+    });
+    const calls = [];
+    const flow = {
+        start(payload) {
+            calls.push(payload);
+            return { ok: true, combat: { id: 'combat-1', participants: payload.participants } };
+        },
+        getState() {
+            return { scene: { combat: null } };
+        },
+    };
+    const encounter = {
+        locationId: 'loc.a',
+        characterIds: ['c.villain', 'c.villain', 'player'],
+        threatNames: [],
+    };
+    const result = startEncounterCombat({ flow, state, encounter });
+    assert.equal(result.ok, true);
+    assert.equal(calls.length, 1, 'start is called exactly once');
+    assert.deepEqual(calls[0].participants, ['player', 'c.villain']);
+    assert.deepEqual(calls[0].sides, { player: 'a', 'c.villain': 'b' });
+    assert.equal(calls[0].locationId, 'loc.a');
+    assert.equal(calls[0].kind, 'skirmish');
+    assert.ok(calls[0].stakes.length > 0);
+    assert.match(result.text, /Combat begins at Arcade: The Player against Claire\./);
+    assert.match(result.text, /Stakes: /);
+    assert.equal(result.combat.id, 'combat-1');
+
+    const threatOnly = startEncounterCombat({
+        flow,
+        state,
+        encounter: { locationId: 'loc.a', characterIds: [], threatNames: ['Glass Cartel'] },
+    });
+    assert.equal(threatOnly.ok, false);
+    assert.equal(threatOnly.reason, 'threat-only');
+    assert.equal(calls.length, 1, 'threat-only never calls the flow');
+});
+
+test('a failing flow start returns ok false with no frame text', () => {
+    const state = makeState({});
+    const failed = startEncounterCombat({
+        flow: {
+            start: () => ({ ok: false, reason: 'combat-active', message: 'A conflict is already active' }),
+        },
+        state,
+        encounter: { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] },
+    });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.reason, 'combat-active');
+    assert.equal(failed.message, 'A conflict is already active');
+    assert.equal(failed.text, undefined);
+});
+
+test('surrender and end call the flow and pass the reason', () => {
+    const calls = [];
+    const flow = {
+        surrender() {
+            calls.push(['surrender']);
+            return { ok: true, ended: true, endReason: 'surrender' };
+        },
+        end(options) {
+            calls.push(['end', options]);
+            return { ok: true, ended: true, endReason: options.reason };
+        },
+    };
+    assert.equal(surrenderEncounterCombat(flow).endReason, 'surrender');
+    const ended = endEncounterCombat(flow, { reason: 'scene-end' });
+    assert.equal(ended.endReason, 'scene-end');
+    assert.deepEqual(calls, [['surrender'], ['end', { reason: 'scene-end' }]]);
+    assert.deepEqual(surrenderEncounterCombat(null), { ok: false, reason: 'no-flow' });
+    assert.deepEqual(endEncounterCombat(undefined), { ok: false, reason: 'no-flow' });
+});
+
+test('combat frame text is deterministic prose only', () => {
+    assert.equal(
+        buildCombatResolutionFrameText({ state: { flags: {} }, result: { endReason: 'surrender' } }),
+        'Combat ends — surrender.',
+    );
+    const withSummary = {
+        flags: { lastCombat: { endReason: 'stamina-zero', summary: 'skirmish ended: stamina-zero' } },
+    };
+    assert.equal(
+        buildCombatResolutionFrameText({ state: withSummary, result: null }),
+        'Combat ends — stamina-zero.\n\nskirmish ended: stamina-zero',
+    );
+    assert.equal(buildCombatResolutionFrameText(), 'Combat ends — resolved.');
+});
+
+test('engageEncounter starts once, posts one combat frame, then requests combat choices', async () => {
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain', { displayName: 'Claire' }) },
+    });
+    const encounter = {
+        locationId: 'loc.a',
+        characterIds: ['c.villain'],
+        threatNames: [],
+        source: 'travel',
+    };
+    let starts = 0;
+    const posts = [];
+    const choices = [];
+    const flow = {
+        start(payload) {
+            starts += 1;
+            return { ok: true, combat: { id: 'combat-9', participants: payload.participants } };
+        },
+    };
+    const result = await engageEncounter({
+        flow,
+        state,
+        encounter,
+        chatId: 'c1',
+        post: async (message, key) => {
+            posts.push({ message, key });
+            return { posted: true, index: 4 };
+        },
+        requestChoices: async (index) => { choices.push(index); },
+        now: () => NOW,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(starts, 1, 'start is called exactly once');
+    assert.equal(posts.length, 1, 'exactly one combat frame is posted');
+    assert.equal(posts[0].message.extra.neoterra.scene.kind, 'combat');
+    assert.ok(!posts[0].key.startsWith('travel:'));
+    assert.match(posts[0].message.mes, /Combat begins at Arcade/);
+    assert.deepEqual(choices, [4], 'combat choices use the posted index');
+});
+
+test('a failed engage posts nothing and returns the flow reason', async () => {
+    const state = makeState({});
+    let posts = 0;
+    const result = await engageEncounter({
+        flow: {
+            start: () => ({ ok: false, reason: 'combat-active', message: 'A conflict is already active' }),
+        },
+        state,
+        encounter: { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] },
+        post: async () => { posts += 1; return { posted: true, index: 1 }; },
+        requestChoices: async () => {},
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.message, 'A conflict is already active');
+    assert.equal(posts, 0);
+});
+
+test('encounterFromCombat recovers the hostile ids after scene.encounter clears', () => {
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain') },
+        encounter: null,
+        combat: {
+            id: 'combat-2',
+            locationId: 'loc.a',
+            participants: ['player', 'c.villain'],
+            round: 1,
+        },
+    });
+    const encounter = encounterFromCombat(state);
+    assert.deepEqual(encounter, {
+        locationId: 'loc.a',
+        characterIds: ['c.villain'],
+        threatNames: [],
+        source: 'scene',
+    });
+    assert.equal(encounterKey(encounter), encounterKey({
+        locationId: 'loc.a',
+        characterIds: ['c.villain'],
+        threatNames: [],
+    }));
+    assert.equal(encounterFromCombat(makeState({})), null);
+
+    const canonical = makeState({
+        player: {
+            identity: 'canon',
+            characterId: 'c.player',
+            displayName: 'Vaiva',
+            controlledBy: 'player',
+            alive: true,
+            side: 'hero',
+        },
+        characters: { 'c.player': character('c.player', 'hero', { controlledBy: 'player' }), 'c.villain': character('c.villain', 'villain') },
+        combat: { locationId: 'loc.a', participants: ['c.player', 'c.villain'], round: 1 },
+    });
+    assert.deepEqual(encounterFromCombat(canonical).characterIds, ['c.villain']);
+});
+
+test('the bar model hides a stale encounter recorded at another location', () => {
+    const state = makeState({ encounter: { locationId: 'loc.b', characterIds: ['c.villain'], threatNames: [] } });
+    const model = buildEncounterBarModel({ state });
+    assert.equal(model.visible, false);
+    assert.equal(model.reason, 'stale-location');
+});
+
+test('avoidEncounter uses the injected clock', () => {
+    let current = makeState({});
+    const store = {
+        get: () => current,
+        replace: (next) => { current = next; },
+    };
+    avoidEncounter(store, { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] }, { now: () => 1234 });
+    assert.equal(current.flags.encounter.avoidedAt, 1234);
 });
 
 test('a villain-POV scene does not treat same-side villains as enemies', async () => {
