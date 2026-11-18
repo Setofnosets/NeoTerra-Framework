@@ -708,9 +708,10 @@ export function createStateTracker({
 }
 
 /**
- * One assistant turn: tick the clock, run the player tracker, advance the
- * storyline on its cadence, then refresh the present cast. Never throws;
- * each stage is isolated so one failure cannot skip the next.
+ * One assistant turn: tick the clock, advance the off-screen world, run the
+ * player tracker, advance the storyline on its cadence, then refresh the
+ * present cast. Never throws; each stage is isolated so one failure cannot
+ * skip the next.
  */
 export async function runTurnPipeline({
     store,
@@ -721,6 +722,7 @@ export async function runTurnPipeline({
     message = '',
     recentMessages = [],
     tickTurns = 1,
+    worldTick = null,
     log = null,
 } = {}) {
     if (!store || typeof store.get !== 'function') {
@@ -796,6 +798,27 @@ export async function runTurnPipeline({
         } catch (error) {
             logWarning(log, 'Could not advance the world clock', error);
             errors.push({ stage: 'tick', error: error?.message ?? String(error) });
+        }
+    }
+
+    // Stage 1.5: the off-screen world tick. It only runs after a successful
+    // clock stage; while time is held the flow itself reports `time-held`.
+    let worldTickReport = { ran: false, reason: 'absent' };
+    if (typeof worldTick?.run === 'function' && ticked) {
+        try {
+            const report = await worldTick.run({});
+            worldTickReport = isObject(report) ? report : { ran: false, reason: 'invalid-report' };
+        } catch (error) {
+            worldTickReport = {
+                ran: false,
+                reason: 'failed',
+                error: error?.message ?? String(error),
+            };
+            logWarning(log, 'Off-screen world tick failed; state unchanged', error);
+            errors.push({
+                stage: 'world-tick',
+                error: error?.message ?? String(error),
+            });
         }
     }
 
@@ -899,6 +922,7 @@ export async function runTurnPipeline({
         ticked,
         turn,
         clock,
+        worldTick: worldTickReport,
         tracker: trackerReport,
         storyline,
         cast,

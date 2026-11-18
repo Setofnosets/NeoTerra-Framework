@@ -84,6 +84,8 @@ test('defaults match the plan and are frozen', () => {
 
     assert.ok(Object.isFrozen(DEFAULT_SETTINGS));
     assert.ok(Object.isFrozen(DEFAULT_SETTINGS.cyoa));
+    assert.equal(DEFAULT_SETTINGS.worldTick.enabled, true);
+    assert.equal(DEFAULT_SETTINGS.worldTick.allowNpcMovesDuringCombat, false);
 
     const copy = cloneDefaults();
     copy.cyoa.count = 2;
@@ -306,4 +308,22 @@ test('the clock settings normalizer fills defaults, clamps, and keeps unknown ke
 
     const low = migrateSettings({ schemaVersion: SCHEMA_VERSION, clock: { slotsPerDay: 0 } });
     assert.equal(low.clock.slotsPerDay, 1);
+});
+
+test('the world-tick settings normalizer fills defaults and keeps unknown keys', () => {
+    const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.equal(defaults.worldTick.enabled, true);
+    assert.equal(defaults.worldTick.allowNpcMovesDuringCombat, false);
+
+    const overridden = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        worldTick: { enabled: false, allowNpcMovesDuringCombat: true, custom: 'keep' },
+    });
+    assert.equal(overridden.worldTick.enabled, false);
+    assert.equal(overridden.worldTick.allowNpcMovesDuringCombat, true);
+    assert.equal(overridden.worldTick.custom, 'keep');
+
+    const legacy = migrateSettings({ schemaVersion: SCHEMA_VERSION, worldTick: null });
+    assert.equal(legacy.worldTick.enabled, true);
+    assert.equal(legacy.worldTick.allowNpcMovesDuringCombat, false);
 });

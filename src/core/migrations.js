@@ -222,6 +222,18 @@ function normalizeClock(clock, defaults) {
     };
 }
 
+function normalizeWorldTick(worldTick, defaults) {
+    const source = isPlainObject(worldTick) ? worldTick : {};
+    return {
+        ...source,
+        enabled: asBoolean(source.enabled, defaults.enabled),
+        allowNpcMovesDuringCombat: asBoolean(
+            source.allowNpcMovesDuringCombat,
+            defaults.allowNpcMovesDuringCombat,
+        ),
+    };
+}
+
 /** Normalize known settings fields after defaults and migrations are applied. */
 export function normalizeSettings(settings) {
     const defaults = DEFAULT_SETTINGS;
@@ -248,6 +260,10 @@ export function normalizeSettings(settings) {
         clock: normalizeClock(
             isPlainObject(settings.clock) ? settings.clock : {},
             defaults.clock,
+        ),
+        worldTick: normalizeWorldTick(
+            isPlainObject(settings.worldTick) ? settings.worldTick : {},
+            defaults.worldTick,
         ),
         contentLimits: {
             ...(isPlainObject(settings.contentLimits) ? settings.contentLimits : {}),

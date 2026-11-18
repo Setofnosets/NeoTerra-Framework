@@ -55,6 +55,13 @@ export const DEFAULT_SETTINGS = freezeDeep({
         maxHoldTurns: 20,
     },
 
+    // Off-screen world tick. A day must pass in fiction time before factions,
+    // threats, NPCs, and rumors move; rates are authored in data/agendas.json.
+    worldTick: {
+        enabled: true,
+        allowNpcMovesDuringCombat: false,
+    },
+
     cyoa: {
         enabled: false,
         count: 4,

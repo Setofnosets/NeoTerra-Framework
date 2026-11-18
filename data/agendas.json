@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "defaults": {
+    "factionInfluencePerDay": 0.5,
+    "mainThreatProgressPerDay": 1.0,
+    "secondaryThreatProgressPerDay": 0.5,
+    "maxFactionDeltaPerTick": 5,
+    "maxNpcMovesPerTick": 2,
+    "maxDaysPerTick": 14,
+    "rumorsPerTick": 2,
+    "rumorTemplates": [
+      "Word around {location}: {faction} is making a move.",
+      "Rumours say {threat} is gaining ground near {location}.",
+      "{faction} pressure is felt in {location} tonight.",
+      "People in {location} are talking about {threat}.",
+      "{faction} activity reported around {location}."
+    ]
+  },
+  "seasons": {
+    "s1dark": {
+      "factionAgendas": {
+        "clarity": { "influencePerDay": 1.0, "rumorTags": ["patrol", "conversion"] },
+        "petrabyte": { "influencePerDay": -0.4, "rumorTags": ["resistance"] }
+      },
+      "threatPace": {
+        "s1dark.threat.resistance": { "progressPerDay": 1.5 }
+      },
+      "rumorTemplates": [
+        "A Clarity patrol walks {location}. Nobody meets their eyes.",
+        "The resistance is whispered about in {location}.",
+        "Conversion vans were seen near {location} after dark."
+      ]
+    },
+    "s1": {
+      "factionAgendas": {
+        "clarity": { "influencePerDay": 0.3, "rumorTags": ["patrol", "conversion"] },
+        "petrabyte": { "influencePerDay": 0.2, "rumorTags": ["resistance"] },
+        "neoterra-pd": { "influencePerDay": 0.2, "rumorTags": ["patrol"] }
+      },
+      "threatPace": {
+        "s1.threat.clarity": { "progressPerDay": 0.8 },
+        "s1.threat.bcp": { "progressPerDay": 0.4 }
+      },
+      "rumorTemplates": [
+        "Clarity patrols were seen around {location} today.",
+        "Word is {threat} is stirring near {location}.",
+        "{faction} is making its presence felt in {location}.",
+        "People in {location} are nervous about {threat}."
+      ]
+    },
+    "s2": {
+      "factionAgendas": {
+        "renya-clan": { "influencePerDay": 0.5, "rumorTags": ["clan", "territory"] },
+        "petrabyte": { "influencePerDay": -0.2, "rumorTags": ["resistance"] }
+      },
+      "threatPace": {
+        "s2.threat.renya-clan": { "progressPerDay": 1.0 },
+        "s2.threat.living-curse": { "progressPerDay": 0.4 }
+      },
+      "rumorTemplates": [
+        "The Renya Clan is pressing into {location}.",
+        "Something is wrong with the air around {location}; they blame {threat}.",
+        "{faction} interests are quietly moving through {location}."
+      ]
+    },
+    "s3": {
+      "factionAgendas": {
+        "midnight-treat": { "influencePerDay": 0.4, "rumorTags": ["nightlife"] },
+        "corvus-corp": { "influencePerDay": -0.2, "rumorTags": ["corporate"] }
+      },
+      "threatPace": {
+        "s3.threat.midnight-treat": { "progressPerDay": 1.0 },
+        "s3.threat.vigilante-purge": { "progressPerDay": 0.4 }
+      },
+      "rumorTemplates": [
+        "Midnight Treat was handing something out in {location} last night.",
+        "Vigilantes were seen near {location}; {threat} is the excuse.",
+        "{faction} money is moving through {location}."
+      ]
+    },
+    "s4": {
+      "factionAgendas": {
+        "clarity": { "influencePerDay": 0.4, "rumorTags": ["patrol", "conversion"] },
+        "petrabyte": { "influencePerDay": -0.3, "rumorTags": ["resistance"] }
+      },
+      "threatPace": {
+        "s4.threat.noah-atopos": { "progressPerDay": 0.8 },
+        "s4.threat.ginny-avalanche": { "progressPerDay": 0.8 },
+        "s4.threat.cold-front": { "progressPerDay": 0.4 }
+      },
+      "rumorTemplates": [
+        "There are rumours about {threat} coming in from {location}.",
+        "Clarity patrols are thicker around {location}.",
+        "{faction} is recruiting in {location}, quietly."
+      ]
+    },
+    "sandbox": {
+      "factionAgendas": {},
+      "threatPace": {}
+    }
+  }
+}

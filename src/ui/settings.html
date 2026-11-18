@@ -129,6 +129,22 @@
                 A day passes every five turns by default. The top-bar time chip freezes and unfreezes time.
             </p>
 
+            <h4 class="neoterra-section-title">Off-screen world tick</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="worldTick.enabled">
+                    <span>Advance factions and threats while off-screen</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="worldTick.allowNpcMovesDuringCombat">
+                    <span>Let off-screen NPCs move during combat</span>
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                One in-game day must pass first; rates come from data/agendas.json.
+                A held scene (time frozen) pauses the tick.
+            </p>
+
             <h4 class="neoterra-section-title">CYOA choices</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">

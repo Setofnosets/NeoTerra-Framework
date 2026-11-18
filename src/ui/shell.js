@@ -32,6 +32,7 @@ import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStat
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
+import { createWorldTick } from '../flows/world-tick.js';
 import { createStorylineTracker } from '../agents/storyline.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
@@ -1078,6 +1079,12 @@ function buildInteractionRuntime(context) {
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
+    const worldTick = shared?.worldTick ?? createWorldTick({
+        store,
+        getSeason: () => season,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
     const controller = createChoicesController({
         agent: choicesAgent,
         getState: () => store.get(),
@@ -1094,6 +1101,7 @@ function buildInteractionRuntime(context) {
         initiative,
         ending,
         runner,
+        worldTick,
         controller,
         combat: createCombatFlow({
             store,
@@ -1330,6 +1338,7 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
             message: typeof message?.mes === 'string' ? message.mes : '',
             recentMessages: recentMessagesBefore(messages, messageIndex),
             tickTurns: 1,
+            worldTick: runtime.worldTick,
             log: (m, e) => logger.warn(m, e),
         });
         if (!chatStillCurrent(chatId)) {

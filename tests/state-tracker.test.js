@@ -19,6 +19,7 @@ import {
 import { AgentAbortedError, validateJsonSchema } from '../src/agents/client.js';
 import { buildPlayerSheet, renderPlayerPanelMarkup } from '../src/ui/player-panel.js';
 import { createWorldStateStore } from '../src/state/store.js';
+import { createWorldTick } from '../src/flows/world-tick.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NOW = 1700000000000;
@@ -32,6 +33,7 @@ const factions = readJson('data/factions.json');
 const locations = readJson('data/locations.json');
 const formGroups = readJson('data/form-groups.json');
 const formRules = readJson('data/form-rules.json');
+const agendas = readJson('data/agendas.json');
 const seasons = {
     s1: readJson('data/seasons/s1.json'),
     s1dark: readJson('data/seasons/s1dark.json'),
@@ -762,4 +764,128 @@ test('the cast refresh still runs while time is held', async () => {
     assert.equal(result.ok, true);
     assert.equal(refreshed, 1);
     assert.ok(result.cast);
+});
+
+test('the world tick runs after the clock and before the player tracker', async () => {
+    const store = makeStore('s1dark');
+    const worldTick = createWorldTick({
+        store,
+        getSeason: () => seasons.s1dark,
+        getSettings: () => ({}),
+        loadData: async () => ({ agendas, locations }),
+        log: () => {},
+    });
+    // Baseline the tick, then let one in-game day pass before the pipeline.
+    await worldTick.run();
+    const seeded = store.get();
+    store.replace({
+        ...seeded,
+        meta: { ...seeded.meta, inGameDate: '2037-03-02' },
+    });
+
+    let seenInfluence = null;
+    const tracker = {
+        run: async ({ state }) => {
+            seenInfluence = state.factions.clarity.influence;
+            return normalizeStateTrackerResult({ result: trackerResult(), state });
+        },
+    };
+    const result = await runTurnPipeline({
+        store,
+        tracker,
+        worldTick,
+        getSettings: () => ({}),
+        log: () => {},
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.ticked, true);
+    assert.equal(result.worldTick.ran, true);
+    assert.equal(result.worldTick.reason, 'ok');
+    assert.equal(result.worldTick.summary.appliedDays, 1);
+    // The tracker saw the post-tick faction influence (85 + 1.0/day).
+    assert.equal(seenInfluence, 86);
+    assert.equal(store.get().factions.clarity.influence, 86);
+    assert.equal(result.tracker.ran, true);
+});
+
+test('a held turn reports a time-held world tick with no events', async () => {
+    const store = makeStore('s1');
+    const worldTick = createWorldTick({
+        store,
+        getSeason: () => seasons.s1,
+        getSettings: () => ({}),
+        loadData: async () => ({ agendas, locations }),
+        log: () => {},
+    });
+    store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' });
+
+    const result = await runTurnPipeline({
+        store,
+        worldTick,
+        getSettings: () => ({}),
+        log: () => {},
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.worldTick.ran, false);
+    assert.equal(result.worldTick.reason, 'time-held');
+    assert.deepEqual(result.worldTick.events, []);
+    assert.equal(store.get().flags.worldTick, undefined);
+});
+
+test('a throwing world tick does not prevent the tracker, storyline, or cast stages', async () => {
+    const store = makeStore('s1');
+    let trackerRan = false;
+    let storylineRan = false;
+    let castRan = false;
+    const result = await runTurnPipeline({
+        store,
+        tracker: {
+            run: async ({ state }) => {
+                trackerRan = true;
+                return normalizeStateTrackerResult({ result: trackerResult(), state });
+            },
+        },
+        initiative: {
+            afterTurn: async () => {
+                storylineRan = true;
+                return { ran: true };
+            },
+        },
+        scene: {
+            refreshCast: async () => {
+                castRan = true;
+                return { applied: [] };
+            },
+        },
+        worldTick: {
+            run: async () => {
+                throw new Error('tick exploded');
+            },
+        },
+        getSettings: () => ({}),
+        log: () => {},
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.worldTick.ran, false);
+    assert.equal(result.worldTick.reason, 'failed');
+    assert.match(result.worldTick.error, /tick exploded/);
+    assert.equal(trackerRan, true);
+    assert.equal(storylineRan, true);
+    assert.equal(castRan, true);
+    assert.ok(result.errors.some((entry) => entry.stage === 'world-tick'));
+});
+
+test('an absent world tick keeps the pipeline result shape with reason absent', async () => {
+    const store = makeStore('s1');
+    const result = await runTurnPipeline({
+        store,
+        getSettings: () => ({}),
+        log: () => {},
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.worldTick, { ran: false, reason: 'absent' });
+    assert.equal(result.ticked, true);
 });
