@@ -22,6 +22,7 @@ import {
     summarizeBeatLedger,
 } from './beats.js';
 import { applyContentGate } from '../core/content-gate.js';
+import { computeRegionVisibility, regionState } from '../state/exploration.js';
 
 export const CANONICAL_MAP = Object.freeze({
     path: 'NeoTerra.png',
@@ -1361,6 +1362,114 @@ export function buildMapViewModel({
  * @param {object} viewModel from {@link buildMapViewModel}
  * @param {{ state?: object, combat?: boolean }} [options]
  */
+const FOG_UNCHARTED = 'Uncharted';
+
+function blankFogFeature(feature, visibility, { showRumoredLabels = true, isBridge = false } = {}) {
+    if (!feature) {
+        return feature;
+    }
+    const blanked = { ...feature, visibility };
+    if (visibility === 'discovered') {
+        return blanked;
+    }
+    const showName = visibility === 'rumored' && showRumoredLabels && !isBridge;
+    if (!isBridge) {
+        blanked.name = showName ? feature.name : FOG_UNCHARTED;
+    } else {
+        blanked.name = FOG_UNCHARTED;
+    }
+    blanked.labelHidden = !showName;
+    blanked.description = null;
+    blanked.factionId = null;
+    blanked.factionName = null;
+    blanked.status = null;
+    blanked.present = [];
+    blanked.regionName = null;
+    blanked.label = null;
+    blanked.districtName = null;
+    blanked.districtId = null;
+    if (isBridge) {
+        blanked.connectsNames = [null, null];
+    } else {
+        blanked.travel = [];
+    }
+    return blanked;
+}
+
+/**
+ * Apply fog of war to a map view model. Returns a new document; the input is
+ * never mutated. Hidden features keep their id/geometry (so the renderer can
+ * mask them) but lose every authored or live string.
+ *
+ * `exploration` null means the chat predates fog: the view model is returned
+ * unchanged rather than masking the whole map.
+ */
+export function applyMapFog(viewModel, exploration, {
+    mode = 'rumors',
+    revealNeighbors = true,
+    showRumoredLabels = true,
+    enabled = true,
+} = {}) {
+    if (!viewModel || !isObject(exploration) || enabled === false) {
+        return viewModel;
+    }
+    const visibility = computeRegionVisibility({
+        exploration,
+        regions: viewModel.regions ?? [],
+        bridges: viewModel.bridges ?? [],
+        mode,
+        revealNeighbors,
+    });
+    const regionVisibility = (regionId) => (
+        regionId ? (visibility.get(regionId) ?? regionState(exploration, regionId)) : 'unknown'
+    );
+
+    const regions = (viewModel.regions ?? []).map((region) => blankFogFeature(
+        region,
+        regionVisibility(region.id),
+        { showRumoredLabels },
+    ));
+    const bridges = (viewModel.bridges ?? []).map((bridge) => {
+        const [a, b] = Array.isArray(bridge.connects) ? bridge.connects : [];
+        const discovered = regionVisibility(a) === 'discovered' || regionVisibility(b) === 'discovered';
+        return blankFogFeature(bridge, discovered ? 'discovered' : 'unknown', { showRumoredLabels, isBridge: true });
+    });
+    const keyLocations = (viewModel.keyLocations ?? []).map((key) => blankFogFeature(
+        key,
+        regionVisibility(key.regionId),
+        { showRumoredLabels },
+    ));
+    const namedLocations = (viewModel.namedLocations ?? []).map((location) => {
+        if (location.visited === true) {
+            return { ...location, visibility: 'discovered' };
+        }
+        // A discovered district does not reveal its venues: named locations are
+        // visible only once visited, otherwise they are a rumour (name at
+        // most) or masked with the region.
+        const visibilityState = regionVisibility(location.regionId);
+        return blankFogFeature(
+            location,
+            visibilityState === 'discovered' ? 'rumored' : visibilityState,
+            { showRumoredLabels },
+        );
+    });
+
+    return {
+        ...viewModel,
+        regions,
+        bridges,
+        keyLocations,
+        namedLocations,
+        index: {
+            regionById: new Map(regions.map((entry) => [entry.id, entry])),
+            bridgeById: new Map(bridges.map((entry) => [entry.id, entry])),
+            keyLocationById: new Map(keyLocations.map((entry) => [entry.id, entry])),
+            namedLocationById: new Map(namedLocations.map((entry) => [entry.id, entry])),
+            keyByLocationId: viewModel.index?.keyByLocationId ?? new Map(),
+        },
+    };
+}
+
 export function buildMapSubmenu(selection, viewModel, options = {}) {
     const state = options.state ?? null;
     const combat = Boolean(options.combat ?? state?.scene?.combat);
@@ -1388,39 +1497,57 @@ export function buildMapSubmenu(selection, viewModel, options = {}) {
 
     const locationId = feature.kind === 'namedLocation' ? feature.id : feature.locationId ?? null;
     const liveLocation = locationId ? state?.locations?.[locationId] ?? null : null;
-    const present = (liveLocation?.present?.length ? liveLocation.present : null)
-        ?? (feature.present?.length ? feature.present : null)
-        ?? (feature.kind === 'namedLocation' && locationId === state?.scene?.locationId
-            ? state?.scene?.present ?? []
-            : []);
+    const visibility = feature.visibility ?? 'discovered';
+    const uncharted = visibility === 'unknown';
+    // A fogged feature must not re-read live presence from raw state: the view
+    // model already blanked it for rumoured/unknown features.
+    const present = visibility === 'discovered'
+        ? (liveLocation?.present?.length ? liveLocation.present : null)
+            ?? (feature.present?.length ? feature.present : null)
+            ?? (feature.kind === 'namedLocation' && locationId === state?.scene?.locationId
+                ? state?.scene?.present ?? []
+                : [])
+        : [];
     const connected = feature.connections ?? (liveLocation?.connections ?? []);
-    const travelAllowed = Boolean(locationId) && !combat;
+    // A virtual node has no polygon: it stays reachable through an authored
+    // connection from the current location even when its region is uncharted.
+    const virtualReachable = feature.virtual === true
+        && typeof state?.scene?.locationId === 'string'
+        && connected.includes(state.scene.locationId);
+    const travelAllowed = Boolean(locationId) && !combat && (!uncharted || virtualReachable);
+    const travelReason = !locationId
+        ? 'This feature is not a travel node'
+        : combat
+            ? 'Travel is disabled during combat'
+            : uncharted && !virtualReachable
+                ? 'Uncharted destination'
+                : null;
 
     return {
         ok: true,
         error: null,
         selection,
         feature,
+        visibility,
         title: feature.name ?? feature.label ?? feature.id,
         typeLabel: feature.kind,
-        districtId: feature.districtId ?? feature.regionId ?? null,
-        districtName: feature.districtName ?? feature.regionName ?? null,
+        districtId: visibility === 'discovered' ? (feature.districtId ?? feature.regionId ?? null) : null,
+        districtName: visibility === 'discovered'
+            ? (feature.districtName ?? feature.regionName ?? null)
+            : null,
         description: feature.description ?? null,
         factionId: feature.factionId ?? null,
         factionName: feature.factionName ?? null,
         status: feature.status ?? null,
         present,
-        keyLocationIds: feature.keyLocationIds ?? [],
-        bridgeIds: feature.bridgeIds ?? [],
+        keyLocationIds: visibility === 'discovered' ? (feature.keyLocationIds ?? []) : [],
+        bridgeIds: visibility === 'discovered' ? (feature.bridgeIds ?? []) : [],
         connects: feature.connects ?? [],
         connectsNames: feature.connectsNames ?? [],
         travel: {
             enabled: travelAllowed,
-            reason: !locationId
-                ? 'This feature is not a travel node'
-                : combat
-                    ? 'Travel is disabled during combat'
-                    : null,
+            blindTrip: (visibility === 'rumored' || virtualReachable) && travelAllowed,
+            reason: travelReason,
             locationId,
             connections: connected,
         },

@@ -22,6 +22,7 @@ import {
     resolveSeasonRoster,
 } from '../data/seasons.js';
 import { SIDES } from '../data/schema.js';
+import { seedExplorationFor } from './exploration.js';
 
 export const WORLD_STATE_SCHEMA_VERSION = 2;
 
@@ -471,6 +472,13 @@ export function createWorldState(options = {}) {
                     sinceTurn: 0,
                     sinceDate: season.anchorDate ?? null,
                 },
+            },
+            map: {
+                exploration: seedExplorationFor({
+                    locations,
+                    startLocationId,
+                    turn: 0,
+                }),
             },
         },
         log: [],

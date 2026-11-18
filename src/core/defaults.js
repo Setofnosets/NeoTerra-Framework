@@ -271,6 +271,14 @@ export const DEFAULT_SETTINGS = freezeDeep({
 
     map: {
         showFogOfWar: false,
+        // Fog of war: per-chat exploration layered over the generated map.
+        fog: {
+            mode: 'rumors',
+            revealOnTravel: true,
+            showRumoredLabels: true,
+            gateTravel: true,
+            revealNeighbors: true,
+        },
         // A successful travel posts the arrival frame and then closes the shell
         // so the chat is visible. A rejected travel keeps the map open.
         closeOnTravel: true,

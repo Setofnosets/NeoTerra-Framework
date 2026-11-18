@@ -323,6 +323,20 @@ export function normalizeSettings(settings) {
         map: {
             ...(isPlainObject(settings.map) ? settings.map : {}),
             showFogOfWar: asBoolean(settings.map?.showFogOfWar, defaults.map.showFogOfWar),
+            fog: {
+                ...(isPlainObject(settings.map?.fog) ? settings.map.fog : {}),
+                mode: settings.map?.fog?.mode === 'hard' ? 'hard' : 'rumors',
+                revealOnTravel: asBoolean(settings.map?.fog?.revealOnTravel, defaults.map.fog.revealOnTravel),
+                showRumoredLabels: asBoolean(
+                    settings.map?.fog?.showRumoredLabels,
+                    defaults.map.fog.showRumoredLabels,
+                ),
+                gateTravel: asBoolean(settings.map?.fog?.gateTravel, defaults.map.fog.gateTravel),
+                revealNeighbors: asBoolean(
+                    settings.map?.fog?.revealNeighbors,
+                    defaults.map.fog.revealNeighbors,
+                ),
+            },
             showOverlay: asBoolean(settings.map?.showOverlay, defaults.map.showOverlay),
             showThreats: asBoolean(settings.map?.showThreats, defaults.map.showThreats),
             showFactions: asBoolean(settings.map?.showFactions, defaults.map.showFactions),

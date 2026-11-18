@@ -22,6 +22,7 @@ import {
     buildMapSubmenu,
     buildMapViewModel,
     buildWorldOverlay,
+    applyMapFog,
     clearGeneratedMapCaches,
     exportMapOverrides,
     getChatMapOverrides,
@@ -38,6 +39,7 @@ import {
 import { loadLocations } from '../data/locations.js';
 import { buildNewspaperView } from '../data/newsroom.js';
 import { loadWorldStateFromMetadata } from '../state/store.js';
+import { getExploration } from '../state/exploration.js';
 import {
     applyEditorPatch,
     buildDirectorCard,
@@ -297,9 +299,9 @@ export async function loadMapSources({ fetchImpl = globalThis.fetch } = {}) {
 }
 
 /** Build the view model from sources plus live state. */
-export function buildPanelViewModel(sources, state = null) {
+export function buildPanelViewModel(sources, state = null, settings = {}) {
     const { generated, districts, overrides, locations } = sources ?? {};
-    return buildMapViewModel({
+    const viewModel = buildMapViewModel({
         regions: generated?.regions ?? null,
         bridges: generated?.bridges ?? null,
         keyLocations: generated?.keyLocations ?? null,
@@ -307,6 +309,14 @@ export function buildPanelViewModel(sources, state = null) {
         districts,
         locations,
         state,
+    });
+    if (settings?.showFogOfWar !== true) {
+        return viewModel;
+    }
+    return applyMapFog(viewModel, getExploration(state), {
+        mode: settings?.fog?.mode ?? 'rumors',
+        revealNeighbors: settings?.fog?.revealNeighbors !== false,
+        showRumoredLabels: settings?.fog?.showRumoredLabels !== false,
     });
 }
 
@@ -808,7 +818,7 @@ function rebuildAfterMapChange(state, worldState) {
         ...(state.sources ?? {}),
         overrides: state.globalOverrides ?? state.sources?.overrides ?? null,
     };
-    state.viewModel = buildPanelViewModel(state.sources, worldState);
+    state.viewModel = buildPanelViewModel(state.sources, worldState, state.settings ?? {});
     state.overlay = buildWorldOverlay({
         state: worldState,
         season: state.season ?? null,
@@ -1335,7 +1345,7 @@ async function loadAndMount(state) {
         if (state.globalOverrides && state.globalOverrides !== sources.overrides) {
             state.sources = { ...sources, overrides: state.globalOverrides };
         }
-        state.viewModel = buildPanelViewModel(state.sources, readState(state));
+        state.viewModel = buildPanelViewModel(state.sources, readState(state), state.settings ?? {});
         state.overlay = buildWorldOverlay({
             state: readState(state),
             season: state.season ?? null,
@@ -1462,7 +1472,7 @@ export function refreshMapPanel() {
         }
     }
     const worldState = readState(state);
-    state.viewModel = buildPanelViewModel(state.sources, worldState);
+    state.viewModel = buildPanelViewModel(state.sources, worldState, state.settings ?? {});
     state.overlay = buildWorldOverlay({
         state: worldState,
         season: state.season ?? null,

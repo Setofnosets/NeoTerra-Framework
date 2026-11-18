@@ -618,6 +618,7 @@ function buildMapRuntime(context, panelRef) {
         season,
         scene,
         initiative,
+        getSettings: () => getSettings(context),
         // Read through the live runtime so a panel remount (same chat) still
         // supplies the current overrides.
         loadSources: () => mapRuntime?.panelRef?.getSources?.() ?? panelRef?.getSources?.() ?? null,

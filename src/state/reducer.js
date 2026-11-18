@@ -8,6 +8,7 @@
 
 import { nextBeatStatus } from '../data/beats.js';
 import { editionKey, validateEdition, NEWSROOM_MAX_EDITIONS } from '../data/newsroom.js';
+import { EXPLORATION_STATES } from './exploration.js';
 import { effectiveStoryTurn } from '../core/world-clock.js';
 import { FACTION_STATUSES } from '../data/factions.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
@@ -82,6 +83,47 @@ function requireStringList(value, label) {
         fail(`${label} must be an array of strings`);
     }
     return value.slice();
+}
+
+function ensureExploration(state) {
+    if (!isObject(state.flags)) {
+        state.flags = {};
+    }
+    if (!isObject(state.flags.map)) {
+        state.flags.map = {};
+    }
+    if (!isObject(state.flags.map.exploration)) {
+        state.flags.map.exploration = { regions: {}, keyLocations: {}, updatedAt: 0 };
+    }
+    const exploration = state.flags.map.exploration;
+    if (!isObject(exploration.regions)) {
+        exploration.regions = {};
+    }
+    if (!isObject(exploration.keyLocations)) {
+        exploration.keyLocations = {};
+    }
+    return exploration;
+}
+
+function markExploration(exploration, target, id, source, turn) {
+    const previous = isObject(target[id]) ? target[id] : null;
+    const stateValue = previous && EXPLORATION_STATES.includes(previous.state)
+        ? previous.state
+        : 'unknown';
+    // Discovery is monotonic: never downgrade a discovered feature.
+    if (stateValue === 'discovered') {
+        return;
+    }
+    target[id] = {
+        state: 'discovered',
+        turn,
+        source: typeof source === 'string' ? source : 'editor',
+    };
+    exploration.updatedAt = turn;
+}
+
+function discoverySource(source) {
+    return typeof source === 'string' && source.length > 0 ? source : 'editor';
 }
 
 function syncPresence(state) {
@@ -723,6 +765,50 @@ const HANDLERS = Object.freeze({
         applyStatus(character, restoredStatus);
         character.lastUpdatedTurn = state.meta.turn;
         syncPlayerMirror(state);
+    },
+
+    DISCOVER_MAP_FEATURE(state, event) {
+        if (event.kind !== 'region' && event.kind !== 'keyLocation') {
+            fail('DISCOVER_MAP_FEATURE kind must be "region" or "keyLocation"');
+        }
+        if (typeof event.id !== 'string' || event.id.length === 0) {
+            fail('DISCOVER_MAP_FEATURE requires an id');
+        }
+        const exploration = ensureExploration(state);
+        const turn = Number.isInteger(state.meta?.turn) ? state.meta.turn : 0;
+        const target = event.kind === 'region' ? exploration.regions : exploration.keyLocations;
+        markExploration(exploration, target, event.id, discoverySource(event.source), turn);
+    },
+
+    REVEAL_REGION(state, event) {
+        const regionId = typeof event.regionId === 'string' && event.regionId.length > 0
+            ? event.regionId
+            : event.id;
+        if (typeof regionId !== 'string' || regionId.length === 0) {
+            fail('REVEAL_REGION requires a regionId');
+        }
+        const exploration = ensureExploration(state);
+        const turn = Number.isInteger(state.meta?.turn) ? state.meta.turn : 0;
+        markExploration(exploration, exploration.regions, regionId, discoverySource(event.source), turn);
+    },
+
+    RESET_EXPLORATION(state, event) {
+        const turn = Number.isInteger(state.meta?.turn) ? state.meta.turn : 0;
+        const exploration = ensureExploration(state);
+        exploration.regions = {};
+        exploration.keyLocations = {};
+        exploration.updatedAt = turn;
+        for (const regionId of Array.isArray(event.regionIds) ? event.regionIds : []) {
+            if (typeof regionId === 'string' && regionId.length > 0) {
+                markExploration(
+                    exploration,
+                    exploration.regions,
+                    regionId,
+                    discoverySource(event.source ?? 'editor'),
+                    turn,
+                );
+            }
+        }
     },
 
     PUBLISH_EDITION(state, event) {

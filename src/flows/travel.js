@@ -19,6 +19,11 @@ import {
     findTravelPath,
 } from '../data/map.js';
 import { buildClockTick, isClockHeld } from '../core/world-clock.js';
+import {
+    collectTravelRegions,
+    destinationVisibility,
+    getExploration,
+} from '../state/exploration.js';
 import { applyEventBatch } from './initiative.js';
 import { buildLocationIntro } from './scene.js';
 
@@ -264,9 +269,57 @@ export function createTravelFlow({
         // must gate the next one.
         const graph = await getGraph();
         const abilities = ability ? [ability] : getPlayerTravelAbilities(state);
+        let settingsNow = {};
+        try {
+            settingsNow = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
+        } catch (error) {
+            logWarning(log, 'Could not read settings for the travel fog gate', error);
+        }
+        const exploration = getExploration(state);
+        const fogOn = settingsNow?.map?.showFogOfWar === true;
+        if (fogOn && exploration && to) {
+            const destination = graph.getNode(to);
+            const visited = Object.entries(state.locations ?? {})
+                .filter(([, location]) => location?.visited === true)
+                .map(([id]) => id);
+            const decision = destinationVisibility({
+                exploration,
+                regionId: destination?.regionId ?? null,
+                virtual: destination?.virtual === true,
+                connections: destination?.connections ?? [],
+                visitedLocationIds: visited,
+                gateTravel: settingsNow?.map?.fog?.gateTravel !== false,
+                mode: settingsNow?.map?.fog?.mode ?? 'rumors',
+                revealNeighbors: settingsNow?.map?.fog?.revealNeighbors !== false,
+                bridges: graph.bridges,
+            });
+            if (!decision.allowed) {
+                return {
+                    ok: false,
+                    reason: 'uncharted',
+                    path: [],
+                    bridges: [],
+                    turns: 0,
+                    blindTrip: false,
+                    exploration,
+                };
+            }
+        }
         const plan = findTravelPath(graph, from, to, { abilities });
         return {
             ...plan,
+            blindTrip: plan.ok === true && fogOn && Boolean(exploration)
+                ? (graph.getNode(to)?.regionId
+                    ? destinationVisibility({
+                        exploration,
+                        regionId: graph.getNode(to).regionId,
+                        gateTravel: settingsNow?.map?.fog?.gateTravel !== false,
+                        mode: settingsNow?.map?.fog?.mode ?? 'rumors',
+                        revealNeighbors: settingsNow?.map?.fog?.revealNeighbors !== false,
+                        bridges: graph.bridges,
+                    }).blind
+                    : false)
+                : false,
             from,
             to,
             graph,
@@ -279,18 +332,36 @@ export function createTravelFlow({
         const state = readState();
         const canonPlayerId = state.player?.identity === 'canon' ? state.player.characterId : null;
         const events = [];
+        let settingsNow = {};
+        try {
+            settingsNow = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
+        } catch (error) {
+            logWarning(log, 'Could not read settings for the travel clock', error);
+        }
 
         // Leaving a scene releases any hold before time advances; a zero-turn
         // trip still releases it.
         events.push({ type: 'SET_CLOCK_HOLD', active: false, reason: 'travel' });
         if (plan.turns > 0) {
-            let settingsNow = {};
-            try {
-                settingsNow = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
-            } catch (error) {
-                logWarning(log, 'Could not read settings for the travel clock', error);
-            }
             events.push(buildClockTick({ state, settings: settingsNow, turns: plan.turns }));
+        }
+        // Fog discovery travels in the same validated batch as the move.
+        const exploration = getExploration(state);
+        if (settingsNow?.map?.showFogOfWar === true
+            && exploration
+            && settingsNow?.map?.fog?.revealOnTravel !== false) {
+            for (const regionId of collectTravelRegions({
+                graph: plan.graph,
+                path: plan.path,
+                bridges: plan.bridges,
+            })) {
+                events.push({
+                    type: 'DISCOVER_MAP_FEATURE',
+                    kind: 'region',
+                    id: regionId,
+                    source: 'travel',
+                });
+            }
         }
         events.push({
             type: 'SET_LOCATION',
@@ -513,6 +584,9 @@ export function describeTravelFailure(plan = {}) {
     }
     if (plan.reason === 'unknown-origin') {
         return 'The current location is not part of the travel network.';
+    }
+    if (plan.reason === 'uncharted') {
+        return 'That district is uncharted. Travel to a neighbouring district first, or reveal it from the map editor.';
     }
     if (plan.reason === 'blocked') {
         const names = (plan.blockedBridges ?? []).map((bridge) => bridge.name ?? bridge.label ?? bridge.id);

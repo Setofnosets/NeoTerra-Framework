@@ -434,6 +434,33 @@
             <h4 class="neoterra-section-title">Map overlay and editor</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.showFogOfWar">
+                    <span>Fog of war (per-chat exploration; off by default)</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Fog mode</span>
+                    <select data-neoterra-path="map.fog.mode">
+                        <option value="rumors">rumors</option>
+                        <option value="hard">hard</option>
+                    </select>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.fog.revealOnTravel">
+                    <span>Discover the regions crossed by travel</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.fog.showRumoredLabels">
+                    <span>Show names for rumoured districts</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.fog.gateTravel">
+                    <span>Block travel to uncharted districts</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="map.fog.revealNeighbors">
+                    <span>Mark bridge-adjacent districts as rumoured</span>
+                </label>
+                <label class="neoterra-check">
                     <input type="checkbox" data-neoterra-path="map.showOverlay">
                     <span>Show the world overlay on the map tab</span>
                 </label>
