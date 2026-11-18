@@ -588,6 +588,18 @@ export async function postTravelOutcome(context, runtime, result, {
     return posted;
 }
 
+/**
+ * Should a successful travel reveal the chat? Only a posted (or deduped) frame
+ * counts; a rejected travel, an `alreadyThere` no-op, or a partial failed post
+ * keeps the map open. Exported for tests.
+ */
+export function shouldCloseAfterTravel(posted, settings) {
+    if (!posted || (posted.posted !== true && posted.deduped !== true)) {
+        return false;
+    }
+    return settings?.map?.closeOnTravel !== false;
+}
+
 function buildMapTravelHandler(context, runtime, panelRef) {
     const travel = runtime?.travel ?? null;
     if (!travel) {
@@ -614,9 +626,20 @@ function buildMapTravelHandler(context, runtime, panelRef) {
             bus.emit(EVENTS.MAP_UPDATED, { travel: result });
             return false;
         }
-        const announce = () => {
+        // `onPosted` fires before the choices round-trip, so the handoff back to
+        // the chat is immediate instead of waiting on an agent-backed request.
+        const announce = (posted = null) => {
             panelRef?.refresh?.();
             bus.emit(EVENTS.MAP_UPDATED, { travel: result, intro: result.intro ?? null });
+            let shouldClose = false;
+            try {
+                shouldClose = shouldCloseAfterTravel(posted, getSettings(refreshContext() ?? context));
+            } catch (error) {
+                logger.debug('Could not read map.closeOnTravel', error);
+            }
+            if (shouldClose) {
+                closeShell();
+            }
         };
         if (result.alreadyThere === true) {
             announce();
@@ -630,7 +653,7 @@ function buildMapTravelHandler(context, runtime, panelRef) {
         }
         // A partial post (chat array only, no renderer) still needs its choices.
         if (!posted.posted && !posted.deduped) {
-            announce();
+            announce(posted);
         }
         return true;
     };
@@ -673,6 +696,9 @@ async function mountMapPanelComponent(context) {
             settings: getSettings(context).map ?? {},
             store: runtime?.store ?? null,
             onTravel,
+            // The toolbar X used to only send CLOSE to the panel's own state
+            // machine, so nothing visible happened. The host closes the shell.
+            onClose: () => closeShell(),
         });
         ref.panel = panel;
         return panel;

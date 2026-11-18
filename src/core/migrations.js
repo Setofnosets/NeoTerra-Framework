@@ -233,6 +233,7 @@ export function normalizeSettings(settings) {
             showRumors: asBoolean(settings.map?.showRumors, defaults.map.showRumors),
             showHeadlines: asBoolean(settings.map?.showHeadlines, defaults.map.showHeadlines),
             showFactionTint: asBoolean(settings.map?.showFactionTint, defaults.map.showFactionTint),
+            closeOnTravel: asBoolean(settings.map?.closeOnTravel, defaults.map.closeOnTravel),
             maxHeadlines: asNumber(settings.map?.maxHeadlines, defaults.map.maxHeadlines, {
                 min: 1,
                 max: 20,

@@ -321,6 +321,7 @@ export function buildPanelViewModel(sources, state = null) {
  *   loadSources?: Function,
  *   leaflet?: object|null,
  *   onTravel?: Function|null,
+ *   onClose?: Function|null,
  *   onMapStateChange?: Function|null,
  * }} options
  */
@@ -328,7 +329,7 @@ export async function mountMapPanel(options = {}) {
     if (!hasDom()) {
         return null;
     }
-    const { root, ctx = null, settings = {}, onTravel = null } = options;
+    const { root, ctx = null, settings = {}, onTravel = null, onClose = null } = options;
     if (!root) {
         throw new TypeError('mountMapPanel requires a root element');
     }
@@ -354,6 +355,10 @@ export async function mountMapPanel(options = {}) {
         loadSources: options.loadSources ?? loadMapSources,
         leaflet: options.leaflet ?? null,
         onTravel,
+        // The X closes the map *window*; the host (the shell) decides what that
+        // means outside the panel. Without it the button was dead: the state
+        // machine reached `closed` but nothing was hidden.
+        onClose: typeof onClose === 'function' ? onClose : null,
         onMapStateChange: options.onMapStateChange ?? null,
         season: options.season ?? null,
         flow: null,
@@ -439,6 +444,9 @@ export async function mountMapPanel(options = {}) {
         }
         if (event.target.closest?.('[data-neoterra-map-close]')) {
             state.flow.send('CLOSE');
+            if (!runCloseHandler(state.onClose)) {
+                logger.debug('The map close callback failed');
+            }
             return;
         }
         if (event.target.closest?.('[data-neoterra-map-travel]')) {
@@ -534,6 +542,23 @@ export async function mountMapPanel(options = {}) {
         getOverlay: () => state.overlay,
         select: (selection) => selectFeature(state, selection),
     };
+}
+
+/**
+ * Invoke the host's map-close callback without letting a host error break the
+ * panel. Exported so the guard is testable without a DOM.
+ */
+export function runCloseHandler(handler) {
+    if (typeof handler !== 'function') {
+        return false;
+    }
+    try {
+        handler();
+        return true;
+    } catch (error) {
+        logger.debug('The map close callback threw', error);
+        return false;
+    }
 }
 
 function renderShellMarkup(state) {

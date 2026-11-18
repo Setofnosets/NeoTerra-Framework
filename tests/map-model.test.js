@@ -54,9 +54,11 @@ import {
     loadMapSources,
     loadPanelGeometry,
     renderSubmenuMarkup,
+    runCloseHandler,
     saveLayerVisibility,
     savePanelGeometry,
 } from '../src/ui/map-panel.js';
+import { shouldCloseAfterTravel } from '../src/ui/shell.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -740,6 +742,33 @@ test('drag and resize clamp to the map host, never the window', () => {
     assert.ok(start > -1 && end > start);
     assert.equal((body.match(/clampToHost\(state\)/g) ?? []).length, 2, 'both handlers clamp via clampToHost');
     assert.doesNotMatch(body, /window\.innerWidth|window\.innerHeight/);
+});
+
+test('the map close callback is guarded and invoked once', () => {
+    let calls = 0;
+    assert.equal(runCloseHandler(() => { calls += 1; }), true);
+    assert.equal(calls, 1);
+    assert.equal(runCloseHandler(null), false);
+    assert.equal(runCloseHandler(() => { throw new Error('host failed'); }), false);
+    // The panel wires the option and forwards the click to the guard.
+    const source = readFileSync(join(ROOT, 'src/ui/map-panel.js'), 'utf8');
+    assert.match(source, /onClose: typeof onClose === 'function' \? onClose : null/);
+    assert.match(source, /runCloseHandler\(state\.onClose\)/);
+});
+
+test('closeOnTravel closes only after a posted or deduped frame', () => {
+    const on = { map: { closeOnTravel: true } };
+    const off = { map: { closeOnTravel: false } };
+    assert.equal(shouldCloseAfterTravel({ posted: true, index: 3 }, on), true);
+    assert.equal(shouldCloseAfterTravel({ posted: false, deduped: true, index: 3 }, on), true);
+    assert.equal(shouldCloseAfterTravel({ posted: true }, off), false);
+    assert.equal(shouldCloseAfterTravel({ posted: false, deduped: false }, on), false);
+    assert.equal(shouldCloseAfterTravel({ posted: false, reason: 'no-chat' }, on), false);
+    // Rejected travel and `alreadyThere` call announce() with no result.
+    assert.equal(shouldCloseAfterTravel(null, on), false);
+    assert.equal(shouldCloseAfterTravel(undefined, on), false);
+    // Missing settings means the default (`true`).
+    assert.equal(shouldCloseAfterTravel({ posted: true }, undefined), true);
 });
 
 test('layer visibility persists per user and sanitizes bad input', () => {    const stored = new Map();

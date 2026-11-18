@@ -219,6 +219,9 @@ export const DEFAULT_SETTINGS = freezeDeep({
 
     map: {
         showFogOfWar: false,
+        // A successful travel posts the arrival frame and then closes the shell
+        // so the chat is visible. A rejected travel keeps the map open.
+        closeOnTravel: true,
         // World overlay ("where am I in the story") on the map tab.
         showOverlay: true,
         showThreats: true,

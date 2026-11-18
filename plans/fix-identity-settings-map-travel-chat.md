@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: fix-identity-settings-map-travel-chat
-- Status: in progress — steps 1–9 complete
+- Status: in progress — steps 1–10 complete; steps 10–11 in progress (docs pending)
 - Date: 2026-11-17
 
 ## Progress
@@ -15,7 +15,7 @@
 - [x] 7. Hand a location change back to the chat (arrival + encounter) — done (d9b6322)
 - [x] 8. Run the per-turn trackers, advance the clock, refresh map state, then offer CYOA — done (1839eeb)
 - [x] 9. Give encounters explicit Engage/Talk/Avoid actions — done (41e3638)
-- [ ] 10. Close the map on a successful location change
+- [x] 10. Close the map on a successful location change — done (82d90ed)
 - [ ] 11. Document the new flow and update the changelog
 
 ## Summary

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { SCHEMA_VERSION, SETTINGS_KEY } from '../src/core/constants.js';
 import { DEFAULT_SETTINGS, cloneDefaults } from '../src/core/defaults.js';
@@ -70,12 +71,53 @@ test('defaults match the plan and are frozen', () => {
     assert.equal(DEFAULT_SETTINGS.agents.lore.everyNTurns, 10);
     assert.ok(DEFAULT_SETTINGS.tokenBudget.total > 0);
 
+    // A successful travel closes the map shell and reveals the chat.
+    assert.equal(DEFAULT_SETTINGS.map.closeOnTravel, true);
+
     assert.ok(Object.isFrozen(DEFAULT_SETTINGS));
     assert.ok(Object.isFrozen(DEFAULT_SETTINGS.cyoa));
 
     const copy = cloneDefaults();
     copy.cyoa.count = 2;
     assert.equal(DEFAULT_SETTINGS.cyoa.count, 4, 'cloneDefaults must not expose the shared default');
+});
+
+test('map.closeOnTravel round-trips through save and read', () => {
+    const { ctx, calls } = mockContext();
+    assert.equal(getSettings(ctx).map.closeOnTravel, true, 'defaults to on');
+
+    saveSettings(ctx, {
+        ...getSettings(ctx),
+        map: { ...getSettings(ctx).map, closeOnTravel: false },
+    });
+    assert.equal(getSettings(ctx).map.closeOnTravel, false);
+    assert.equal(calls.saves >= 2, true);
+
+    // Legacy settings without the key are filled from the default.
+    const legacy = { schemaVersion: SCHEMA_VERSION, map: { showFogOfWar: true } };
+    const migrated = migrateSettings(legacy);
+    assert.equal(migrated.map.closeOnTravel, true);
+    assert.equal(migrated.map.showFogOfWar, true);
+
+    // A persisted non-boolean must not reach the shell: it reads with
+    // `!== false`, so a string "false" would keep the auto-close on.
+    const malformed = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        map: { closeOnTravel: 'false', showFogOfWar: true },
+    });
+    assert.equal(malformed.map.closeOnTravel, true);
+    assert.equal(malformed.map.showFogOfWar, true);
+
+    const explicit = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        map: { closeOnTravel: false },
+    });
+    assert.equal(explicit.map.closeOnTravel, false);
+});
+
+test('the Settings map section exposes map.closeOnTravel', () => {
+    const html = readFileSync(new URL('../src/ui/settings.html', import.meta.url), 'utf8');
+    assert.match(html, /data-neoterra-path="map\.closeOnTravel"/);
 });
 
 test('fresh install writes defaults exactly once', () => {
