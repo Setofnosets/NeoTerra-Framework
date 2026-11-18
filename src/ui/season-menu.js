@@ -111,11 +111,20 @@ export function renderIdentityStep({ entry, choices, error }) {
         const detail = option.identity === 'canon'
             ? `${option.side}${option.nonCanon ? ' — non-canon character' : ''}`
             : 'Write your own persona';
+        const initials = option.identity === 'canon'
+            ? String(option.label ?? '')
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase() ?? '')
+                .join('') || '?'
+            : 'YOU';
         return `
         <label class="neoterra-identity-option">
             <input type="radio" name="neoterra-identity" value="${escapeHtml(option.identity)}"
                 data-neoterra-identity data-character-id="${escapeHtml(option.characterId ?? '')}"
                 ${checked}>
+            <span class="neoterra-identity-portrait" aria-hidden="true">${escapeHtml(initials)}</span>
             <span class="neoterra-identity-label">${escapeHtml(option.label)}</span>
             <span class="neoterra-identity-detail">${escapeHtml(detail)}</span>
         </label>`;
@@ -192,9 +201,11 @@ function hostLabelFor(ctx) {
     return typeof group?.name === 'string' && group.name.length > 0 ? group.name : null;
 }
 
-function renderSetupStrip(setup) {    if (!setup) {
+export function renderSetupStrip(setup) {
+    if (!setup) {
         return '';
     }
+    const directorInstalled = (setup.directorInstalled ?? setup.installed) === true;
     const modeLabels = {
         director: 'Director / narrator',
         group: 'Group chat',
@@ -206,15 +217,16 @@ function renderSetupStrip(setup) {    if (!setup) {
         || 'No chat open — open a character or group chat first';
     const narratorLabel = setup.mode === 'solo'
         ? `Canon card${setup.hostName ? ` — ${setup.hostName}` : ''}`
-        : setup.directorInstalled
+        : directorInstalled
             ? 'Director card — installed'
             : 'Director card — not installed';
-    const download = setup.directorInstalled
-        ? ''
-        : `<button type="button" class="menu_button" data-neoterra-download-director>Download Director card</button>`;
-    const instructions = setup.directorInstalled
-        ? ''
-        : `<p class="neoterra-setup-hint">Import it in SillyTavern: <strong>Characters → Import character → select the downloaded file</strong>. Then select the card, start a new chat, and enter a season. Solo mode uses the canon card instead.</p>`;
+    const needsDirectorCard = setup.mode !== 'solo' && !directorInstalled;
+    const download = needsDirectorCard
+        ? `<button type="button" class="menu_button" data-neoterra-download-director>Download Director card</button>`
+        : '';
+    const instructions = needsDirectorCard
+        ? `<p class="neoterra-setup-hint">Import it in SillyTavern: <strong>Characters → Import character → select the downloaded file</strong>. Then select the card, start a new chat, and enter a season. Solo mode uses the canon card instead.</p>`
+        : '';
     const notice = setup.notice
         ? `<p class="neoterra-setup-notice" role="status">${escapeHtml(setup.notice)}</p>`
         : '';
@@ -325,7 +337,9 @@ export async function mountSeasonMenu(options = {}) {
         characterFilter: '',
         error: null,
         busy: false,
-        setupNotice: null,
+        setupNotice: typeof options.notice === 'string' && options.notice.length > 0
+            ? options.notice
+            : null,
         directorDownloading: false,
         ctx,
         getContext: resolveContext,
@@ -333,6 +347,9 @@ export async function mountSeasonMenu(options = {}) {
         root,
         onStart: typeof options.onStart === 'function' ? options.onStart : null,
         onEntered: typeof options.onEntered === 'function' ? options.onEntered : null,
+        onKeepCurrentWorld: typeof options.onKeepCurrentWorld === 'function'
+            ? options.onKeepCurrentWorld
+            : null,
     };
     mounted = state;
 
@@ -356,13 +373,18 @@ export async function mountSeasonMenu(options = {}) {
             characterFilter: state.characterFilter,
             loading: state.busy,
             setup: state.view === VIEW.LIST
-                ? {
-                    mode: liveCtx?.extensionSettings?.neoterra?.castMode ?? 'director',
-                    hostName: hostLabelFor(liveCtx),
-                    chatId: resolveActiveChatId(liveCtx),
-                    ...directorCardStatus(liveCtx),
-                    notice: state.setupNotice,
-                }
+                ? (() => {
+                    const status = directorCardStatus(liveCtx);
+                    return {
+                        mode: liveCtx?.extensionSettings?.neoterra?.castMode ?? 'director',
+                        hostName: hostLabelFor(liveCtx),
+                        chatId: resolveActiveChatId(liveCtx),
+                        directorInstalled: status.installed,
+                        directorName: status.name,
+                        directorAvatar: status.avatar,
+                        notice: state.setupNotice,
+                    };
+                })()
                 : null,
         });
     };
@@ -516,6 +538,13 @@ export async function mountSeasonMenu(options = {}) {
             return;
         }
         if (target.closest?.('[data-neoterra-confirm-cancel]')) {
+            // With a live world, leaving the replace prompt must return to
+            // Session Home. The fallback keeps the old in-menu behaviour for
+            // callers that mount the menu without a host callback.
+            if (state.onKeepCurrentWorld) {
+                state.onKeepCurrentWorld();
+                return;
+            }
             state.view = VIEW.IDENTITY;
             state.error = null;
             paint();

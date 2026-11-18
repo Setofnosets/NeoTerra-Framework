@@ -27,6 +27,7 @@ import {
     readIdentityRadio,
     renderIdentityStep,
     renderSeasonMenuMarkup,
+    renderSetupStrip,
 } from '../src/ui/season-menu.js';
 import { clearProfilesCache } from '../src/data/profiles.js';
 import { buildOpeningScene, getPovLabel } from '../src/flows/scene.js';
@@ -742,4 +743,38 @@ test('loadFormData validates the authored form documents', async () => {
     );
     assert.ok(error instanceof SeasonStartError);
     assert.equal(error.code, 'MISSING_DATA');
+});
+
+test('renderSetupStrip reports an installed Director card and hides the download CTA', () => {
+    const installed = renderSetupStrip({
+        mode: 'director',
+        hostName: 'Neo Terra — Director',
+        chatId: 'chat-1',
+        directorInstalled: true,
+    });
+    assert.match(installed, /Director card — installed/);
+    assert.doesNotMatch(installed, /data-neoterra-download-director/);
+    assert.doesNotMatch(installed, /not installed/);
+    assert.doesNotMatch(installed, /neoterra-setup-hint/);
+
+    const missing = renderSetupStrip({
+        mode: 'director',
+        hostName: null,
+        chatId: 'chat-1',
+        directorInstalled: false,
+    });
+    assert.match(missing, /Director card — not installed/);
+    assert.match(missing, /data-neoterra-download-director/);
+    assert.match(missing, /neoterra-setup-hint/);
+
+    // The status helper returns `{ installed }`; the strip must accept that
+    // shape too so callers cannot reintroduce the missing-card regression.
+    const normalized = renderSetupStrip({ mode: 'director', installed: true });
+    assert.match(normalized, /Director card — installed/);
+    assert.doesNotMatch(normalized, /data-neoterra-download-director/);
+
+    const solo = renderSetupStrip({ mode: 'solo', hostName: 'Vaiva', directorInstalled: false });
+    assert.match(solo, /Canon card — Vaiva/);
+    assert.doesNotMatch(solo, /data-neoterra-download-director/);
+    assert.doesNotMatch(solo, /neoterra-setup-hint/);
 });
