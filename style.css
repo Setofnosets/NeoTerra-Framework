@@ -1753,6 +1753,13 @@
     display: none;
 }
 
+/* SillyTavern's `.menu_button` sets its own display, so the hidden attribute
+   alone would leave inactive actions visible. */
+.neoterra-encounter-bar button[hidden],
+.neoterra-encounter-bar p[hidden] {
+    display: none !important;
+}
+
 /* ---------- Agent config ---------- */
 
 .neoterra-agent-config {

@@ -1652,8 +1652,11 @@ function subscribeChatChanges(context) {
         void refreshInteractionUi(refreshContext());
     };
     try {
-        on('chat_changed', handler);
-        chatChangeSubscription = { eventSource, handler };
+        // ST 1.19 ships camelCase event names (`chat_id_changed`); older builds
+        // used `chat_changed`. Read the live map so a chat switch always lands.
+        const chatChangedEvent = context?.eventTypes?.CHAT_CHANGED ?? 'chat_id_changed';
+        on(chatChangedEvent, handler);
+        chatChangeSubscription = { eventSource, handler, event: chatChangedEvent };
     } catch (error) {
         logger.debug('chat_changed subscription unavailable', error);
     }
@@ -1667,7 +1670,7 @@ function unsubscribeChatChanges() {
     }
     try {
         const off = subscription.eventSource?.removeListener ?? subscription.eventSource?.off;
-        off?.call?.(subscription.eventSource, 'chat_changed', subscription.handler);
+        off?.call?.(subscription.eventSource, subscription.event ?? 'chat_id_changed', subscription.handler);
     } catch (error) {
         logger.debug('Could not remove the chat_changed listener', error);
     }
