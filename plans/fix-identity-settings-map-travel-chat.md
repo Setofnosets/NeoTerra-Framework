@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: fix-identity-settings-map-travel-chat
-- Status: in progress — steps 1–10 complete; steps 10–11 in progress (docs pending)
+- Status: complete — steps 1–11 done
 - Date: 2026-11-17
 
 ## Progress
@@ -16,7 +16,7 @@
 - [x] 8. Run the per-turn trackers, advance the clock, refresh map state, then offer CYOA — done (1839eeb)
 - [x] 9. Give encounters explicit Engage/Talk/Avoid actions — done (41e3638)
 - [x] 10. Close the map on a successful location change — done (82d90ed)
-- [ ] 11. Document the new flow and update the changelog
+- [x] 11. Document the new flow and update the changelog — done (fc85437)
 
 ## Summary
 - **Goal:** make the reported flows work end to end: canon identity selection, the Open settings button, a map window that fits vertically, an explicit season kickoff, and location changes that produce visible, persistent chat output (including encounters and CYOA options) instead of only mutating state and the map sidebar.
