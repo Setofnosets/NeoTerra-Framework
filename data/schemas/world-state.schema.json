@@ -28,7 +28,7 @@
     "log"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "chatId": { "type": "string", "minLength": 1 },
     "seasonId": { "type": "string", "minLength": 1 },
     "mode": { "enum": ["director", "group", "solo"] },
@@ -38,6 +38,11 @@
       "required": ["turn", "inGameDate", "timeOfDay", "sceneId", "inCombat", "startedAt"],
       "properties": {
         "turn": { "type": "integer", "minimum": 0 },
+        "storyTurn": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Fiction turn. Optional for older documents; falls back to turn."
+        },
         "inGameDate": { "type": ["string", "null"] },
         "timeOfDay": { "type": "string" },
         "sceneId": { "type": "string" },
@@ -114,7 +119,36 @@
     "flags": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Small free-form flags used by beats and endings."
+      "description": "Small free-form flags used by beats and endings.",
+      "properties": {
+        "clock": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Fiction-time brake. hold.active freezes the date and slot; autoHold mirrors settings; lastEvaluatedTurn records the last turn the ledger looked at.",
+          "properties": {
+            "hold": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "active": { "type": "boolean" },
+                "reason": { "type": ["string", "null"] },
+                "sinceTurn": { "type": "integer", "minimum": 0 },
+                "sinceDate": { "type": ["string", "null"] }
+              }
+            },
+            "autoHold": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "combat": { "type": "boolean" },
+                "encounter": { "type": "boolean" },
+                "beat": { "type": "boolean" }
+              }
+            },
+            "lastEvaluatedTurn": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
     },
     "log": {
       "type": "array",

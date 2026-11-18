@@ -580,3 +580,138 @@ test('empty state supports movement without characters', () => {
     assert.equal(state.arc, 'season');
     assert.equal(state.ending.status, 'none');
 });
+
+test('TICK_TIME advances storyTurn by default and honours an explicit value', () => {
+    const state = seed('s1');
+    const defaulted = applyWorldEvent(state, { type: 'TICK_TIME', turns: 2 }, CONTEXT);
+    assert.equal(defaulted.meta.turn, 2);
+    assert.equal(defaulted.meta.storyTurn, 2);
+
+    const held = applyWorldEvent(
+        defaulted,
+        { type: 'TICK_TIME', turns: 3, storyTurns: 0 },
+        CONTEXT,
+    );
+    assert.equal(held.meta.turn, 5);
+    assert.equal(held.meta.storyTurn, 2);
+
+    const explicit = applyWorldEvent(
+        held,
+        { type: 'TICK_TIME', turns: 4, storyTurns: 1 },
+        CONTEXT,
+    );
+    assert.equal(explicit.meta.turn, 9);
+    assert.equal(explicit.meta.storyTurn, 3);
+
+    assert.throws(
+        () => applyWorldEvent(state, { type: 'TICK_TIME', turns: 1, storyTurns: -1 }, CONTEXT),
+        /TICK_TIME storyTurns must be a non-negative integer/,
+    );
+    assert.throws(
+        () => applyWorldEvent(state, { type: 'TICK_TIME', turns: 1, storyTurns: 1.5 }, CONTEXT),
+        /TICK_TIME storyTurns must be a non-negative integer/,
+    );
+
+    // A V1-shaped document without `storyTurn` starts from `meta.turn`.
+    const legacy = cloneWorldState(state);
+    delete legacy.meta.storyTurn;
+    const migratedOnTick = applyWorldEvent(legacy, { type: 'TICK_TIME', turns: 2 }, CONTEXT);
+    assert.equal(migratedOnTick.meta.storyTurn, 2);
+});
+
+test('SET_CLOCK_HOLD records entry and exit and is idempotent', () => {
+    const state = seed('s1');
+    const entered = applyWorldEvent(
+        state,
+        { type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' },
+        CONTEXT,
+    );
+    assert.deepEqual(entered.flags.clock.hold, {
+        active: true,
+        reason: 'manual',
+        sinceTurn: 0,
+        sinceDate: state.meta.inGameDate,
+    });
+
+    // Applying the same hold state returns the exact same document.
+    const repeated = applyWorldEvent(
+        entered,
+        { type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' },
+        CONTEXT,
+    );
+    assert.equal(repeated, entered);
+
+    const released = applyWorldEvent(
+        entered,
+        { type: 'SET_CLOCK_HOLD', active: false, reason: 'released-by-hand' },
+        CONTEXT,
+    );
+    assert.equal(released.flags.clock.hold.active, false);
+    assert.equal(released.flags.clock.hold.reason, 'released-by-hand');
+    assert.equal(released.flags.clock.hold.sinceTurn, 0);
+    assert.equal(released.flags.clock.hold.sinceDate, state.meta.inGameDate);
+
+    // Releasing when nothing is held is a no-op document.
+    assert.equal(
+        applyWorldEvent(state, { type: 'SET_CLOCK_HOLD', active: false }, CONTEXT),
+        state,
+    );
+    assert.throws(
+        () => applyWorldEvent(state, { type: 'SET_CLOCK_HOLD', active: 'yes' }, CONTEXT),
+        /SET_CLOCK_HOLD active must be a boolean/,
+    );
+
+    // A missing flags.clock is created rather than throwing.
+    const bare = cloneWorldState(state);
+    delete bare.flags;
+    const created = applyWorldEvent(
+        bare,
+        { type: 'SET_CLOCK_HOLD', active: true, reason: 'encounter' },
+        CONTEXT,
+    );
+    assert.equal(created.flags.clock.hold.reason, 'encounter');
+});
+
+test('combat auto-holds and only a combat hold is cleared by COMBAT_END', () => {
+    const state = seed('s1');
+    const a = 's1.aurelia.longshot';
+    const b = 's1.vaiva.colorgarde';
+
+    const combat = applyWorldEvent(
+        state,
+        { type: 'COMBAT_START', participants: [a, b], kind: 'brawl' },
+        CONTEXT,
+    );
+    assert.deepEqual(combat.flags.clock.hold, {
+        active: true,
+        reason: 'combat',
+        sinceTurn: 0,
+        sinceDate: state.meta.inGameDate,
+    });
+
+    const manual = applyWorldEvent(
+        state,
+        { type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' },
+        CONTEXT,
+    );
+    const manualCombat = applyWorldEvent(
+        manual,
+        { type: 'COMBAT_START', participants: [a, b] },
+        CONTEXT,
+    );
+    assert.equal(manualCombat.flags.clock.hold.reason, 'manual');
+
+    const ended = applyWorldEvent(combat, { type: 'COMBAT_END' }, CONTEXT);
+    assert.equal(ended.flags.clock.hold.active, false);
+    const manualEnded = applyWorldEvent(manualCombat, { type: 'COMBAT_END' }, CONTEXT);
+    assert.equal(manualEnded.flags.clock.hold.active, true);
+    assert.equal(manualEnded.flags.clock.hold.reason, 'manual');
+
+    const suppressed = applyWorldEvent(
+        state,
+        { type: 'COMBAT_START', participants: [a, b], hold: false },
+        CONTEXT,
+    );
+    assert.equal(suppressed.flags.clock.hold.active, false);
+    assert.equal(suppressed.meta.inCombat, true);
+});

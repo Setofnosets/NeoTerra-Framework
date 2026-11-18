@@ -74,6 +74,14 @@ test('defaults match the plan and are frozen', () => {
     // A successful travel closes the map shell and reveals the chat.
     assert.equal(DEFAULT_SETTINGS.map.closeOnTravel, true);
 
+    assert.equal(DEFAULT_SETTINGS.clock.enabled, true);
+    assert.equal(DEFAULT_SETTINGS.clock.slotsPerDay, 5);
+    assert.equal(DEFAULT_SETTINGS.clock.timeOfDayStart, 'evening');
+    assert.deepEqual(
+        { ...DEFAULT_SETTINGS.clock.autoHold },
+        { combat: true, encounter: false, beat: false },
+    );
+
     assert.ok(Object.isFrozen(DEFAULT_SETTINGS));
     assert.ok(Object.isFrozen(DEFAULT_SETTINGS.cyoa));
 
@@ -264,4 +272,38 @@ test('invalid values are normalized without throwing', () => {
     assert.equal(migrated.cyoa.theme, 'auto');
     assert.equal(migrated.agents.storyline.everyNTurns, 1);
     assert.equal(migrated.tokenBudget.total, 0);
+});
+
+test('the clock settings normalizer fills defaults, clamps, and keeps unknown keys', () => {
+    const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.equal(defaults.clock.enabled, true);
+    assert.equal(defaults.clock.slotsPerDay, 5);
+    assert.equal(defaults.clock.timeOfDayStart, 'evening');
+    assert.deepEqual(
+        { ...defaults.clock.autoHold },
+        { combat: true, encounter: false, beat: false },
+    );
+    assert.equal(defaults.clock.maxHoldTurns, 20);
+
+    const clamped = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        clock: {
+            enabled: false,
+            slotsPerDay: 99,
+            timeOfDayStart: 'midnight',
+            autoHold: { combat: false },
+            maxHoldTurns: 0,
+            custom: 'keep',
+        },
+    });
+    assert.equal(clamped.clock.enabled, false);
+    assert.equal(clamped.clock.slotsPerDay, 12);
+    assert.equal(clamped.clock.timeOfDayStart, 'evening');
+    assert.equal(clamped.clock.autoHold.combat, false);
+    assert.equal(clamped.clock.autoHold.encounter, false);
+    assert.equal(clamped.clock.maxHoldTurns, 1);
+    assert.equal(clamped.clock.custom, 'keep');
+
+    const low = migrateSettings({ schemaVersion: SCHEMA_VERSION, clock: { slotsPerDay: 0 } });
+    assert.equal(low.clock.slotsPerDay, 1);
 });

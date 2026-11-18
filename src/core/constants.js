@@ -19,6 +19,7 @@ export const SETTINGS_KEY = EXTENSION_ID;
 export const SCHEMA_VERSION = 1;
 
 export const CONTENT_GATE_LEVELS = Object.freeze(['full', 'reduced', 'mature-only', 'strict']);
+export const TIME_SLOTS = Object.freeze(['dawn', 'morning', 'afternoon', 'evening', 'night']);
 export const CAST_MODES = Object.freeze(['director', 'group', 'solo']);
 export const BEAT_DEADLINE_PRESSURE = Object.freeze(['off', 'generous', 'standard', 'harsh']);
 

@@ -32,6 +32,7 @@ import {
 import { buildLocationIntro, createSceneFlow } from '../src/flows/scene.js';
 import { createInitiative } from '../src/flows/initiative.js';
 import { createStorylineTracker } from '../src/agents/storyline.js';
+import { advanceClock } from '../src/core/world-clock.js';
 import { createWorldStateStore } from '../src/state/store.js';
 import { createWorldState } from '../src/state/world-state.js';
 import { buildFormIndex } from '../src/data/forms.js';
@@ -480,6 +481,61 @@ test('travel moves the player, advances time, journals the trip, and builds an i
     assert.equal(result.tracker.reason, 'no-initiative');
     assert.equal(result.state.flags.travel.lastTo, 'maple-heights');
     assert.equal(result.messageExtra.to, 'maple-heights');
+});
+
+test('travel releases a hold and advances exactly the path turns of fiction time', async () => {
+    const store = makeStore();
+    const flow = makeTravel(store, {
+        initiative: null,
+        getSettings: () => ({ clock: { enabled: true } }),
+    });
+    store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' });
+    const before = store.get();
+
+    const result = await flow.travel({ to: 'maple-heights' });
+    assert.equal(result.ok, true);
+    assert.ok(result.turns >= 1);
+
+    const advanced = advanceClock({
+        date: before.meta.inGameDate,
+        timeOfDay: before.meta.timeOfDay,
+        turns: result.turns,
+    });
+    assert.equal(result.state.meta.turn, before.meta.turn + result.turns);
+    assert.equal(result.state.meta.storyTurn, before.meta.storyTurn + result.turns);
+    assert.equal(result.state.meta.timeOfDay, advanced.timeOfDay);
+    assert.equal(result.state.meta.inGameDate, advanced.date);
+    assert.equal(result.state.flags.clock.hold.active, false);
+    assert.equal(result.state.flags.clock.hold.reason, 'travel');
+});
+
+test('a disabled clock travels with the date and slot unchanged', async () => {
+    const store = makeStore();
+    const flow = makeTravel(store, {
+        initiative: null,
+        getSettings: () => ({ clock: { enabled: false } }),
+    });
+    const before = store.get();
+    const result = await flow.travel({ to: 'maple-heights' });
+    assert.equal(result.ok, true);
+    assert.equal(result.state.meta.turn, before.meta.turn + result.turns);
+    // V1 behavior: fiction turns track the mechanical counter even though the
+    // clock does not advance the date or slot.
+    assert.equal(result.state.meta.storyTurn, before.meta.storyTurn + result.turns);
+    assert.equal(result.state.meta.inGameDate, before.meta.inGameDate);
+    assert.equal(result.state.meta.timeOfDay, before.meta.timeOfDay);
+});
+
+test('a same-location trip still releases a hold without ticking time', async () => {
+    const store = makeStore();
+    const flow = makeTravel(store, { initiative: null });
+    store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' });
+    const before = store.get();
+    const result = await flow.travel({ to: before.scene.locationId });
+    assert.equal(result.ok, true);
+    assert.equal(result.alreadyThere, true);
+    assert.equal(result.state.meta.turn, before.meta.turn);
+    assert.equal(result.state.flags.clock.hold.active, false);
 });
 
 test('a cross-district trip keeps bridge display names in the arrival', async () => {

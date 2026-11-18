@@ -582,6 +582,7 @@ export function startSeason(options = {}) {
         profiles = null,
         metadata = null,
         worldBookName = null,
+        timeOfDayStart = 'evening',
     } = options;
 
     if (!store || typeof store.seed !== 'function') {
@@ -622,6 +623,7 @@ export function startSeason(options = {}) {
         mode: effectiveMode,
         now,
         profiles,
+        timeOfDayStart,
         player: {
             identity: selection.identity,
             characterId: selection.characterId,
@@ -836,6 +838,7 @@ export async function enterSeason(options = {}) {
         now,
         profiles,
         metadata,
+        timeOfDayStart: ctx?.extensionSettings?.neoterra?.clock?.timeOfDayStart ?? 'evening',
     });
 
     if (metadata && worldBookAdapter && typeof worldBookAdapter.ensure === 'function') {

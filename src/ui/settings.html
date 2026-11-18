@@ -88,6 +88,47 @@
                 <textarea rows="2" data-neoterra-path="kickoff.prompt"></textarea>
             </label>
 
+            <h4 class="neoterra-section-title">World clock</h4>
+            <div class="neoterra-settings-grid">
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="clock.enabled">
+                    <span>Advance in-game time (one slot per turn)</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Slots per day</span>
+                    <input type="number" min="1" max="12" step="1" data-neoterra-path="clock.slotsPerDay">
+                </label>
+                <label class="neoterra-field">
+                    <span>First slot of a new season</span>
+                    <select data-neoterra-path="clock.timeOfDayStart">
+                        <option value="dawn">Dawn</option>
+                        <option value="morning">Morning</option>
+                        <option value="afternoon">Afternoon</option>
+                        <option value="evening">Evening</option>
+                        <option value="night">Night</option>
+                    </select>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="clock.autoHold.combat">
+                    <span>Freeze time during combat</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="clock.autoHold.encounter">
+                    <span>Freeze time during encounters</span>
+                </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="clock.autoHold.beat">
+                    <span>Freeze time during beat scenes</span>
+                </label>
+                <label class="neoterra-field">
+                    <span>Maximum hold turns</span>
+                    <input type="number" min="1" max="1000" step="1" data-neoterra-path="clock.maxHoldTurns">
+                </label>
+            </div>
+            <p class="neoterra-hint">
+                A day passes every five turns by default. The top-bar time chip freezes and unfreezes time.
+            </p>
+
             <h4 class="neoterra-section-title">CYOA choices</h4>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-check">

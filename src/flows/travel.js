@@ -18,6 +18,7 @@ import {
     detectTravelAbilities,
     findTravelPath,
 } from '../data/map.js';
+import { buildClockTick, isClockHeld } from '../core/world-clock.js';
 import { applyEventBatch } from './initiative.js';
 import { buildLocationIntro } from './scene.js';
 
@@ -279,8 +280,17 @@ export function createTravelFlow({
         const canonPlayerId = state.player?.identity === 'canon' ? state.player.characterId : null;
         const events = [];
 
+        // Leaving a scene releases any hold before time advances; a zero-turn
+        // trip still releases it.
+        events.push({ type: 'SET_CLOCK_HOLD', active: false, reason: 'travel' });
         if (plan.turns > 0) {
-            events.push({ type: 'TICK_TIME', turns: plan.turns });
+            let settingsNow = {};
+            try {
+                settingsNow = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
+            } catch (error) {
+                logWarning(log, 'Could not read settings for the travel clock', error);
+            }
+            events.push(buildClockTick({ state, settings: settingsNow, turns: plan.turns }));
         }
         events.push({
             type: 'SET_LOCATION',
@@ -374,6 +384,13 @@ export function createTravelFlow({
             };
         }
         if (plan.alreadyThere) {
+            if (isClockHeld(readState())) {
+                try {
+                    store.dispatch({ type: 'SET_CLOCK_HOLD', active: false, reason: 'travel' });
+                } catch (error) {
+                    logWarning(log, 'Could not release the clock hold on a no-op trip', error);
+                }
+            }
             return {
                 ok: true,
                 alreadyThere: true,

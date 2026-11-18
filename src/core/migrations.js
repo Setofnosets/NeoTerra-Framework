@@ -13,6 +13,7 @@ import {
     CONTENT_GATE_LEVELS,
     CYOA_THEMES,
     SCHEMA_VERSION,
+    TIME_SLOTS,
 } from './constants.js';
 import {
     DEFAULT_BAD_END_EPILOGUE_PROMPT,
@@ -194,6 +195,33 @@ function normalizeContext(context, defaults) {
     };
 }
 
+function normalizeClock(clock, defaults) {
+    const source = isPlainObject(clock) ? clock : {};
+    const autoHold = isPlainObject(source.autoHold) ? source.autoHold : {};
+    const autoHoldDefaults = defaults.autoHold;
+    return {
+        ...source,
+        enabled: asBoolean(source.enabled, defaults.enabled),
+        slotsPerDay: asNumber(source.slotsPerDay, defaults.slotsPerDay, {
+            min: 1,
+            max: 12,
+            integer: true,
+        }),
+        timeOfDayStart: asEnum(source.timeOfDayStart, TIME_SLOTS, defaults.timeOfDayStart),
+        autoHold: {
+            ...autoHold,
+            combat: asBoolean(autoHold.combat, autoHoldDefaults.combat),
+            encounter: asBoolean(autoHold.encounter, autoHoldDefaults.encounter),
+            beat: asBoolean(autoHold.beat, autoHoldDefaults.beat),
+        },
+        maxHoldTurns: asNumber(source.maxHoldTurns, defaults.maxHoldTurns, {
+            min: 1,
+            max: 1000,
+            integer: true,
+        }),
+    };
+}
+
 /** Normalize known settings fields after defaults and migrations are applied. */
 export function normalizeSettings(settings) {
     const defaults = DEFAULT_SETTINGS;
@@ -216,6 +244,10 @@ export function normalizeSettings(settings) {
         context: normalizeContext(
             isPlainObject(settings.context) ? settings.context : {},
             defaults.context,
+        ),
+        clock: normalizeClock(
+            isPlainObject(settings.clock) ? settings.clock : {},
+            defaults.clock,
         ),
         contentLimits: {
             ...(isPlainObject(settings.contentLimits) ? settings.contentLimits : {}),

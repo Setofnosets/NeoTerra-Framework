@@ -23,6 +23,7 @@ import {
     summarizeBeatLedger,
 } from '../data/beats.js';
 import { FACTION_STATUSES } from '../data/factions.js';
+import { isClockHeld } from '../core/world-clock.js';
 import { isLegalTransform } from '../data/forms.js';
 import { LOCATION_STATUSES } from '../data/locations.js';
 
@@ -704,6 +705,7 @@ export function planDeterministicStoryline({
         season,
         pressure,
         resolveSatisfied,
+        held: isClockHeld(state),
     });
     return {
         events: dedupeEvents(plan.events),

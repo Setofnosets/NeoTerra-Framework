@@ -8,6 +8,7 @@
 
 import { BEAT_STATUSES } from '../data/beats.js';
 import { splitListText } from '../data/card-profile.js';
+import { TIME_SLOTS } from '../core/constants.js';
 import { FACTION_STATUSES, buildFactionIndex } from '../data/factions.js';
 import {
     LOCATION_KINDS,
@@ -22,7 +23,7 @@ import {
 } from '../data/seasons.js';
 import { SIDES } from '../data/schema.js';
 
-export const WORLD_STATE_SCHEMA_VERSION = 1;
+export const WORLD_STATE_SCHEMA_VERSION = 2;
 
 export const CHARACTER_STATUSES = Object.freeze([
     'active',
@@ -296,6 +297,7 @@ export function createWorldState(options = {}) {
         now = Date.now(),
         profiles = null,
         player,
+        timeOfDayStart = 'evening',
     } = options;
 
     if (!isObject(season)) {
@@ -426,8 +428,9 @@ export function createWorldState(options = {}) {
         mode,
         meta: {
             turn: 0,
+            storyTurn: 0,
             inGameDate: season.anchorDate ?? null,
-            timeOfDay: 'evening',
+            timeOfDay: TIME_SLOTS.includes(timeOfDayStart) ? timeOfDayStart : 'evening',
             sceneId: 'opening',
             inCombat: false,
             startedAt: now,
@@ -460,7 +463,16 @@ export function createWorldState(options = {}) {
             combat: null,
             framing: season.premise ?? '',
         },
-        flags: {},
+        flags: {
+            clock: {
+                hold: {
+                    active: false,
+                    reason: null,
+                    sinceTurn: 0,
+                    sinceDate: season.anchorDate ?? null,
+                },
+            },
+        },
         log: [],
     };
 
@@ -487,6 +499,7 @@ export function createEmptyWorldState({ chatId = 'empty-chat' } = {}) {
         mode: 'director',
         meta: {
             turn: 0,
+            storyTurn: 0,
             inGameDate: null,
             timeOfDay: 'evening',
             sceneId: 'opening',
@@ -506,7 +519,16 @@ export function createEmptyWorldState({ chatId = 'empty-chat' } = {}) {
         relationships: [],
         recentEvents: [],
         scene: { locationId: null, present: [], combat: null, framing: '' },
-        flags: {},
+        flags: {
+            clock: {
+                hold: {
+                    active: false,
+                    reason: null,
+                    sinceTurn: 0,
+                    sinceDate: null,
+                },
+            },
+        },
         log: [],
     };
 }
@@ -934,6 +956,9 @@ function validateInner(state, errors) {
         add(errors, 'meta', 'must be an object');
     } else {
         requireInteger(errors, 'meta.turn', state.meta.turn, { min: 0 });
+        if (state.meta.storyTurn !== undefined && state.meta.storyTurn !== null) {
+            requireInteger(errors, 'meta.storyTurn', state.meta.storyTurn, { min: 0 });
+        }
         requireNullableString(errors, 'meta.inGameDate', state.meta.inGameDate);
         requireString(errors, 'meta.timeOfDay', state.meta.timeOfDay);
         requireString(errors, 'meta.sceneId', state.meta.sceneId);

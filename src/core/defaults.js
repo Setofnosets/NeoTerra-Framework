@@ -45,6 +45,16 @@ export const DEFAULT_SETTINGS = freezeDeep({
     // Soft canon-beat deadlines; `off` disables escalation.
     beatDeadlinePressure: 'standard',
 
+    // Fiction time. The mechanical turn always increments; a hold freezes the
+    // in-game date and slot.
+    clock: {
+        enabled: true,
+        slotsPerDay: 5,
+        timeOfDayStart: 'evening',
+        autoHold: { combat: true, encounter: false, beat: false },
+        maxHoldTurns: 20,
+    },
+
     cyoa: {
         enabled: false,
         count: 4,

@@ -255,10 +255,10 @@ card text into state would therefore improve narration with **no renderer change
     directory is a **copy** (a plan file added to this working tree is absent there while
     older plans are present). Every later step would otherwise need a manual re-copy.
   - Keep the existing copy as a backup, then replace it with a directory junction to
-    `C:\Users\locua\OneDrive\Escritorio\KI\extensions\NeoTerra-Framework`:
+    this repository checkout (`<repo>`):
     ```bat
-    rmdir /S /Q "C:\Users\locua\OneDrive\Escritorio\KI\ST\SillyTavern\public\scripts\extensions\third-party\NeoTerra-Framework"
-    mklink /J "C:\Users\locua\OneDrive\Escritorio\KI\ST\SillyTavern\public\scripts\extensions\third-party\NeoTerra-Framework" "C:\Users\locua\OneDrive\Escritorio\KI\extensions\NeoTerra-Framework"
+    rmdir /S /Q "<SillyTavern>/public/scripts/extensions/third-party/NeoTerra-Framework"
+    mklink /J "<SillyTavern>/public/scripts/extensions/third-party/NeoTerra-Framework" "<repo>"
     ```
   - The working tree tracks https://github.com/Setofnosets/NeoTerra-Framework; the junction
     makes the served extension identical to the code under review. `plans/`, `tests/` and

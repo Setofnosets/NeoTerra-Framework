@@ -8,6 +8,7 @@
 
 import { applyWorldEvents } from '../state/reducer.js';
 import { validateWorldState } from '../state/world-state.js';
+import { isClockHeld } from '../core/world-clock.js';
 
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -227,6 +228,11 @@ export function createInitiative({
         const current = state();
         if (!isObject(current)) {
             return { ran: false, reason: 'no-state', events: [] };
+        }
+        if (trigger === 'turn' && force !== true && isClockHeld(current)) {
+            // A held world never advances its forecast on ordinary turns;
+            // location/beat/manual triggers still run.
+            return { ran: false, reason: 'time-held', events: [] };
         }
         const settingsNow = settings();
         const decision = shouldRunStoryline({

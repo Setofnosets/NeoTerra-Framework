@@ -13,6 +13,7 @@ import {
 } from '../src/state/migrations.js';
 import {
     createWorldState,
+    createEmptyWorldState,
     validateWorldState,
     cloneWorldState,
 } from '../src/state/world-state.js';
@@ -132,6 +133,27 @@ test('seeding is deterministic apart from startedAt', () => {
     assert.notEqual(later.meta.startedAt, first.meta.startedAt);
     later.meta.startedAt = first.meta.startedAt;
     assert.deepEqual(later, first);
+});
+
+test('the seed carries the clock fields and schema version 2', () => {
+    const state = seed('s1');
+    assert.equal(state.schemaVersion, 2);
+    assert.equal(state.meta.storyTurn, 0);
+    assert.deepEqual(state.flags.clock.hold, {
+        active: false,
+        reason: null,
+        sinceTurn: 0,
+        sinceDate: seasons.s1.anchorDate ?? null,
+    });
+
+    const empty = createEmptyWorldState({ chatId: 'clock-empty' });
+    assert.equal(empty.meta.storyTurn, 0);
+    assert.equal(empty.flags.clock.hold.active, false);
+    assert.equal(empty.flags.clock.hold.sinceDate, null);
+
+    // The authored start slot is honored by the seed and clamps to a known slot.
+    assert.equal(seed('s1', { timeOfDayStart: 'dawn' }).meta.timeOfDay, 'dawn');
+    assert.equal(seed('s1', { timeOfDayStart: 'not-a-slot' }).meta.timeOfDay, 'evening');
 });
 
 test('roster, locations, factions, threats, and beats are seeded from data', () => {
@@ -293,13 +315,65 @@ test('migrations normalize v0, preserve unknown keys, and never downgrade', () =
     assert.equal(migrated.schemaVersion, CURRENT_WORLD_STATE_VERSION);
     assert.deepEqual(migrated.unknownExtension, { keep: true });
     assert.equal(migrated.meta.turn, 4);
+    assert.equal(migrated.meta.storyTurn, 4);
     assert.equal(migrated.meta.timeOfDay, 'evening');
     assert.equal(migrated.player.identity, 'custom');
     assert.deepEqual(migrated.characters, {});
+    assert.equal(migrated.flags.clock.hold.active, false);
+    assert.equal(migrated.flags.clock.hold.sinceTurn, 4);
     assert.equal(validateWorldState(migrated).ok, true);
 
     const future = { schemaVersion: 99, chatId: 'future', mystery: true };
     assert.deepEqual(migrateWorldState(future), future);
+});
+
+test('v1 migrates storyTurn and the clock hold without losing authored holds', () => {
+    const v2 = createWorldState({
+        season: seasons.s1,
+        registry,
+        factions,
+        locations,
+        formGroups,
+        formRules,
+        chatId: 'v1-chat',
+        now: NOW,
+    });
+    const v1 = cloneWorldState(v2);
+    v1.schemaVersion = 1;
+    v1.meta.turn = 7;
+    delete v1.meta.storyTurn;
+    delete v1.flags.clock;
+
+    const migrated = migrateWorldState(v1);
+    assert.equal(migrated.schemaVersion, 2);
+    assert.equal(migrated.meta.storyTurn, 7);
+    assert.equal(migrated.flags.clock.hold.active, false);
+    assert.equal(migrated.flags.clock.hold.reason, null);
+    assert.equal(migrated.flags.clock.hold.sinceTurn, 7);
+    assert.equal(migrated.flags.clock.hold.sinceDate, migrated.meta.inGameDate);
+    assert.equal(validateWorldState(migrated).ok, true);
+
+    // A clock block authored before the migration survives, including a hold.
+    const authored = cloneWorldState(v1);
+    authored.flags = {
+        clock: {
+            hold: { active: true, reason: 'combat', sinceTurn: 3, sinceDate: '2037-01-01' },
+            extra: 'keep',
+        },
+    };
+    const preserved = migrateWorldState(authored);
+    assert.equal(preserved.flags.clock.hold.active, true);
+    assert.equal(preserved.flags.clock.hold.reason, 'combat');
+    assert.equal(preserved.flags.clock.extra, 'keep');
+
+    // Validation keeps old/hand-built documents valid.
+    const seedState = seed('s1');
+    const noStoryTurn = cloneWorldState(seedState);
+    delete noStoryTurn.meta.storyTurn;
+    assert.equal(validateWorldState(noStoryTurn).ok, true);
+    const badStoryTurn = cloneWorldState(seedState);
+    badStoryTurn.meta.storyTurn = -1;
+    assert.equal(validateWorldState(badStoryTurn).ok, false);
 });
 
 test('an empty metadata store seeds a valid state for every playable season', () => {

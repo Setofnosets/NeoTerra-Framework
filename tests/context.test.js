@@ -362,6 +362,25 @@ test('continuity and lore blocks render when their data exists', () => {
     );
 });
 
+test('the scene block marks a held clock as time frozen', () => {
+    const state = makeState();
+    state.flags = { clock: { hold: { active: true, reason: 'chip' } } };
+    const result = renderContext(state, { settings: settingsWith(), season: SEASON });
+    const scene = blockById(result, 'scene');
+    assert.ok(scene);
+    assert.match(scene.text, /Time: 2037-03-05, night \(time frozen\)/);
+
+    const undated = makeState({
+        meta: { ...state.meta, inGameDate: null, timeOfDay: '' },
+        flags: { clock: { hold: { active: true, reason: 'chip' } } },
+    });
+    const undatedScene = blockById(
+        renderContext(undated, { settings: settingsWith(), season: SEASON }),
+        'scene',
+    );
+    assert.match(undatedScene.text, /Time: \(time frozen\)/);
+});
+
 test('empty state renders no headings and no text', () => {
     const result = renderContext({}, { settings: settingsWith() });
     assert.deepEqual(result.blocks, []);

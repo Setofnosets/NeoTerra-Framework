@@ -432,6 +432,41 @@ test('cadence honors everyNTurns, location changes, and disabling', () => {
     });
 });
 
+test('the cadence pass is skipped while time is held, but location passes still run', async () => {
+    const store = makeStore('s1');
+    let calls = 0;
+    const storyline = {
+        run: async () => {
+            calls += 1;
+            return { events: [], source: 'deterministic', act: 'opening', notes: [], rejected: [] };
+        },
+    };
+    const initiative = createInitiative({
+        store,
+        season: seasons.s1,
+        registry,
+        formGroups,
+        formRules,
+        storyline,
+        getSettings: () => ({}),
+        now: () => NOW,
+    });
+    store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' });
+
+    const heldTurn = await initiative.afterTurn({});
+    assert.equal(heldTurn.ran, false);
+    assert.equal(heldTurn.reason, 'time-held');
+    assert.equal(calls, 0);
+
+    const location = await initiative.afterLocationChange({ from: 'central-plaza', to: 'central-plaza' });
+    assert.equal(location.ran, true);
+    assert.equal(calls, 1);
+
+    const forced = await initiative.runStoryline({ trigger: 'turn', force: true });
+    assert.equal(forced.ran, true);
+    assert.equal(calls, 2);
+});
+
 test('initiative applies events atomically and persists the cadence marker', async () => {
     const store = makeStore('s1');
     const storyline = {

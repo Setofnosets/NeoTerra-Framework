@@ -9,6 +9,7 @@
 
 import { applyContentGate } from '../core/content-gate.js';
 import { DEFAULT_SETTINGS } from '../core/defaults.js';
+import { isClockHeld } from '../core/world-clock.js';
 import { buildRegistryIndex } from '../data/registry.js';
 import {
     selectOpenBeats,
@@ -112,8 +113,12 @@ function renderScene(state, settings) {
 
     const date = state?.meta?.inGameDate;
     const time = state?.meta?.timeOfDay;
+    const frozen = isClockHeld(state);
     if (date || time) {
-        lines.push(`Time: ${[date, time].filter(Boolean).join(', ')}`);
+        const suffix = frozen ? ' (time frozen)' : '';
+        lines.push(`Time: ${[date, time].filter(Boolean).join(', ')}${suffix}`);
+    } else if (frozen) {
+        lines.push('Time: (time frozen)');
     }
 
     const present = Array.isArray(scene.present) ? scene.present : [];

@@ -16,6 +16,7 @@ import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
 import { getSettings, resetSettings } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu } from './season-menu.js';
+import { mountClockChip } from './clock-chip.js';
 import {
     describeMissingSettingsHost,
     disposeSettingsPanel,
@@ -27,7 +28,7 @@ import { disposeMapPanel, mountMapPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData } from './codex-data.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
-import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, WAL_PREFIX } from '../state/store.js';
+import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
@@ -210,6 +211,125 @@ function mountTopButton() {
     const button = document.getElementById(UI_IDS.TOP_BUTTON);
     button?.addEventListener('click', () => openShell(), { signal: abort.signal });
     return button;
+}
+
+/* ------------------------------------------------------------------ */
+/* World-clock chip                                                    */
+/* ------------------------------------------------------------------ */
+
+let clockChip = null;
+let clockChipSubscription = null;
+
+/** The store backing the open chat, preferring the live shared runtime. */
+function liveWorldState() {
+    const live = refreshContext();
+    const chatId = currentChatId(live);
+    if (!chatId) {
+        return null;
+    }
+    if (mapRuntime?.chatId === chatId) {
+        return mapRuntime.store.get();
+    }
+    if (interactionRuntime?.chatId === chatId) {
+        return interactionRuntime.store.get();
+    }
+    let stored = null;
+    try {
+        stored = loadWorldStateFromMetadata(live?.chatMetadata);
+    } catch (error) {
+        logger.debug('Could not read the world state for the clock chip', error);
+        return null;
+    }
+    if (!stored) {
+        return null;
+    }
+    // A chip toggle may have an in-memory dispatch that has not been persisted
+    // yet; read the per-chat shared store so the chip reflects it immediately.
+    return sharedStoreFor(live)?.get() ?? stored;
+}
+
+function sharedStoreFor(context) {
+    const chatId = currentChatId(context);
+    const metadata = context?.chatMetadata;
+    if (!chatId || !metadata) {
+        return null;
+    }
+    if (mapRuntime?.chatId === chatId) {
+        return mapRuntime.store;
+    }
+    if (interactionRuntime?.chatId === chatId) {
+        return interactionRuntime.store;
+    }
+    try {
+        return getSharedWorldStateStore({
+            metadata,
+            saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
+            storage: readLocalStorage(),
+            chatId,
+        });
+    } catch (error) {
+        logger.warn('Could not open the chat world state for the clock chip', error);
+        return null;
+    }
+}
+
+function mountClockChipForShell() {
+    if (!hasDom()) {
+        return null;
+    }
+    const wrapper = document.querySelector('[data-neoterra-top-wrapper]');
+    if (!wrapper) {
+        return null;
+    }
+    clockChip?.dispose?.();
+    clockChip = mountClockChip({
+        host: wrapper,
+        getState: () => liveWorldState(),
+        getSettings: () => {
+            try {
+                return getSettings(refreshContext() ?? ctx);
+            } catch {
+                return null;
+            }
+        },
+        onToggle: ({ held }) => {
+            const live = refreshContext() ?? ctx;
+            const store = sharedStoreFor(live);
+            if (!store || !store.get()) {
+                return;
+            }
+            try {
+                store.dispatch({
+                    type: 'SET_CLOCK_HOLD',
+                    active: !held,
+                    reason: 'chip',
+                });
+                clockChip?.refresh?.();
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'clock', held: !held });
+            } catch (error) {
+                logger.warn('Could not toggle the world clock', error);
+            }
+        },
+    });
+    clockChipSubscription?.();
+    const offMap = bus.on(EVENTS.MAP_UPDATED, () => {
+        clockChip?.refresh?.();
+    });
+    const offSettings = bus.on(EVENTS.SETTINGS_CHANGED, () => {
+        clockChip?.refresh?.();
+    });
+    clockChipSubscription = () => {
+        offMap();
+        offSettings();
+    };
+    return clockChip;
+}
+
+function disposeClockChip() {
+    clockChipSubscription?.();
+    clockChipSubscription = null;
+    clockChip?.dispose?.();
+    clockChip = null;
 }
 
 function mountShell() {
@@ -1596,6 +1716,7 @@ export async function initialize(options = {}) {
         abort = new AbortController();
 
         mountTopButton();
+        mountClockChipForShell();
         mountShell();
         void mountSeasonPanel(ctx);
         registerSlashCommand(ctx);
@@ -1669,6 +1790,7 @@ function subscribeChatChanges(context) {
             void mountCodexPanelForActiveChat();
         }
         refreshSettingsPanel();
+        clockChip?.refresh?.();
         void refreshInteractionUi(refreshContext());
     };
     try {
@@ -1707,6 +1829,7 @@ export function dispose() {
     unregisterCombatIntegrations({ ctx });
     unsubscribeChatChanges();
     unsubscribeInteractionEvents();
+    disposeClockChip();
     disposeChatRuntimes();
     mountedCodexChatId = null;
     disposeSeasonMenu();

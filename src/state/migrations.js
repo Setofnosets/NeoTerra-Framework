@@ -6,7 +6,7 @@
  * consume the current version.
  */
 
-export const CURRENT_WORLD_STATE_VERSION = 1;
+export const CURRENT_WORLD_STATE_VERSION = 2;
 
 const STATUSES = Object.freeze([
     'active',
@@ -78,7 +78,7 @@ function migrateV0ToV1(raw) {
 
     return {
         ...raw,
-        schemaVersion: CURRENT_WORLD_STATE_VERSION,
+        schemaVersion: 1,
         chatId: asString(raw.chatId, ''),
         seasonId: asString(raw.seasonId, 'sandbox'),
         mode: ['director', 'group', 'solo'].includes(raw.mode) ? raw.mode : 'director',
@@ -142,11 +142,50 @@ function migrateV0ToV1(raw) {
 }
 
 /**
+ * v1 -> v2: fiction time and the clock hold. A v1 document only knew
+ * `meta.turn`, so `storyTurn` starts equal to it. An existing clock block (a
+ * document authored after the field was introduced) is preserved, including an
+ * active hold.
+ */
+function migrateV1ToV2(raw) {
+    const meta = asObject(raw.meta);
+    const flags = asObject(raw.flags);
+    const clock = asObject(flags.clock);
+    const hold = asObject(clock.hold);
+    const turn = Number.isInteger(meta.turn) ? meta.turn : (Number(meta.turn) || 0);
+    const inGameDate = asNullableString(meta.inGameDate);
+    return {
+        ...raw,
+        schemaVersion: 2,
+        meta: {
+            ...meta,
+            storyTurn: Number.isInteger(meta.storyTurn) ? meta.storyTurn : turn,
+        },
+        flags: {
+            ...flags,
+            clock: {
+                ...clock,
+                hold: {
+                    ...hold,
+                    active: asBoolean(hold.active),
+                    reason: typeof hold.reason === 'string' ? hold.reason : null,
+                    sinceTurn: Number.isInteger(hold.sinceTurn) ? hold.sinceTurn : turn,
+                    sinceDate: typeof hold.sinceDate === 'string' || hold.sinceDate === null
+                        ? hold.sinceDate
+                        : inGameDate,
+                },
+            },
+        },
+    };
+}
+
+/**
  * Versioned migration table. Keys are the *source* version; each function
  * returns the next version's document.
  */
 export const WORLD_STATE_MIGRATIONS = Object.freeze({
     0: migrateV0ToV1,
+    1: migrateV1ToV2,
 });
 
 /**

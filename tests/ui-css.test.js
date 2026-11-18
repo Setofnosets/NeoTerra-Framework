@@ -77,3 +77,15 @@ test('the map flex chain passes the host a definite height', () => {
     assert.doesNotMatch(host, /min-height:\s*420px/);
     assert.match(host, /min-height:\s*0/);
 });
+
+test('the world-clock chip is themed and shows a frozen state', () => {
+    const chip = ruleBody('.neoterra-clock-chip');
+    assert.ok(chip, 'expected a .neoterra-clock-chip rule');
+    assert.doesNotMatch(chip, /#[0-9a-fA-F]{3,8}\b/);
+    assert.match(chip, /var\(--nt-/);
+
+    const held = ruleBody(".neoterra-clock-chip[data-clock-held='true']");
+    assert.ok(held, 'expected a held-state chip rule');
+    assert.doesNotMatch(held, /#[0-9a-fA-F]{3,8}\b/);
+    assert.match(held, /var\(--nt-/);
+});

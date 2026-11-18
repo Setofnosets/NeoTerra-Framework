@@ -9,6 +9,12 @@
  */
 
 import { AgentAbortedError } from './client.js';
+import {
+    buildClockTick,
+    buildClockTurn,
+    effectiveStoryTurn,
+    isClockHeld,
+} from '../core/world-clock.js';
 import { applyWorldEvents } from '../state/reducer.js';
 import { validateWorldState } from '../state/world-state.js';
 
@@ -728,11 +734,64 @@ export async function runTurnPipeline({
     }
     const errors = [];
 
-    // Stage 1: advance the world clock once per genuine assistant turn.
+    // Stage 0: resolve encounter/beat auto-holds before the clock ticks. Combat
+    // is handled by the reducer; a manual or chip hold always wins. Every
+    // dispatch here is best-effort and never blocks the turn.
+    try {
+        const clockSettings = settings?.clock ?? {};
+        const autoHold = isObject(clockSettings.autoHold) ? clockSettings.autoHold : {};
+        const sceneNow = isObject(scene) ? scene : {};
+        // The live `scene` argument is the flow object, not the document; read
+        // the world's scene first and fall back to the injected object for
+        // tests and future flow shapes.
+        const worldScene = store.get()?.scene;
+        const encounter = isObject(worldScene?.encounter)
+            ? worldScene.encounter
+            : (isObject(sceneNow.encounter) ? sceneNow.encounter : null);
+        const hasEncounter = isObject(encounter);
+        let hold = store.get()?.flags?.clock?.hold;
+        let held = hold?.active === true;
+
+        if (autoHold.encounter === true && hasEncounter && !held) {
+            store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'encounter' });
+            hold = store.get()?.flags?.clock?.hold;
+            held = hold?.active === true;
+        } else if (held && hold?.reason === 'encounter' && !hasEncounter) {
+            store.dispatch({
+                type: 'SET_CLOCK_HOLD',
+                active: false,
+                reason: 'encounter-cleared',
+            });
+            hold = store.get()?.flags?.clock?.hold;
+            held = hold?.active === true;
+        }
+
+        const beatId = typeof worldScene?.beatId === 'string' && worldScene.beatId.length > 0
+            ? worldScene.beatId
+            : (typeof sceneNow.beatId === 'string' && sceneNow.beatId.length > 0
+                ? sceneNow.beatId
+                : null);
+        const hasBeat = typeof beatId === 'string';
+        if (autoHold.beat === true && hasBeat && !held) {
+            store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'beat' });
+        } else if (held && hold?.reason === 'beat' && !hasBeat) {
+            store.dispatch({ type: 'SET_CLOCK_HOLD', active: false, reason: 'beat-cleared' });
+        }
+    } catch (error) {
+        logWarning(log, 'Could not resolve the clock auto-hold', error);
+    }
+
+    // Stage 1: advance the world clock once per genuine assistant turn. An
+    // automatic turn uses the clock-aware payload; an explicit multi-turn tick
+    // keeps its exact length.
     let ticked = false;
     if (Number.isFinite(tickTurns) && tickTurns > 0) {
         try {
-            store.dispatch({ type: 'TICK_TIME', turns: tickTurns });
+            const current = store.get();
+            const tick = tickTurns === 1
+                ? buildClockTurn({ state: current, settings })
+                : buildClockTick({ state: current, settings, turns: tickTurns });
+            store.dispatch(tick);
             ticked = true;
         } catch (error) {
             logWarning(log, 'Could not advance the world clock', error);
@@ -820,8 +879,16 @@ export async function runTurnPipeline({
     }
 
     let turn = null;
+    let clock = null;
     try {
-        turn = store.get()?.meta?.turn ?? null;
+        const after = store.get();
+        turn = after?.meta?.turn ?? null;
+        clock = {
+            held: isClockHeld(after),
+            storyTurn: effectiveStoryTurn(after),
+            timeOfDay: after?.meta?.timeOfDay ?? null,
+            date: after?.meta?.inGameDate ?? null,
+        };
     } catch (error) {
         logWarning(log, 'Could not read the world clock after the turn', error);
         errors.push({ stage: 'turn-read', error: error?.message ?? String(error) });
@@ -831,6 +898,7 @@ export async function runTurnPipeline({
         ok: true,
         ticked,
         turn,
+        clock,
         tracker: trackerReport,
         storyline,
         cast,

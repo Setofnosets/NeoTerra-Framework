@@ -78,12 +78,12 @@ test('deadline helpers read turns, dates, acts, and upcoming beats deterministic
         ['s1.opening.arms-deal', 's1.opening.beast-rumors'],
     );
 
-    const overdueState = { ...state, meta: { ...state.meta, turn: 13 } };
+    const overdueState = { ...state, meta: { ...state.meta, turn: 13, storyTurn: 13 } };
     const armsDeal = season.canonBeats.find((beat) => beat.id === 's1.opening.arms-deal');
     assert.equal(isBeatOverdue(armsDeal, overdueState), true);
     assert.equal(isBeatOverdue(armsDeal, state), false);
 
-    const late = { ...state, meta: { ...state.meta, turn: 91 } };
+    const late = { ...state, meta: { ...state.meta, turn: 91, storyTurn: 91 } };
     assert.equal(isFinalDeadlinePassed(season, late), true);
 });
 
@@ -239,4 +239,87 @@ test('S4 exposes two independent main threats and their progress clamps', () => 
     assert.equal(noah.stage, noah.stages.length - 1);
     assert.ok(ginny.progress > 25);
     assert.ok(getCurrentAct(next, season));
+});
+
+test('a hold freezes fiction time and suppresses deadline escalation', () => {
+    const store = makeStore('s1');
+    const season = seasons.s1;
+    const start = store.get();
+    const startDate = start.meta.inGameDate;
+    const startSlot = start.meta.timeOfDay;
+
+    let state = apply(store, [{ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' }]);
+    state = applyWorldEvents(state, [{ type: 'TICK_TIME', turns: 10, storyTurns: 0 }], CONTEXT);
+    assert.equal(state.meta.turn, 10);
+    assert.equal(state.meta.storyTurn, 0);
+    assert.equal(state.meta.inGameDate, startDate);
+    assert.equal(state.meta.timeOfDay, startSlot);
+
+    const plan = planBeatLifecycleEvents({ state, season, pressure: 'standard' });
+    assert.ok(plan.notes.includes('time-held'));
+    assert.equal(plan.ending, false);
+    assert.equal(plan.events.some((event) => event.type === 'DEFER_BEAT'), false);
+    assert.equal(plan.events.some((event) => event.type === 'ADVANCE_THREAT'), false);
+    assert.equal(plan.events.some((event) => event.type === 'TRIGGER_ENDING'), false);
+
+    // Suspension must hold even when fiction time is already past every
+    // deadline: the world cannot punish the player inside a frozen scene.
+    const overdueHeld = applyWorldEvents(state, [{
+        type: 'TICK_TIME',
+        turns: 0,
+        storyTurns: 500,
+    }], CONTEXT);
+    assert.equal(overdueHeld.meta.storyTurn, 500);
+    const overduePlan = planBeatLifecycleEvents({ state: overdueHeld, season, pressure: 'standard' });
+    assert.ok(overduePlan.notes.includes('time-held'));
+    assert.equal(overduePlan.ending, false);
+    assert.equal(overduePlan.events.some((event) => event.type === 'DEFER_BEAT'), false);
+    assert.equal(overduePlan.events.some((event) => event.type === 'ADVANCE_THREAT'), false);
+    assert.equal(overduePlan.events.some((event) => event.type === 'TRIGGER_ENDING'), false);
+
+    // An explicit tick still advances both counters and the date.
+    const explicit = applyWorldEvents(state, [{
+        type: 'TICK_TIME',
+        turns: 13,
+        storyTurns: 13,
+        date: '2037-03-20',
+        timeOfDay: 'night',
+    }], CONTEXT);
+    assert.equal(explicit.meta.turn, 23);
+    assert.equal(explicit.meta.storyTurn, 13);
+    assert.equal(explicit.meta.inGameDate, '2037-03-20');
+    assert.equal(explicit.meta.timeOfDay, 'night');
+
+    // Releasing the hold re-enables overdue escalation.
+    const released = applyWorldEvents(explicit, [{
+        type: 'SET_CLOCK_HOLD',
+        active: false,
+        reason: 'manual-release',
+    }], CONTEXT);
+    const escalation = planBeatLifecycleEvents({ state: released, season, pressure: 'standard' });
+    assert.ok(escalation.events.some(
+        (event) => event.type === 'DEFER_BEAT' && event.beatId === 's1.opening.arms-deal',
+    ));
+});
+
+test('isBeatOverdue is driven by storyTurn, not the mechanical turn', () => {
+    const store = makeStore('s1');
+    const season = seasons.s1;
+    const state = store.get();
+    const armsDeal = season.canonBeats.find((beat) => beat.id === 's1.opening.arms-deal');
+    assert.equal(isBeatOverdue(armsDeal, { ...state, meta: { ...state.meta, turn: 99, storyTurn: 0 } }), false);
+    assert.equal(
+        isBeatOverdue(armsDeal, { ...state, meta: { ...state.meta, turn: 0, storyTurn: 99 } }),
+        true,
+    );
+});
+
+test('a date-based beat deadline becomes reachable once the in-game date passes it', () => {
+    const store = makeStore('s1');
+    const state = store.get();
+    const dated = { id: 'fixture.dated', deadlineDate: '2037-03-05', deadlineTurns: null };
+    const before = { ...state, meta: { ...state.meta, inGameDate: '2037-03-05', storyTurn: 0 } };
+    const after = { ...state, meta: { ...state.meta, inGameDate: '2037-03-06', storyTurn: 0 } };
+    assert.equal(isBeatOverdue(dated, before), false);
+    assert.equal(isBeatOverdue(dated, after), true);
 });

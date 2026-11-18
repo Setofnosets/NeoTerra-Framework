@@ -8,6 +8,8 @@
  * agent, and tests.
  */
 
+import { effectiveStoryTurn, isClockHeld } from '../core/world-clock.js';
+
 export const BEAT_ACTS = Object.freeze(['opening', 'escalation', 'climax', 'resolution']);
 export const BEAT_FLEXIBILITIES = Object.freeze(['strict', 'adaptable', 'optional']);
 export const BEAT_STATUSES = Object.freeze([
@@ -516,9 +518,9 @@ export function isBeatTerminal(state, beatId) {
 }
 
 function deadlineTurnPassed(beat, state) {
+    const storyTurn = effectiveStoryTurn(state);
     return Number.isInteger(beat?.deadlineTurns)
-        && Number.isInteger(state?.meta?.turn)
-        && state.meta.turn > beat.deadlineTurns;
+        && storyTurn > beat.deadlineTurns;
 }
 
 function deadlineDatePassed(beat, state) {
@@ -539,8 +541,7 @@ export function isFinalDeadlinePassed(season, state) {
         return false;
     }
     const turnPassed = Number.isInteger(deadline.turns)
-        && Number.isInteger(state?.meta?.turn)
-        && state.meta.turn > deadline.turns;
+        && effectiveStoryTurn(state) > deadline.turns;
     const datePassed = typeof deadline.date === 'string'
         && typeof state?.meta?.inGameDate === 'string'
         && state.meta.inGameDate > deadline.date;
@@ -635,11 +636,16 @@ export function planBeatLifecycleEvents({
     season,
     pressure = 'standard',
     resolveSatisfied = true,
+    held = false,
 } = {}) {
     const events = [];
     const notes = [];
     if (!isObject(state) || !isObject(season)) {
         return { events, notes, ending: false };
+    }
+    const suspended = held === true || isClockHeld(state);
+    if (suspended) {
+        notes.push('time-held');
     }
 
     // 1. Resolve beats whose declared predicates are already satisfied.
@@ -722,7 +728,8 @@ export function planBeatLifecycleEvents({
 
     // 4. Overdue beats escalate once, then defer. `off` still records the miss
     //    but never advances a threat.
-    {
+    let ending = false;
+    if (!suspended) {
         const primary = selectPrimaryThreat(state);
         const gain = pressure === 'off' ? 0 : deadlineThreatGain(pressure);
         for (const beat of beatList(season)) {
@@ -758,9 +765,9 @@ export function planBeatLifecycleEvents({
         }
     }
 
-    // 5. Final deadline: the declared failure state wins once.
-    let ending = false;
-    if (state.ending?.status === 'none' && isFinalDeadlinePassed(season, state)) {
+    // 5. Final deadline: the declared failure state wins once, never inside a
+    //    frozen scene.
+    if (!suspended && state.ending?.status === 'none' && isFinalDeadlinePassed(season, state)) {
         const mainThreatsNow = (state.threats ?? []).filter(
             (threat) => isObject(threat) && threat.rank === 'main',
         );

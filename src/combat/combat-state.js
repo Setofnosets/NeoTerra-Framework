@@ -100,6 +100,21 @@ function maxRoundsFrom(getSettings) {
     return clamp(Math.round(raw), MIN_MAX_ROUNDS, MAX_MAX_ROUNDS);
 }
 
+/** Combat auto-hold setting; a settings read failure defaults to holding. */
+function combatAutoHoldFrom(getSettings) {
+    try {
+        const settings = typeof getSettings === 'function' ? getSettings() : null;
+        // A disabled clock has nothing to freeze; recording a hold would only
+        // mislabel the chip and the scene block as frozen.
+        if (settings?.clock?.enabled === false) {
+            return false;
+        }
+        return settings?.clock?.autoHold?.combat !== false;
+    } catch {
+        return true;
+    }
+}
+
 function appendAction(state, record) {
     const combat = state.scene?.combat;
     if (!isObject(combat)) {
@@ -265,6 +280,7 @@ export function createCombatFlow({ store, getSettings = null, now = Date.now, lo
                 maxRounds: maxRoundsFrom(getSettings),
                 status: 'active',
                 actions: [],
+                hold: combatAutoHoldFrom(getSettings),
             }]);
             store.replace(next);
             return { ok: true, combat: store.get().scene.combat, state: store.get() };

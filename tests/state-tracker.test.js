@@ -660,3 +660,106 @@ test('a failed clock tick is recorded and the player tracker still runs', async 
     assert.equal(store.get().player.willpower.current, 41);
     assert.ok(result.errors.some((entry) => entry.stage === 'tick'));
 });
+
+test('an unheld turn advances the slot and date once', async () => {
+    const store = makeStore('s1');
+    const before = store.get();
+    const result = await runTurnPipeline({
+        store,
+        getSettings: () => ({ clock: { enabled: true } }),
+        log: () => {},
+    });
+    const after = store.get();
+    assert.equal(result.ok, true);
+    assert.equal(result.ticked, true);
+    assert.equal(after.meta.turn, before.meta.turn + 1);
+    assert.equal(after.meta.storyTurn, before.meta.storyTurn + 1);
+    assert.equal(after.meta.timeOfDay, 'night');
+    assert.equal(after.meta.inGameDate, before.meta.inGameDate);
+    assert.deepEqual(result.clock, {
+        held: false,
+        storyTurn: after.meta.storyTurn,
+        timeOfDay: 'night',
+        date: before.meta.inGameDate,
+    });
+});
+
+test('a held turn ticks the mechanical turn but not fiction time', async () => {
+    const store = makeStore('s1');
+    const before = store.get();
+    store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' });
+    const result = await runTurnPipeline({
+        store,
+        getSettings: () => ({ clock: { enabled: true } }),
+        log: () => {},
+    });
+    const after = store.get();
+    assert.equal(after.meta.turn, before.meta.turn + 1);
+    assert.equal(after.meta.storyTurn, 0);
+    assert.equal(after.meta.inGameDate, before.meta.inGameDate);
+    assert.equal(after.meta.timeOfDay, before.meta.timeOfDay);
+    assert.equal(result.clock.held, true);
+});
+
+test('a disabled clock leaves the date and slot byte-identical', async () => {
+    const store = makeStore('s1');
+    const before = store.get();
+    await runTurnPipeline({
+        store,
+        getSettings: () => ({ clock: { enabled: false } }),
+        log: () => {},
+    });
+    const after = store.get();
+    assert.equal(after.meta.turn, before.meta.turn + 1);
+    assert.equal(after.meta.inGameDate, before.meta.inGameDate);
+    assert.equal(after.meta.timeOfDay, before.meta.timeOfDay);
+});
+
+test('the encounter auto-hold is set and released per settings', async () => {
+    const store = makeStore('s1');
+    const before = store.get();
+    const settings = { clock: { enabled: true, autoHold: { encounter: true } } };
+    const withEncounter = {
+        encounter: { characterIds: ['s1.vaiva.colorgarde'], locationId: before.scene.locationId },
+        refreshCast: async () => ({ applied: [] }),
+    };
+    const entered = await runTurnPipeline({
+        store,
+        scene: withEncounter,
+        getSettings: () => settings,
+        log: () => {},
+    });
+    assert.equal(entered.clock.held, true);
+    assert.equal(store.get().flags.clock.hold.reason, 'encounter');
+    assert.equal(store.get().meta.storyTurn, 0);
+
+    const cleared = await runTurnPipeline({
+        store,
+        scene: { refreshCast: async () => ({ applied: [] }) },
+        getSettings: () => settings,
+        log: () => {},
+    });
+    assert.equal(cleared.clock.held, false);
+    assert.equal(store.get().flags.clock.hold.reason, 'encounter-cleared');
+    assert.equal(store.get().meta.storyTurn, 1);
+});
+
+test('the cast refresh still runs while time is held', async () => {
+    const store = makeStore('s1');
+    store.dispatch({ type: 'SET_CLOCK_HOLD', active: true, reason: 'manual' });
+    let refreshed = 0;
+    const result = await runTurnPipeline({
+        store,
+        scene: {
+            refreshCast: async () => {
+                refreshed += 1;
+                return { applied: [] };
+            },
+        },
+        getSettings: () => ({}),
+        log: () => {},
+    });
+    assert.equal(result.ok, true);
+    assert.equal(refreshed, 1);
+    assert.ok(result.cast);
+});

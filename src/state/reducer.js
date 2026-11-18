@@ -7,6 +7,7 @@
  */
 
 import { nextBeatStatus } from '../data/beats.js';
+import { effectiveStoryTurn } from '../core/world-clock.js';
 import { FACTION_STATUSES } from '../data/factions.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
 import { LOCATION_STATUSES } from '../data/locations.js';
@@ -267,7 +268,15 @@ const HANDLERS = Object.freeze({
         if (!Number.isInteger(turns) || turns < 0) {
             fail('TICK_TIME turns must be a non-negative integer');
         }
+        const storyTurns = event.storyTurns ?? turns;
+        if (!Number.isInteger(storyTurns) || storyTurns < 0) {
+            fail('TICK_TIME storyTurns must be a non-negative integer');
+        }
+        // Read fiction time before the mechanical turn moves: V1 documents
+        // without `storyTurn` fall back to the pre-tick `meta.turn`.
+        const baseStoryTurn = effectiveStoryTurn(state);
         state.meta.turn += turns;
+        state.meta.storyTurn = baseStoryTurn + storyTurns;
         if (Object.hasOwn(event, 'date')) {
             if (event.date !== null && typeof event.date !== 'string') {
                 fail('TICK_TIME date must be a string or null');
@@ -715,6 +724,27 @@ const HANDLERS = Object.freeze({
         syncPlayerMirror(state);
     },
 
+    SET_CLOCK_HOLD(state, event) {
+        if (typeof event.active !== 'boolean') {
+            fail('SET_CLOCK_HOLD active must be a boolean');
+        }
+        const reason = event.active
+            ? (typeof event.reason === 'string' ? event.reason : 'manual')
+            : (typeof event.reason === 'string' ? event.reason : null);
+        if (!isObject(state.flags)) {
+            state.flags = {};
+        }
+        if (!isObject(state.flags.clock)) {
+            state.flags.clock = {};
+        }
+        state.flags.clock.hold = {
+            active: event.active,
+            reason,
+            sinceTurn: Number.isInteger(state.meta?.turn) ? state.meta.turn : 0,
+            sinceDate: state.meta?.inGameDate ?? null,
+        };
+    },
+
     COMBAT_START(state, event) {
         const locationId = event.locationId ?? state.scene.locationId;
         if (locationId !== null && locationId !== undefined) {
@@ -768,11 +798,36 @@ const HANDLERS = Object.freeze({
         }
         state.scene.combat = combat;
         state.meta.inCombat = true;
+        // Combat freezes fiction time unless a hold already belongs to another
+        // cause (manual/encounter/beat wins) or the caller opts out.
+        if (event.hold !== false && state.flags?.clock?.hold?.active !== true) {
+            if (!isObject(state.flags)) {
+                state.flags = {};
+            }
+            if (!isObject(state.flags.clock)) {
+                state.flags.clock = {};
+            }
+            state.flags.clock.hold = {
+                active: true,
+                reason: 'combat',
+                sinceTurn: state.meta.turn,
+                sinceDate: state.meta.inGameDate ?? null,
+            };
+        }
     },
 
-    COMBAT_END(state) {
+    COMBAT_END(state, event) {
         state.scene.combat = null;
         state.meta.inCombat = false;
+        const hold = state.flags?.clock?.hold;
+        if (hold?.active === true && hold.reason === 'combat' && event?.releaseHold !== false) {
+            state.flags.clock.hold = {
+                active: false,
+                reason: null,
+                sinceTurn: state.meta.turn,
+                sinceDate: state.meta.inGameDate ?? null,
+            };
+        }
     },
 
     SET_FACTION_INFLUENCE(state, event) {
@@ -1149,6 +1204,9 @@ export function applyWorldEvent(state, event, context = {}) {
         || (event.type === 'RECORD_BAD_END'
             && state.badEnds?.[event.characterId]?.continuityKey !== undefined
             && state.badEnds[event.characterId].continuityKey === badEndContinuityKey(state, event))
+        || (event.type === 'SET_CLOCK_HOLD'
+            && typeof event.active === 'boolean'
+            && (state.flags?.clock?.hold?.active === true) === (event.active === true))
     ) {
         return state;
     }
