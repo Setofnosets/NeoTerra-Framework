@@ -261,6 +261,27 @@ test('multi-actor bundles stay bundles and never become form groups', () => {
     assert.equal(npcPool.some((entry) => entry.displayName === 'Atropos Couple'), false);
 });
 
+test('generated profiles cover every registry entry and point at its card', () => {
+    const profiles = readJson(join(ROOT, 'data', 'characters', 'profiles.json'));
+    assert.equal(profiles.schemaVersion, 1);
+    assert.equal(profiles.generatedBy, 'tools/build-data.mjs');
+    assert.equal(profiles.counts.profiles, registry.entries.length);
+    assert.equal(Object.keys(profiles.profiles).length, registry.entries.length);
+
+    for (const entry of registry.entries) {
+        const profile = profiles.profiles[entry.id];
+        assert.ok(profile, `${entry.id} has no generated profile`);
+        assert.equal(profile.source.cardPath, entry.cardPath, entry.id);
+        assert.equal(profile.source.file, entry.file, entry.id);
+        assert.ok(Array.isArray(profile.missing), entry.id);
+        assert.equal(typeof profile.name, 'string', entry.id);
+    }
+
+    const missingAppearance = Object.values(profiles.profiles)
+        .filter((profile) => profile.missing.includes('appearance')).length;
+    assert.equal(profiles.counts.missingAppearance, missingAppearance);
+});
+
 test('form rules cover every alternate and never cross seasons', () => {
     assert.equal(validateFormRules(formRules, registry).ok, true);
     assert.ok(formRules.rules.length >= 33);

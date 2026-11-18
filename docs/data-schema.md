@@ -10,6 +10,7 @@ season scope, map bindings).
 | Path | Kind | Purpose |
 | --- | --- | --- |
 | `data/characters/index.json` | generated | Season-scoped character/form registry |
+| `data/characters/profiles.json` | generated | Parsed card profiles keyed by registry id |
 | `data/characters/overrides.json` | authored | ID fixes, aliases, multi-actor cards |
 | `data/seasons/index.json` | generated | Season manifest used by the loader |
 | `data/seasons/<id>.json` | authored | Season definition |
@@ -81,6 +82,68 @@ Both `--check` modes fail if generated files are stale.
 Supported fields: `id`, `displayName`, `aliases`, `side`, `threatLevel`,
 `formKind`, `tags`, `bundle`, `actors`, `npcEligible`. Unknown keys are
 ignored, so notes may be kept in the file.
+
+## Character profiles
+
+`data/characters/profiles.json` is generated from the labelled sections of each
+card's `data.description` (`tools/build-data.mjs`). Never hand-edit it; run
+`npm run build:data`. `--check` fails when the file is stale.
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedBy": "tools/build-data.mjs",
+  "source": "Chars",
+  "counts": { "profiles": 78, "missingAppearance": 0 },
+  "profiles": {
+    "s1.vaiva.colorgarde": {
+      "name": "Vaiva",
+      "gender": "Female",
+      "species": "Human",
+      "appearance": "…",
+      "attire": "…",
+      "abilities": "…",
+      "personality": "…",
+      "speech": "…",
+      "likes": ["…"],
+      "dislikes": ["…"],
+      "goals": [],
+      "background": "…",
+      "sensitive": [{ "label": "Sexual Information", "text": "…" }],
+      "extras": [{ "label": "History with Vaiva", "text": "…" }],
+      "forms": { "Light Shade": "…" },
+      "missing": ["goals"],
+      "source": {
+        "file": "Chars/S1/Vaiva-Colorgarde.json",
+        "cardPath": "Chars/S1/Vaiva-Colorgarde.json",
+        "dataName": "Vaiva"
+      }
+    }
+  }
+}
+```
+
+- Keys are the **final registry ids**, after `overrides.json` and form-group
+  resolution. Every registry entry must have exactly one profile.
+- `source.cardPath` is validated against the registry entry, so a renamed or
+  dropped card becomes a build error instead of a silently empty profile.
+- A card whose `data.description` is missing or not a string is a build error.
+- `missing` lists the canonical fields the card did not provide (for example
+  `appearance`). `missingAppearance` counts profiles where appearance is absent
+  after variant labels such as `Civilian Appearance` are resolved.
+- `likes`, `dislikes`, and `goals` are arrays: short, clearly separated items are
+  split; prose bodies stay a single item.
+- `sensitive` keeps NSFW-labelled sections (`Sexual Information`,
+  `Sexual Preference`, `Sexual Personality`, `Kink`) verbatim so the content
+  gate, not the parser, decides visibility.
+- `forms` maps a `Transformation into <form>` / `Transform into <form>` label to
+  its body; the codex renders the entry matching the selected form.
+- Bundle cards with `[Character N;` framing expose one profile per actor under
+  `actors` (with the shared preamble fields merged in). The top-level fields
+  describe the first actor; the framing lines never leak into a body.
+- Unknown labels are kept in `extras`; `Setting/World`, aliases, side, threat
+  level, `OOC reminder`, and `IMPORTANT` are ignored because they are already
+  registry metadata or season-level text.
 
 ## Season definition
 

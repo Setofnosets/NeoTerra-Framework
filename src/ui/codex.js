@@ -12,6 +12,8 @@
 
 import { applyWorldEvent } from '../state/reducer.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
+import { findFormSection, splitListText } from '../data/card-profile.js';
+import { applyContentGate } from '../core/content-gate.js';
 import { createLogger } from '../core/logger.js';
 
 const logger = createLogger('codex-ui');
@@ -488,12 +490,199 @@ function buildCharacterStateFromEntry(entry, state, season) {
     };
 }
 
+/**
+ * Live state wins when it holds a value; otherwise the card text is shown.
+ */
+function liveText(value, card) {
+    const live = typeof value === 'string' ? value : '';
+    if (live.trim().length > 0) {
+        return live;
+    }
+    return typeof card === 'string' ? card : '';
+}
+
+/**
+ * Live lists win when non-empty; otherwise the card body is split tolerantly.
+ */
+function liveList(value, card) {
+    if (Array.isArray(value) && value.length > 0) {
+        return value;
+    }
+    if (Array.isArray(card)) {
+        return card.slice();
+    }
+    return splitListText(card);
+}
+
+function gateField(text, settings, context) {
+    return applyContentGate(
+        typeof text === 'string' ? text : '',
+        settings?.contentGate ?? 'full',
+        settings?.contentLimits ?? {},
+        context,
+    );
+}
+
+function gateList(values, settings, context) {
+    return asArray(values)
+        .map((value) => gateField(value, settings, context))
+        .filter((value) => value.trim().length > 0);
+}
+
+/**
+ * Apply the content gate to one card profile at render time.
+ *
+ * The stored profile is never mutated: changing `contentGate` or a hard limit
+ * re-gates the same parsed text on the next render.
+ */
+export function gateCardProfile(card, { settings = {}, characterId = null, isPlayer = false } = {}) {
+    if (!card || typeof card !== 'object') {
+        return null;
+    }
+    const context = { characterId, isPlayer };
+    const text = (value) => gateField(value, settings, context);
+    const forms = {};
+    for (const [name, body] of Object.entries(card.forms ?? {})) {
+        const gated = text(body);
+        if (gated.trim().length > 0) {
+            forms[name] = gated;
+        }
+    }
+    const actors = asArray(card.actors)
+        .map((actor) => gateCardProfile(actor, { settings, characterId, isPlayer }))
+        .filter(Boolean);
+    return {
+        ...card,
+        appearance: text(card.appearance),
+        attire: text(card.attire),
+        abilities: text(card.abilities),
+        personality: text(card.personality),
+        speech: text(card.speech),
+        background: text(card.background),
+        gender: text(card.gender),
+        species: text(card.species),
+        occupation: text(card.occupation),
+        faction: text(card.faction),
+        identity: text(card.identity),
+        combatStyle: text(card.combatStyle),
+        gear: text(card.gear),
+        weakness: text(card.weakness),
+        likes: gateList(card.likes, settings, context),
+        dislikes: gateList(card.dislikes, settings, context),
+        goals: gateList(card.goals, settings, context),
+        sensitive: asArray(card.sensitive)
+            .map((section) => ({
+                label: section?.label ?? '',
+                text: text(section?.text),
+            }))
+            .filter((section) => section.text.trim().length > 0),
+        extras: asArray(card.extras)
+            .map((section) => ({
+                label: section?.label ?? '',
+                text: text(section?.text),
+            }))
+            .filter((section) => section.text.trim().length > 0),
+        forms,
+        ...(card.actors ? { actors } : {}),
+    };
+}
+
+function listLikeCardTraits(profile) {
+    const items = splitListText(profile?.personality || profile?.speech);
+    return items.length >= 2 ? items : [];
+}
+
+/**
+ * Merge one card profile into a live character, filling only empty fields.
+ *
+ * Raw card text is stored (no content gate): the codex gates at render time and
+ * the prompt renderer gates again, so changing the setting later still works.
+ *
+ * @returns {{ character: object, changed: boolean }}
+ */
+export function mergeCardProfileIntoCharacter(character, profile) {
+    if (!character || !profile || profile.actors) {
+        return { character, changed: false };
+    }
+    const next = { ...character };
+    let changed = false;
+
+    const setText = (field, value) => {
+        if (typeof value !== 'string' || value.trim().length === 0) {
+            return;
+        }
+        const current = typeof next[field] === 'string' ? next[field] : '';
+        if (current.trim().length === 0) {
+            next[field] = value;
+            changed = true;
+        }
+    };
+    const setList = (field, values) => {
+        if (!Array.isArray(values) || values.length === 0) {
+            return;
+        }
+        if (!Array.isArray(next[field]) || next[field].length === 0) {
+            next[field] = values.slice();
+            changed = true;
+        }
+    };
+
+    setText('appearance', profile.appearance);
+    setText('outfit', profile.attire);
+    setText('notes', profile.background);
+    setList('abilities', splitListText(profile.abilities));
+    setList('likes', profile.likes);
+    setList('dislikes', profile.dislikes);
+    setList('goals', profile.goals);
+    setList('traits', listLikeCardTraits(profile));
+
+    return { character: changed ? next : character, changed };
+}
+
+/**
+ * Fill missing character fields for the supplied ids from the card profiles.
+ * Idempotent: a second call with the same state reports no change.
+ */
+export function backfillCardProfiles({ state, ids = null, profiles = null } = {}) {
+    if (!state || !profiles || typeof profiles !== 'object') {
+        return { state, changed: false, updated: [] };
+    }
+    const targetIds = Array.isArray(ids) ? ids : Object.keys(state.characters ?? {});
+    const characters = { ...(state.characters ?? {}) };
+    const updated = [];
+
+    for (const id of targetIds) {
+        const character = characters[id];
+        if (!character) {
+            continue;
+        }
+        // Match the Codex display key (the state/roster id), not the current
+        // form: an imported profile must be the one the panel shows.
+        const profile = profiles[id] ?? null;
+        const result = mergeCardProfileIntoCharacter(character, profile);
+        if (result.changed) {
+            characters[id] = result.character;
+            updated.push(id);
+        }
+    }
+
+    if (updated.length === 0) {
+        return { state, changed: false, updated: [] };
+    }
+    return {
+        state: { ...state, characters },
+        changed: true,
+        updated,
+    };
+}
+
 function buildDetail({
     state,
     season,
     registry,
     formIndex,
     formRules,
+    profiles,
     settings,
     selectedId,
     playAs,
@@ -523,6 +712,15 @@ function buildDetail({
     const willpower = character?.willpower ?? {};
     const staminaMax = Number.isFinite(stamina.max) && stamina.max > 0 ? stamina.max : 100;
     const willpowerMax = Number.isFinite(willpower.max) && willpower.max > 0 ? willpower.max : 100;
+    const isPlayer = state?.player?.identity === 'canon'
+        && state?.player?.characterId === selectedId;
+    const card = gateCardProfile(profiles?.[selectedId] ?? null, {
+        settings,
+        characterId: selectedId,
+        isPlayer,
+    });
+    const gateContext = { characterId: selectedId, isPlayer };
+    const gateValue = (value) => gateField(value, settings, gateContext);
 
     return {
         characterId: selectedId,
@@ -530,8 +728,7 @@ function buildDetail({
         side: character?.side ?? entry?.side ?? 'neutral',
         status: character?.status ?? 'active',
         alive: character ? character.alive !== false && character.status !== 'dead' : true,
-        isPlayer: state?.player?.identity === 'canon'
-            && state?.player?.characterId === selectedId,
+        isPlayer,
         nonCanon: !roster.has(selectedId),
         locationId: character?.locationId ?? null,
         locationName: character?.locationId
@@ -569,15 +766,38 @@ function buildDetail({
             mood: character?.mood ?? '',
             allegiance: character?.allegiance ?? '',
             agenda: character?.agenda ?? '',
-            goals: asArray(character?.goals),
-            appearance: character?.appearance ?? '',
-            outfit: character?.outfit ?? '',
-            abilities: asArray(character?.abilities),
-            skills: asArray(character?.skills),
-            traits: asArray(character?.traits),
-            likes: asArray(character?.likes),
-            dislikes: asArray(character?.dislikes),
-            notes: character?.notes ?? '',
+            // Live and card values both pass the gate: imported/seeded card text
+            // is stored raw, so the render layer is the single policy point.
+            goals: gateList(liveList(character?.goals, card?.goals), settings, gateContext),
+            appearance: gateValue(liveText(character?.appearance, card?.appearance)),
+            outfit: gateValue(liveText(character?.outfit, card?.attire)),
+            abilities: gateList(liveList(character?.abilities, card?.abilities), settings, gateContext),
+            skills: gateList(asArray(character?.skills), settings, gateContext),
+            traits: gateList(asArray(character?.traits), settings, gateContext),
+            likes: gateList(liveList(character?.likes, card?.likes), settings, gateContext),
+            dislikes: gateList(liveList(character?.dislikes, card?.dislikes), settings, gateContext),
+            notes: gateValue(character?.notes ?? ''),
+            // Live-only values let the renderer avoid repeating seeded card text.
+            liveAppearance: gateValue(typeof character?.appearance === 'string' ? character.appearance : ''),
+            liveOutfit: gateValue(typeof character?.outfit === 'string' ? character.outfit : ''),
+            liveNotes: gateValue(character?.notes ?? ''),
+            liveGoals: gateList(asArray(character?.goals), settings, gateContext),
+            liveAbilities: gateList(asArray(character?.abilities), settings, gateContext),
+            liveLikes: gateList(asArray(character?.likes), settings, gateContext),
+            liveDislikes: gateList(asArray(character?.dislikes), settings, gateContext),
+            gender: card?.gender ?? '',
+            species: card?.species ?? '',
+            identity: card?.identity ?? '',
+            speech: card?.speech ?? '',
+            personality: card?.personality ?? '',
+            background: card?.background ?? '',
+            combatStyle: card?.combatStyle ?? '',
+            gear: card?.gear ?? '',
+            weakness: card?.weakness ?? '',
+            sensitive: card?.sensitive ?? [],
+            extras: card?.extras ?? [],
+            forms: card?.forms ?? {},
+            card,
         },
         relationships: character ? buildRelationships(state, selectedId) : [],
         badEnd: record
@@ -613,6 +833,7 @@ export function buildCodexView({
     formGroups = null,
     formRules = null,
     formIndex = null,
+    profiles = null,
     settings = {},
     filters = {},
     selectedId = null,
@@ -673,6 +894,7 @@ export function buildCodexView({
         seasonId: season?.id ?? state?.seasonId ?? null,
         seasonTitle: season?.title ?? null,
         sandbox,
+        hasProfiles: Boolean(profiles && Object.keys(profiles).length > 0),
         player: {
             identity: state?.player?.identity ?? 'custom',
             characterId: state?.player?.characterId ?? null,
@@ -701,6 +923,7 @@ export function buildCodexView({
             registry,
             formIndex: index,
             formRules,
+            profiles,
             settings,
             selectedId: effectiveSelected,
             playAs,
@@ -843,6 +1066,10 @@ function listMarkup(values, empty = 'None') {
     if (values.length === 0) {
         return `<p class="neoterra-empty">${escapeCodexHtml(empty)}</p>`;
     }
+    // A single long body is prose, not a one-line bullet.
+    if (values.length === 1 && values[0].length > 200) {
+        return `<p class="neoterra-codex-card-text">${escapeCodexHtml(values[0])}</p>`;
+    }
     return `<ul class="neoterra-codex-list-inline">${values.map((value) => (
         `<li>${escapeCodexHtml(value)}</li>`
     )).join('')}</ul>`;
@@ -912,11 +1139,101 @@ function renderLineage(detail) {
     </div>`;
 }
 
+function cardParagraph(label, text) {
+    if (typeof text !== 'string' || text.trim().length === 0) {
+        return '';
+    }
+    return `<p class="neoterra-codex-card-text"><strong>${escapeCodexHtml(label)}:</strong> ${escapeCodexHtml(text)}</p>`;
+}
+
+function cardRow(label, text) {
+    if (typeof text !== 'string' || text.trim().length === 0) {
+        return '';
+    }
+    return `<div class="neoterra-codex-card-row">
+        <span>${escapeCodexHtml(label)}</span>
+        <p>${escapeCodexHtml(text)}</p>
+    </div>`;
+}
+
+function sameList(left, right) {
+    return JSON.stringify(asArray(left)) === JSON.stringify(asArray(right));
+}
+
+function renderCardProfile(card, detail) {
+    if (!card) {
+        return '';
+    }
+    const live = detail.profile;
+    const paragraphs = [
+        card.appearance !== live.liveAppearance
+            ? cardParagraph('Appearance', card.appearance)
+            : '',
+        card.attire !== live.liveOutfit ? cardParagraph('Attire', card.attire) : '',
+        cardParagraph('Personality', card.personality),
+        cardParagraph('Speech', card.speech),
+        card.background !== live.liveNotes ? cardParagraph('Background', card.background) : '',
+    ].join('');
+
+    const lists = [
+        ['Likes', card.likes, live.liveLikes],
+        ['Dislikes', card.dislikes, live.liveDislikes],
+        ['Goals', card.goals, live.liveGoals],
+    ].map(([label, values, liveValues]) => (values.length > 0 && !sameList(values, liveValues)
+        ? `<section class="neoterra-codex-profile-block">
+            <h6>${escapeCodexHtml(label)}</h6>
+            ${listMarkup(values)}
+        </section>`
+        : '')).join('');
+
+    const canonicalRows = [
+        ['Identity', card.identity],
+        ['Occupation', card.occupation],
+        ['Faction', card.faction],
+        ['Combat style', card.combatStyle],
+        ['Gear', card.gear],
+        ['Weakness', card.weakness],
+    ].map(([label, value]) => cardRow(label, value)).join('');
+    const extras = asArray(card.extras).map((entry) => cardRow(entry.label, entry.text)).join('');
+    const sensitive = asArray(card.sensitive).map((entry) => cardRow(entry.label, entry.text)).join('');
+    const formBody = findFormSection(card, detail.form?.label);
+    const actorProfiles = asArray(card.actors).slice(1).map((actor) => `
+        <details class="neoterra-codex-card-actor">
+            <summary>${escapeCodexHtml(actor.name || 'Actor')}</summary>
+            ${cardParagraph('Appearance', actor.appearance)}
+            ${cardParagraph('Personality', actor.personality)}
+            ${cardParagraph('Background', actor.background)}
+        </details>`).join('');
+    const actorNames = asArray(card.actors).map((actor) => actor.name).filter(Boolean);
+
+    return `<section class="neoterra-codex-section neoterra-codex-card-profile" data-neoterra-codex-card-profile>
+        <div class="neoterra-codex-card-profile-head">
+            <h5>From the character card</h5>
+            <button type="button" class="menu_button" data-neoterra-import-profile="${escapeCodexHtml(detail.characterId)}">Import card profile</button>
+        </div>
+        ${actorNames.length > 1 ? `<p class="neoterra-hint">Multi-actor card: ${escapeCodexHtml(actorNames.join(' & '))}</p>` : ''}
+        ${paragraphs}
+        ${lists}
+        ${canonicalRows ? `<div class="neoterra-codex-card-rows">${canonicalRows}</div>` : ''}
+        ${extras ? `<h6>Other card notes</h6><div class="neoterra-codex-card-rows">${extras}</div>` : ''}
+        ${formBody ? `<section class="neoterra-codex-form-notes" data-neoterra-codex-form-notes>
+            <h6>Form notes: ${escapeCodexHtml(detail.form?.label ?? 'current form')}</h6>
+            ${cardParagraph('Transformation', formBody)}
+        </section>` : ''}
+        ${actorProfiles}
+        ${sensitive ? `<section class="neoterra-codex-sensitive" data-neoterra-codex-sensitive>
+            <h6>Sensitive</h6>
+            <div class="neoterra-codex-card-rows">${sensitive}</div>
+        </section>` : ''}
+    </section>`;
+}
+
 function renderDetail(detail, state) {
     if (!detail) {
         return '<p class="neoterra-empty">Select a character to see their codex entry.</p>';
     }
     const profile = detail.profile;
+    const identityLine = [profile.gender, profile.species].filter(Boolean).join(' · ');
     const badges = [
         badge(detail.side, detail.side === 'villain' ? 'danger' : 'accent'),
         badge(detail.status),
@@ -956,7 +1273,7 @@ function renderDetail(detail, state) {
         <header class="neoterra-codex-detail-head">
             <div>
                 <h4>${escapeCodexHtml(detail.displayName)}</h4>
-                <p class="neoterra-hint">${escapeCodexHtml(detail.form.label)}${detail.locationName ? ` · ${escapeCodexHtml(detail.locationName)}` : ''}${detail.threatLevel ? ` · threat ${escapeCodexHtml(detail.threatLevel)}` : ''}</p>
+                <p class="neoterra-hint">${escapeCodexHtml(detail.form.label)}${identityLine ? ` · ${escapeCodexHtml(identityLine)}` : ''}${detail.locationName ? ` · ${escapeCodexHtml(detail.locationName)}` : ''}${detail.threatLevel ? ` · threat ${escapeCodexHtml(detail.threatLevel)}` : ''}</p>
             </div>
             <div class="neoterra-codex-badges">${badges}</div>
         </header>
@@ -1008,12 +1325,14 @@ function renderDetail(detail, state) {
 
         <section class="neoterra-codex-section">
             <h5>Profile</h5>
-            <p>${escapeCodexHtml(profile.appearance || 'No appearance recorded.')}</p>
-            <p class="neoterra-hint">Outfit: ${escapeCodexHtml(profile.outfit || 'none recorded')}</p>
+            <p>${escapeCodexHtml(profile.liveAppearance || 'No appearance recorded.')}</p>
+            <p class="neoterra-hint">Outfit: ${escapeCodexHtml(profile.liveOutfit || 'none recorded')}</p>
             <p class="neoterra-hint">Form kind: ${escapeCodexHtml(profile.formKind ?? 'unknown')} · Role: ${escapeCodexHtml(profile.formRole ?? 'unknown')}</p>
             <p class="neoterra-hint">Card: ${escapeCodexHtml(profile.cardPath ?? 'not linked')}</p>
-            ${profile.notes ? `<p>${escapeCodexHtml(profile.notes)}</p>` : ''}
+            ${profile.liveNotes ? `<p>${escapeCodexHtml(profile.liveNotes)}</p>` : ''}
         </section>
+
+        ${renderCardProfile(profile.card, detail)}
 
         <section class="neoterra-codex-section">
             <h5>Relationships</h5>
@@ -1056,7 +1375,10 @@ export function renderCodexMarkup(view) {
                 <h4>Character Codex</h4>
                 <p class="neoterra-hint">${escapeCodexHtml(view.seasonTitle ?? view.seasonId ?? 'Neo Terra')} · ${view.filtered.length}/${view.total} characters${view.sandbox ? ' · Sandbox' : ''}</p>
             </div>
-            <p class="neoterra-codex-playing">Playing as <strong>${escapeCodexHtml(view.player.displayName)}</strong>${view.player.nonCanon ? ' (non-canon)' : ''}</p>
+            <div class="neoterra-codex-head-actions">
+                <p class="neoterra-codex-playing">Playing as <strong>${escapeCodexHtml(view.player.displayName)}</strong>${view.player.nonCanon ? ' (non-canon)' : ''}</p>
+                ${view.hasProfiles ? '<button type="button" class="menu_button" data-neoterra-sync-profiles>Sync card profiles</button>' : ''}
+            </div>
         </header>
         <div class="neoterra-codex-filters">
             <label class="neoterra-field neoterra-codex-search">
@@ -1137,6 +1459,7 @@ export function mountCodex({
     registry = null,
     formGroups = null,
     formRules = null,
+    profiles = null,
     getSettings = () => ({}),
     onIdentityChange = null,
     onWorldChange = null,
@@ -1159,6 +1482,7 @@ export function mountCodex({
         registry,
         formGroups,
         formRules,
+        profiles,
         formIndex: resolveFormIndex({ registry, formGroups }),
         getSettings,
         onIdentityChange,
@@ -1186,6 +1510,7 @@ export function mountCodex({
         formGroups,
         formRules,
         formIndex: state.formIndex,
+        profiles,
         settings: getSettings(),
         filters: state.filters,
         selectedId: state.selectedId,
@@ -1274,6 +1599,32 @@ export function mountCodex({
         paint();
     };
 
+    const applyProfileBackfill = (ids, mode) => {
+        try {
+            const before = store.get();
+            const result = backfillCardProfiles({ state: before, ids, profiles });
+            if (!result.changed) {
+                state.error = null;
+                state.status = mode === 'sync'
+                    ? 'Card profiles are already in sync.'
+                    : 'No missing card fields to import for this character.';
+                paint();
+                return;
+            }
+            const next = store.replace(result.state);
+            state.error = null;
+            state.status = mode === 'sync'
+                ? `Synced card profiles for ${result.updated.length} character(s).`
+                : `Imported card profile for ${next.characters?.[ids[0]]?.displayName ?? ids[0]}.`;
+            onWorldChange?.({ state: next, reason: 'card-profiles', updated: result.updated });
+        } catch (error) {
+            state.error = error?.message ?? String(error);
+            state.status = null;
+            logger.warn('Card profile import failed', error);
+        }
+        paint();
+    };
+
     root.addEventListener('input', (event) => {
         const input = event.target.closest?.('[data-neoterra-codex-search]');
         if (!input) {
@@ -1301,6 +1652,19 @@ export function mountCodex({
     }, { signal: controller.signal });
 
     root.addEventListener('click', (event) => {
+        if (event.target.closest?.('[data-neoterra-sync-profiles]')) {
+            state.status = null;
+            state.error = null;
+            applyProfileBackfill(Object.keys(store.get()?.characters ?? {}), 'sync');
+            return;
+        }
+        const importProfile = event.target.closest?.('[data-neoterra-import-profile]');
+        if (importProfile) {
+            state.status = null;
+            state.error = null;
+            applyProfileBackfill([importProfile.dataset.neoterraImportProfile], 'one');
+            return;
+        }
         const selectCard = event.target.closest?.('[data-neoterra-codex-select]');
         if (selectCard) {
             state.selectedId = selectCard.dataset.neoterraCodexSelect;

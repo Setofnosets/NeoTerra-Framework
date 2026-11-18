@@ -204,8 +204,9 @@ failure.
 ## Content gate
 
 The global gate defaults to `full` (a byte-identical no-op). `reduced`,
-`mature-only`, and `strict` transform every rendered block and tracker prompt.
-Per-character and per-player hard limits are layered on top and always win;
+`mature-only`, and `strict` transform every rendered block, card-profile section
+in the Codex, and tracker prompt. Per-character and per-player hard limits are
+layered on top and always win;
 the global gate can only be as strict as those limits require. See
 [docs/data-schema.md](docs/data-schema.md#content-limits).
 
@@ -245,6 +246,7 @@ All season-specific content is data:
 
 ```
 data/characters/index.json      # generated registry
+data/characters/profiles.json   # generated card-section profiles
 data/characters/overrides.json  # authored fixes and multi-actor cards
 data/seasons/index.json         # generated season manifest
 data/seasons/<id>.json          # season definition
@@ -269,8 +271,38 @@ re-run `npm run build:data`. Use the settings panel's **Import character
 cards** drop zone to generate override entries for unusual cards; then merge
 the downloaded file into `data/characters/overrides.json` and rebuild.
 
-See [docs/adding-a-season.md](docs/adding-a-season.md) and
-[docs/data-schema.md](docs/data-schema.md).
+### Character profiles
+
+`tools/build-data.mjs` parses each card's labelled `data.description`
+sections into `data/characters/profiles.json` (keyed by the final registry id).
+A non-empty live `WorldState` value takes precedence over the card; card text
+fills the gaps and is shown in the card section when it differs from live state.
+In existing chats, **Import card profile** (per character) and **Sync card
+profiles** (header) fill only missing fields; they never overwrite live values
+and are safe to run twice. New seasons seed the same text into empty state at
+start.
+
+Sensitive sections are parsed, not dropped. The Codex and the prompt renderer
+apply `contentGate` and `contentLimits` at render time, so changing the setting
+updates existing chats without rewriting stored state. Never hand-edit
+`profiles.json`; run `npm run build:data`.
+
+See [docs/adding-a-season.md](docs/adding-a-season.md),
+[docs/data-schema.md](docs/data-schema.md#character-profiles).
+
+### Troubleshooting
+
+If the Characters tab shows **"The character codex could not be mounted."**:
+
+- The host element carries the failure reason in
+  `data-neoterra-codex-error` (inspect `[data-neoterra-codex-host]`).
+- The browser console has a `Could not mount the character codex` warning with
+  the same error.
+- Report both. The Codex loads form groups/rules and the generated profiles;
+  none of these should depend on the chat-scoped roster slice.
+
+A missing `data/characters/profiles.json` is non-fatal: the Codex mounts with
+live state only and season start still succeeds.
 
 ---
 
@@ -278,7 +310,7 @@ See [docs/adding-a-season.md](docs/adding-a-season.md) and
 
 ```bash
 # Regenerate generated data
-npm run build:data                 # data/characters/index.json + data/seasons/index.json
+npm run build:data                 # data/characters/{index,profiles}.json + data/seasons/index.json
 npm run build:map                  # data/map/* + data/locations.json bindings
 
 # Validation
@@ -295,6 +327,23 @@ every proposal is human-verified. It requires `DEEPSEEK_API_KEY` for `--draft`.
 
 No runtime npm dependencies are added. Node 20+ is only required for the
 development tools and tests.
+
+### Local dev install
+
+When iterating on this repository against a running SillyTavern, point the
+third-party install at the working tree instead of copying files. On Windows,
+replace the copy with a directory junction (keep a backup first):
+
+```bat
+rmdir /S /Q "SillyTavern\public\scripts\extensions\third-party\NeoTerra-Framework"
+mklink /J "SillyTavern\public\scripts\extensions\third-party\NeoTerra-Framework" "%USERPROFILE%\path\to\NeoTerra-Framework"
+```
+
+Replace the `%USERPROFILE%\path\to\NeoTerra-Framework` placeholder with the absolute
+path of your clone. Then every save is served on the next page refresh, and repository-only files
+(`plans/`, `tests/`, `tools/`) become visible to the static server without ever
+being loaded by SillyTavern. Remove the junction with `rmdir` and restore the
+backup to undo it.
 
 ---
 

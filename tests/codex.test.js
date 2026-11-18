@@ -5,10 +5,12 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+    backfillCardProfiles,
     buildCodexView,
     buildFormSwapOptions,
     buildPlayAsConfirmation,
     buildPlayAsOptions,
+    gateCardProfile,
     performFormSwap,
     performPlayAs,
     performPlayAsCustom,
@@ -36,6 +38,7 @@ const factions = readJson('data/factions.json');
 const locations = readJson('data/locations.json');
 const formGroups = readJson('data/form-groups.json');
 const formRules = readJson('data/form-rules.json');
+const profiles = readJson('data/characters/profiles.json').profiles;
 const seasons = {
     s1: readJson('data/seasons/s1.json'),
     s1dark: readJson('data/seasons/s1dark.json'),
@@ -280,6 +283,183 @@ test('Play-as confirmation dialog and codex markup are rendered safely', () => {
     assert.match(markup, /data-neoterra-codex-filter="status"/);
     assert.match(markup, /Play as Carol Fate/);
     assert.match(markup, /data-neoterra-form-swap-target/);
+});
+
+test('card profiles fill empty live fields and never override live values', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const vaiva = 's1.vaiva.colorgarde';
+    const view = viewFor(store, 's1', { profiles, selectedId: vaiva });
+    assert.ok(view.selected.profile.card);
+    assert.match(view.selected.profile.appearance, /captivating 25-year-old/);
+    assert.match(view.selected.profile.outfit, /chic fashion/);
+    assert.ok(view.selected.profile.abilities.length > 0);
+    assert.match(view.selected.profile.abilities.join(' '), /normal human/);
+    assert.match(view.selected.profile.personality, /Vaiva's personality/);
+    assert.ok(view.selected.profile.speech.length > 0);
+    assert.ok(view.selected.profile.likes.length >= 2);
+    assert.ok(view.selected.profile.dislikes.length >= 2);
+    assert.match(view.selected.profile.background, /PetraByte/);
+    assert.equal(view.selected.profile.gender, 'Female');
+    assert.equal(view.selected.profile.species, 'Human');
+
+    const markup = renderCodexMarkup(view);
+    assert.match(markup, /From the character card/);
+    assert.match(markup, /Female · Human/);
+    assert.match(markup, /data-neoterra-codex-card-profile/);
+
+    // Canonical card rows (occupation/gear/etc.) render even though the S1
+    // cards used above leave most of them empty.
+    const withRows = viewFor(store, 's1', {
+        profiles: {
+            ...profiles,
+            [vaiva]: {
+                ...profiles[vaiva],
+                occupation: 'Engineer',
+                faction: 'PetraByte',
+                combatStyle: 'Suit-assisted',
+                gear: 'Light suit',
+                weakness: 'Overconfidence',
+            },
+        },
+        selectedId: vaiva,
+    });
+    const rowsMarkup = renderCodexMarkup(withRows);
+    assert.match(rowsMarkup, /Occupation/);
+    assert.match(rowsMarkup, /Combat style/);
+    assert.match(rowsMarkup, /Light suit/);
+
+    // A non-empty live value wins over the card and is what the panel shows.
+    const state = store.get();
+    state.characters[vaiva].appearance = 'Live appearance wins.';
+    store.replace(state);
+    const live = viewFor(store, 's1', { profiles, selectedId: vaiva });
+    assert.equal(live.selected.profile.appearance, 'Live appearance wins.');
+    assert.match(renderCodexMarkup(live), /Live appearance wins\./);
+
+    // Goals exist on the corrupted Carol card.
+    const fate = viewFor(store, 's1', {
+        profiles,
+        selectedId: 's1.twisting.fate.corrupted.carol.fate',
+    });
+    assert.ok(fate.selected.profile.goals.length > 0);
+});
+
+test('profiles: {} reproduces the live-only codex with no card block', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const view = viewFor(store, 's1', { profiles: {}, selectedId: 's1.vaiva.colorgarde' });
+    assert.equal(view.selected.profile.appearance, '');
+    assert.equal(view.selected.profile.card, null);
+    assert.deepEqual(view.selected.profile.likes, []);
+    const markup = renderCodexMarkup(view);
+    assert.doesNotMatch(markup, /From the character card/);
+    assert.match(markup, /No appearance recorded\./);
+
+    // An unknown profile id and a missing profile map are safe.
+    assert.doesNotThrow(() => viewFor(store, 's1', {
+        profiles: { 'not.a.real.entry': { appearance: 'ghost' } },
+        selectedId: 's1.vaiva.colorgarde',
+    }));
+});
+
+test('card profile backfill is idempotent and never overwrites live values', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const vaiva = 's1.vaiva.colorgarde';
+    const state = store.get();
+    state.characters[vaiva].appearance = 'Live appearance.';
+    store.replace(state);
+
+    const first = backfillCardProfiles({ state: store.get(), ids: [vaiva], profiles });
+    assert.equal(first.changed, true);
+    assert.equal(first.state.characters[vaiva].appearance, 'Live appearance.');
+    assert.deepEqual(first.state.characters[vaiva].likes, profiles[vaiva].likes);
+    assert.equal(first.state.characters[vaiva].notes, profiles[vaiva].background);
+
+    const saved = store.replace(first.state);
+    const second = backfillCardProfiles({ state: saved, ids: [vaiva], profiles });
+    assert.equal(second.changed, false);
+    assert.equal(second.state, saved);
+
+    // A full sync also becomes a no-op after one pass.
+    const allIds = Object.keys(saved.characters);
+    const sync = backfillCardProfiles({ state: saved, ids: allIds, profiles });
+    const synced = store.replace(sync.state);
+    const again = backfillCardProfiles({ state: synced, ids: allIds, profiles });
+    assert.equal(again.changed, false);
+});
+
+test('live state that came from a card is also gated at render time', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const vaiva = 's1.vaiva.colorgarde';
+    const state = store.get();
+    state.characters[vaiva].appearance = 'A sex scene in the rain.';
+    state.characters[vaiva].likes = ['fuck'];
+    state.characters[vaiva].notes = 'A sex scene in the past.';
+    store.replace(state);
+
+    const full = viewFor(store, 's1', { profiles: {}, selectedId: vaiva });
+    assert.match(full.selected.profile.appearance, /sex scene/);
+
+    const strict = viewFor(store, 's1', {
+        profiles: {},
+        settings: { contentGate: 'strict' },
+        selectedId: vaiva,
+    });
+    assert.equal(strict.selected.profile.appearance, '');
+    assert.deepEqual(strict.selected.profile.likes, []);
+    assert.equal(strict.selected.profile.notes, '');
+    assert.doesNotMatch(renderCodexMarkup(strict), /sex scene/);
+});
+
+test('the content gate is applied to card profiles at render time', () => {
+    const card = {
+        appearance: 'Graphic gore covers the street.',
+        sensitive: [{ label: 'Sexual Information', text: 'A sex scene with moaning.' }],
+        extras: [{ label: 'Weakness', text: 'None recorded.' }],
+        forms: { 'Night Form': 'A sex scene in the dark.' },
+        likes: ['fuck'],
+        dislikes: [],
+        goals: [],
+    };
+
+    const full = gateCardProfile(card, { settings: { contentGate: 'full' } });
+    assert.equal(full.sensitive[0].text, 'A sex scene with moaning.');
+    assert.equal(full.forms['Night Form'], 'A sex scene in the dark.');
+
+    const mature = gateCardProfile(card, { settings: { contentGate: 'mature-only' } });
+    assert.match(mature.sensitive[0].text, /\[sexual content omitted\]/);
+    assert.match(mature.forms['Night Form'], /\[sexual content omitted\]/);
+    assert.equal(mature.appearance, card.appearance);
+
+    const reduced = gateCardProfile(card, { settings: { contentGate: 'reduced' } });
+    assert.match(reduced.appearance, /\[violence elided\]/);
+
+    const strict = gateCardProfile(card, {
+        settings: { contentGate: 'strict' },
+        characterId: 's1.vaiva.colorgarde',
+        isPlayer: true,
+    });
+    assert.equal(strict.appearance, '');
+    assert.deepEqual(strict.sensitive, []);
+    assert.deepEqual(strict.forms, {});
+
+    // Hard limits only tighten the global level.
+    const limit = gateCardProfile(card, {
+        settings: {
+            contentGate: 'full',
+            contentLimits: { player: '', characters: { 's1.vaiva.colorgarde': 'mature-only' } },
+        },
+        characterId: 's1.vaiva.colorgarde',
+    });
+    assert.match(limit.sensitive[0].text, /\[sexual content omitted\]/);
+
+    const playerLimit = gateCardProfile(card, {
+        settings: { contentGate: 'full', contentLimits: { player: 'mature-only', characters: {} } },
+        isPlayer: true,
+    });
+    assert.match(playerLimit.sensitive[0].text, /\[sexual content omitted\]/);
+
+    // The stored profile is never mutated.
+    assert.equal(card.sensitive[0].text, 'A sex scene with moaning.');
 });
 
 test('settings expose agent routing/prompts and character hard limits', () => {

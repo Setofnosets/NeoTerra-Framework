@@ -48,6 +48,28 @@ contracts are described in [docs/scene-output.md](docs/scene-output.md).
 - **Dead map close button** — the map toolbar **×** now closes the shell
   through an `onClose` callback. `map.closeOnTravel` (default on) closes the
   shell after a successful travel.
+- **Characters tab never mounted** — the Codex validated the global
+  `form-rules.json` against the chat-scoped roster slice, so every season chat
+  reported unresolved ids and painted "The character codex could not be
+  mounted." Form rules now get the structural check only; registry-id
+  resolution is opt-in for callers holding the complete registry. The failure
+  reason is also exposed as `data-neoterra-codex-error`.
+- **Every character profile was empty** — the Codex read only
+  `WorldState.characters[id]`, which season start seeded empty. Card sections
+  are now parsed at build time into `data/characters/profiles.json`; live
+  non-empty values still win.
+
+### Added
+
+- **Card profiles in the Codex** — appearance, attire, personality, speech,
+  background, likes/dislikes/goals, abilities, occupation/faction/gear/weakness,
+  per-form notes, and bundle actor profiles are read from
+  `data/characters/profiles.json`. Sensitive sections are rendered only through
+  `contentGate`/`contentLimits` at render time.
+- **Profile backfill and seeding** — new seasons seed card text into empty
+  character fields; existing chats get **Import card profile** and **Sync card
+  profiles** actions. Both are idempotent and never overwrite a non-empty live
+  value.
 
 ### Notes
 

@@ -28,6 +28,7 @@ import {
     renderIdentityStep,
     renderSeasonMenuMarkup,
 } from '../src/ui/season-menu.js';
+import { clearProfilesCache } from '../src/data/profiles.js';
 import { buildOpeningScene, getPovLabel } from '../src/flows/scene.js';
 import { selectNpcPool } from '../src/state/selectors.js';
 import { createWorldStateStore } from '../src/state/store.js';
@@ -45,6 +46,7 @@ const locations = readJson('data/locations.json');
 const formGroups = readJson('data/form-groups.json');
 const formRules = readJson('data/form-rules.json');
 const districts = readJson('data/districts.json');
+const profileArtifact = readJson('data/characters/profiles.json');
 
 const SEASON_IDS = ['s1', 's1dark', 's2', 's3', 's4', 'sandbox'];
 const seasonDocuments = Object.fromEntries(
@@ -573,6 +575,72 @@ test('enterSeason loads data, seeds the chat, and links a materialized book', as
     assert.equal(metadata.neoterra.worldBook.status, 'materialized');
     assert.equal(metadata.neoterra.registry.entries.some((entry) => entry.id === 's1.vaiva.colorgarde'), true);
     assert.ok(saves >= 1);
+});
+
+test('enterSeason seeds card profiles and tolerates a missing profile file', async () => {
+    clearFormDataCache();
+    clearProfilesCache();
+    const metadata = {};
+    const documents = {
+        's1.json': seasonDocuments.s1,
+        'index.json': registry,
+        'factions.json': factions,
+        'locations.json': locations,
+        'form-groups.json': formGroups,
+        'form-rules.json': formRules,
+        'districts.json': districts,
+        'profiles.json': profileArtifact,
+    };
+    const fetchImpl = async (url) => {
+        const key = Object.keys(documents).find((name) => String(url).endsWith(name));
+        if (!key) {
+            return { ok: false, status: 404, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => documents[key] };
+    };
+    const ctx = {
+        chatId: 'chat-profiles',
+        chatMetadata: metadata,
+        saveMetadataDebounced: () => {},
+        characters: [],
+    };
+    const result = await enterSeason({
+        id: 's1',
+        identity: { identity: 'custom' },
+        ctx,
+        fetchImpl,
+        now: 1700000000000,
+    });
+    const vaiva = result.state.characters['s1.vaiva.colorgarde'];
+    assert.equal(vaiva.appearance, profileArtifact.profiles['s1.vaiva.colorgarde'].appearance);
+    assert.ok(vaiva.likes.length > 0);
+
+    // A stale install without profiles.json still starts the season.
+    clearFormDataCache();
+    clearProfilesCache();
+    const metadata2 = {};
+    const result2 = await enterSeason({
+        id: 's1',
+        identity: { identity: 'custom' },
+        ctx: {
+            chatId: 'chat-no-profiles',
+            chatMetadata: metadata2,
+            saveMetadataDebounced: () => {},
+            characters: [],
+        },
+        fetchImpl: async (url) => {
+            const key = Object.keys(documents).find(
+                (name) => name !== 'profiles.json' && String(url).endsWith(name),
+            );
+            if (!key) {
+                return { ok: false, status: 404, json: async () => ({}) };
+            }
+            return { ok: true, status: 200, json: async () => documents[key] };
+        },
+        now: 1700000000000,
+    });
+    assert.equal(result2.state.characters['s1.vaiva.colorgarde'].appearance, '');
+    clearProfilesCache();
 });
 
 test('enterSeason refuses to seed when the chat changed during loading', async () => {

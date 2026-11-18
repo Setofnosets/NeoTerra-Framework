@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PLAYABLE_SEASON_IDS } from '../src/data/seasons.js';
+import { buildCharacterProfile } from '../src/context/worldbook.js';
 import { applyWorldEvent } from '../src/state/reducer.js';
 import {
     CURRENT_WORLD_STATE_VERSION,
@@ -189,6 +190,54 @@ test('custom persona is the default without a default player character', () => {
     assert.equal(explicit.player.displayName, 'Vex');
     assert.equal(explicit.player.personaNotes, 'A stranger.');
     assert.equal(explicit.characters['s1dark.carol.bleeding-heart'].controlledBy, 'npc');
+});
+
+test('card profiles seed empty character fields with raw card text', () => {
+    const profiles = readJson('data/characters/profiles.json').profiles;
+    const vaiva = 's1.vaiva.colorgarde';
+    const plain = seed('s1');
+    const seeded = seed('s1', { profiles });
+
+    assert.equal(plain.characters[vaiva].appearance, '');
+    assert.deepEqual(plain.characters[vaiva].likes, []);
+    assert.equal(seeded.characters[vaiva].appearance, profiles[vaiva].appearance);
+    assert.equal(seeded.characters[vaiva].outfit, profiles[vaiva].attire);
+    assert.deepEqual(seeded.characters[vaiva].likes, profiles[vaiva].likes);
+    assert.deepEqual(seeded.characters[vaiva].dislikes, profiles[vaiva].dislikes);
+    assert.equal(seeded.characters[vaiva].notes, profiles[vaiva].background);
+    assert.ok(seeded.characters[vaiva].abilities.length > 0);
+    const fate = 's1.twisting.fate.corrupted.carol.fate';
+    assert.deepEqual(seeded.characters[fate].goals, profiles[fate].goals);
+    assert.ok(seeded.characters[fate].goals.length > 0);
+
+    // Derived fields and identity stay untouched.
+    assert.equal(seeded.characters[vaiva].agenda, plain.characters[vaiva].agenda);
+    assert.equal(seeded.characters[vaiva].side, plain.characters[vaiva].side);
+    assert.equal(seeded.characters[vaiva].status, 'active');
+    // Stored text is not gated; the prompt/codex gate at render time.
+    assert.equal(seeded.characters[vaiva].appearance.includes('[sexual content omitted]'), false);
+});
+
+test('seeded profile text is gated and truncated at prompt render time', () => {
+    const profiles = readJson('data/characters/profiles.json').profiles;
+    const vaiva = 's1.vaiva.colorgarde';
+    const state = seed('s1', { profiles });
+    const entry = registry.entries.find((candidate) => candidate.id === vaiva);
+    const character = {
+        ...state.characters[vaiva],
+        appearance: 'A sex scene happens here. A calm street follows.',
+    };
+
+    const full = buildCharacterProfile({ entry, character, maxTokens: 1200, gateLevel: 'full' });
+    assert.match(full.text, /sex scene/);
+    const strict = buildCharacterProfile({ entry, character, maxTokens: 1200, gateLevel: 'strict' });
+    assert.doesNotMatch(strict.text, /sex scene/);
+    assert.match(strict.text, /calm street/);
+    // The stored state is never rewritten by the gate.
+    assert.equal(character.appearance, 'A sex scene happens here. A calm street follows.');
+
+    const tiny = buildCharacterProfile({ entry, character, maxTokens: 10, gateLevel: 'full' });
+    assert.equal(tiny.truncated, true);
 });
 
 test('validateWorldState reports missing references and invalid enums without throwing', () => {

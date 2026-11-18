@@ -13,6 +13,7 @@
 
 import { buildOpeningScene } from './scene.js';
 import { createLogger } from '../core/logger.js';
+import { loadProfiles } from '../data/profiles.js';
 import { buildRegistryIndex, loadRegistry } from '../data/registry.js';
 import {
     PLAYABLE_SEASON_IDS,
@@ -559,6 +560,7 @@ export function applySeasonChatMetadata(metadata, payload = {}) {
  *   identity?: object,
  *   confirmReplace?: boolean,
  *   now?: number,
+ *   profiles?: Record<string, object>|null,
  *   metadata?: object|null,
  *   worldBookName?: string|null,
  * }} options
@@ -577,6 +579,7 @@ export function startSeason(options = {}) {
         identity = {},
         confirmReplace = false,
         now = Date.now(),
+        profiles = null,
         metadata = null,
         worldBookName = null,
     } = options;
@@ -618,6 +621,7 @@ export function startSeason(options = {}) {
         chatId,
         mode: effectiveMode,
         now,
+        profiles,
         player: {
             identity: selection.identity,
             characterId: selection.characterId,
@@ -764,12 +768,15 @@ export async function enterSeason(options = {}) {
         );
     }
 
-    const [season, registry, factions, locations, formData] = await Promise.all([
+    const [season, registry, factions, locations, formData, profiles] = await Promise.all([
         loadSeason(id, { fetchImpl }),
         loadRegistry({ fetchImpl }),
         loadFactions({ fetchImpl }),
         loadLocations({ fetchImpl }),
         loadFormData({ fetchImpl }),
+        // Profiles are optional: a stale install without profiles.json must
+        // still be able to start a season with live-only state.
+        loadProfiles({ fetchImpl }).catch(() => null),
     ]);
     assertPlayableSeason(season);
 
@@ -827,6 +834,7 @@ export async function enterSeason(options = {}) {
         identity,
         confirmReplace,
         now,
+        profiles,
         metadata,
     });
 

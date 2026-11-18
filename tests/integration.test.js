@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { compareGeneratedFile } from '../tools/build-data.mjs';
 
 import {
     buildWorldBundle,
@@ -35,6 +38,24 @@ test('generated data and the shipped map are current', () => {
     const map = run('tools/build-map.mjs', ['--check']);
     assert.equal(map.status, 0, `${map.stdout}\n${map.stderr}`);
     assert.match(map.stdout, /check passed/);
+});
+
+test('a stale generated artifact fails the freshness comparison', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'neoterra-profiles-'));
+    const file = join(dir, 'profiles.json');
+    try {
+        writeFileSync(file, '{"profiles":{}}\n');
+        const errors = [];
+        compareGeneratedFile(file, '{"profiles":{"s1.vaiva.colorgarde":{}}}\n', 'character profiles', errors);
+        assert.equal(errors.length, 1);
+        assert.match(errors[0], /character profiles out of date; run node tools\/build-data\.mjs/);
+
+        const current = [];
+        compareGeneratedFile(file, '{"profiles":{}}\n', 'character profiles', current);
+        assert.deepEqual(current, []);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 test('the season manifest is generated from the season files', () => {

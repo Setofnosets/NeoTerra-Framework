@@ -10,6 +10,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { parseCardProfile } from '../src/data/card-profile.js';
 import {
     FORM_KINDS,
     SEASON_IDS,
@@ -23,6 +24,7 @@ import { validateSeasonDefinition } from '../src/data/seasons.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY_PATH = join(ROOT, 'data', 'characters', 'index.json');
+const PROFILES_PATH = join(ROOT, 'data', 'characters', 'profiles.json');
 const OVERRIDES_PATH = join(ROOT, 'data', 'characters', 'overrides.json');
 const FORM_GROUPS_PATH = join(ROOT, 'data', 'form-groups.json');
 const FORM_RULES_PATH = join(ROOT, 'data', 'form-rules.json');
@@ -557,6 +559,76 @@ export function buildRegistry({ cards, overrides, formGroups, seasonIds = SEASON
     };
 }
 
+/**
+ * Build the generated `data/characters/profiles.json` artifact.
+ *
+ * Keys are the final registry ids (after overrides), and each profile records
+ * the card it came from so a stale entry cannot silently point at a different
+ * file. Unreadable descriptions are build errors, not empty profiles.
+ *
+ * @param {{
+ *   cards: Array<{ file: string, raw: unknown }>,
+ *   registry: { entries: Array<{ id: string, file: string, cardPath: string }> },
+ * }} input
+ */
+export function buildProfiles({ cards, registry }) {
+    if (!Array.isArray(cards)) {
+        throw new Error('buildProfiles: cards must be an array');
+    }
+    if (!Array.isArray(registry?.entries)) {
+        throw new Error('buildProfiles: registry.entries must be an array');
+    }
+
+    const cardsByFile = new Map(cards.map((card) => [normalizeKey(card.file), card]));
+    const profiles = {};
+    const errors = [];
+    let missingAppearance = 0;
+
+    for (const entry of registry.entries) {
+        const card = cardsByFile.get(normalizeKey(entry.file));
+        if (!card) {
+            errors.push(`${entry.file}: no card source found for registry entry "${entry.id}"`);
+            continue;
+        }
+        // Derive the path from the file, not from the entry, so a registry entry
+        // whose cardPath drifts is a real error instead of a tautology.
+        const file = toPosix(entry.file);
+        const expectedCardPath = file.startsWith('Chars/') ? file : `Chars/${file}`;
+        const profile = parseCardProfile(card.raw, {
+            file: entry.file,
+            cardPath: expectedCardPath,
+        });
+        if (!profile) {
+            errors.push(`${entry.file}: cannot read data.description for profile "${entry.id}"`);
+            continue;
+        }
+        if (profile.source.cardPath !== entry.cardPath) {
+            errors.push(
+                `${entry.file}: profile cardPath "${profile.source.cardPath}" does not match registry cardPath "${entry.cardPath}"`,
+            );
+            continue;
+        }
+        if (profile.missing.includes('appearance')) {
+            missingAppearance += 1;
+        }
+        profiles[entry.id] = profile;
+    }
+
+    return {
+        artifact: {
+            schemaVersion: 1,
+            generatedBy: 'tools/build-data.mjs',
+            source: 'Chars',
+            counts: {
+                profiles: Object.keys(profiles).length,
+                missingAppearance,
+            },
+            profiles,
+        },
+        errors,
+    };
+}
+
 export function seasonIdFromPath(file, seasonIds = SEASON_IDS) {
     const normalized = normalizeKey(file);
     const top = normalized.split('/')[0];
@@ -736,6 +808,12 @@ function buildAndValidate() {
         errors.push(...formatValidationErrors('index.json', registryValidation));
     }
 
+    const { artifact: profiles, errors: profileErrors } = buildProfiles({ cards, registry });
+    errors.push(...profileErrors);
+    if (profileErrors.length > 0) {
+        return { errors };
+    }
+
     const rulesValidation = validateFormRules(formRules, registry);
     if (!rulesValidation.ok) {
         errors.push(...formatValidationErrors('form-rules.json', rulesValidation));
@@ -748,10 +826,10 @@ function buildAndValidate() {
     }
     const seasonIndex = buildSeasonIndex(documents, seasonDirs);
 
-    return { registry, seasonIndex, errors };
+    return { registry, seasonIndex, profiles, errors };
 }
 
-function summary(registry, seasonIndex) {
+function summary(registry, seasonIndex, profiles) {
     const lines = [];
     const seasonIds = [...new Set([
         ...seasonIndex.seasons.map((season) => season.id),
@@ -767,6 +845,9 @@ function summary(registry, seasonIndex) {
     );
     lines.push(`Bundles: ${registry.entries.filter((entry) => entry.bundle).length}`);
     lines.push(`Form groups: ${new Set(registry.entries.map((entry) => entry.formGroup).filter(Boolean)).size}`);
+    lines.push(
+        `Profiles: ${profiles.counts.profiles} (${profiles.counts.missingAppearance} without Appearance)`,
+    );
     lines.push(`Seasons: ${seasonIndex.seasons.map((season) => `${season.id}${season.playable ? '' : ' (not playable)'}`).join(', ')}`);
     return lines.join('\n');
 }
@@ -777,7 +858,7 @@ function printErrors(errors) {
     }
 }
 
-function compareGeneratedFile(path, serialized, label, errors) {
+export function compareGeneratedFile(path, serialized, label, errors) {
     let existing;
     try {
         existing = readFileSync(path, 'utf8');
@@ -792,7 +873,7 @@ function compareGeneratedFile(path, serialized, label, errors) {
 
 export function main(argv = process.argv.slice(2)) {
     const check = argv.includes('--check');
-    const { registry, seasonIndex, errors } = buildAndValidate();
+    const { registry, seasonIndex, profiles, errors } = buildAndValidate();
 
     if (errors.length > 0) {
         printErrors(errors);
@@ -801,23 +882,28 @@ export function main(argv = process.argv.slice(2)) {
 
     const registryText = `${JSON.stringify(registry, null, 2)}\n`;
     const seasonIndexText = `${JSON.stringify(seasonIndex, null, 2)}\n`;
+    const profilesText = `${JSON.stringify(profiles, null, 2)}\n`;
 
     if (check) {
         const checkErrors = [];
         compareGeneratedFile(REGISTRY_PATH, registryText, 'registry', checkErrors);
         compareGeneratedFile(SEASON_INDEX_PATH, seasonIndexText, 'season index', checkErrors);
+        compareGeneratedFile(PROFILES_PATH, profilesText, 'character profiles', checkErrors);
         if (checkErrors.length > 0) {
             printErrors(checkErrors);
             return 1;
         }
-        console.log(`Registry is up to date. ${summary(registry, seasonIndex)}`);
+        console.log(`Registry is up to date. ${summary(registry, seasonIndex, profiles)}`);
         return 0;
     }
 
     writeFileSync(REGISTRY_PATH, registryText);
     writeFileSync(SEASON_INDEX_PATH, seasonIndexText);
-    console.log(`Wrote ${relative(ROOT, REGISTRY_PATH)} and ${relative(ROOT, SEASON_INDEX_PATH)}.`);
-    console.log(summary(registry, seasonIndex));
+    writeFileSync(PROFILES_PATH, profilesText);
+    console.log(
+        `Wrote ${relative(ROOT, REGISTRY_PATH)}, ${relative(ROOT, SEASON_INDEX_PATH)} and ${relative(ROOT, PROFILES_PATH)}.`,
+    );
+    console.log(summary(registry, seasonIndex, profiles));
     return 0;
 }
 

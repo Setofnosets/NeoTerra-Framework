@@ -25,8 +25,7 @@ import {
 } from './settings.js';
 import { disposeMapPanel, mountMapPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
-import { loadRegistry } from '../data/registry.js';
-import { loadFormGroups, loadFormRules } from '../data/forms.js';
+import { loadCodexData } from './codex-data.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
 import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, WAL_PREFIX } from '../state/store.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
@@ -727,6 +726,7 @@ async function mountCodexPanelComponent(context) {
     const metadata = context?.chatMetadata;
     if (!chatId || !metadata) {
         disposeCodex();
+        host.removeAttribute('data-neoterra-codex-error');
         host.innerHTML = '<p class="neoterra-empty">Open a chat to see its character codex.</p>';
         return null;
     }
@@ -734,20 +734,11 @@ async function mountCodexPanelComponent(context) {
         disposeCodex();
     }
     mountedCodexChatId = chatId;
+    host.removeAttribute('data-neoterra-codex-error');
     try {
-        const season = metadata?.neoterra?.seasonDefinition ?? null;
-        const metadataRegistry = metadata?.neoterra?.registry ?? null;
-        const hasEntries = Array.isArray(metadataRegistry?.entries)
-            && metadataRegistry.entries.length > 0;
-        // Season-start stores a roster slice. Sandbox has an empty roster, so its
-        // slice is truthy but empty; load the full registry in that case.
-        const registry = hasEntries && season?.allowAnyCharacter !== true
-            ? metadataRegistry
-            : await loadRegistry();
-        const [formGroups, formRules] = await Promise.all([
-            loadFormGroups(),
-            loadFormRules({ registry }),
-        ]);
+        // Form rules are a global document; loading them without the chat slice
+        // keeps every season's ids unresolved only where they belong.
+        const { season, registry, formGroups, formRules, profiles } = await loadCodexData({ metadata });
         const store = createWorldStateStore({
             metadata,
             saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
@@ -762,6 +753,7 @@ async function mountCodexPanelComponent(context) {
             registry,
             formGroups,
             formRules,
+            profiles,
             getSettings: () => getSettings(context),
             onIdentityChange: ({ identity }) => {
                 const root = metadata.neoterra ?? (metadata.neoterra = {});
@@ -780,6 +772,8 @@ async function mountCodexPanelComponent(context) {
             },
         });
     } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        host.dataset.neoterraCodexError = message;
         logger.warn('Could not mount the character codex', error);
         host.innerHTML = '<p class="neoterra-error" role="alert">The character codex could not be mounted.</p>';
         return null;

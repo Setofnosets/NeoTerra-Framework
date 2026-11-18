@@ -89,35 +89,63 @@ export async function loadFormGroups({ fetchImpl = globalThis.fetch } = {}) {
     return formGroupsInFlight;
 }
 
+function assertFormRules(rules, registry, label) {
+    const validation = validateFormRules(rules, registry);
+    if (!validation.ok) {
+        throw new Error(
+            `${label}: invalid form rules (${formatValidationErrors(validation.errors)})`,
+        );
+    }
+}
+
 /**
  * Fetch, validate, and cache `data/form-rules.json`.
  *
- * @param {{ fetchImpl?: typeof fetch, registry?: object|null }} [options]
+ * The structural check always runs. Registry-scoped id resolution is opt-in
+ * (`validateRegistryIds: true`) because the rules document references cards
+ * from every season: validating it against a chat-scoped roster slice reports
+ * every other season's ids as unresolved. Callers that pass
+ * `validateRegistryIds` must hold the complete registry (`--check`).
+ *
+ * @param {{
+ *   fetchImpl?: typeof fetch,
+ *   registry?: object|null,
+ *   validateRegistryIds?: boolean,
+ * }} [options]
  * @returns {Promise<object>}
  */
-export async function loadFormRules({ fetchImpl = globalThis.fetch, registry = null } = {}) {
-    if (formRulesCache) {
-        return formRulesCache;
-    }
-    if (!formRulesInFlight) {
-        formRulesInFlight = (async () => {
-            const formRules = await fetchJson(FORM_RULES_URL, {
-                fetchImpl,
-                label: 'loadFormRules',
+export async function loadFormRules({
+    fetchImpl = globalThis.fetch,
+    registry = null,
+    validateRegistryIds = false,
+} = {}) {
+    if (!formRulesCache) {
+        if (!formRulesInFlight) {
+            formRulesInFlight = (async () => {
+                const formRules = await fetchJson(FORM_RULES_URL, {
+                    fetchImpl,
+                    label: 'loadFormRules',
+                });
+                assertFormRules(formRules, null, 'loadFormRules');
+                formRulesCache = formRules;
+                return formRules;
+            })().finally(() => {
+                formRulesInFlight = null;
             });
-            const validation = validateFormRules(formRules, registry);
-            if (!validation.ok) {
-                throw new Error(
-                    `loadFormRules: invalid form rules (${formatValidationErrors(validation.errors)})`,
-                );
-            }
-            formRulesCache = formRules;
-            return formRules;
-        })().finally(() => {
-            formRulesInFlight = null;
-        });
+        }
+        await formRulesInFlight;
     }
-    return formRulesInFlight;
+    // Re-validate cached rules when the caller asks for id resolution; a cached
+    // structural pass must not silently skip the registry check.
+    if (validateRegistryIds) {
+        if (!registry || typeof registry !== 'object') {
+            throw new Error(
+                'loadFormRules: validateRegistryIds requires the complete character registry',
+            );
+        }
+        assertFormRules(formRulesCache, registry, 'loadFormRules');
+    }
+    return formRulesCache;
 }
 
 /** Clear the module-level form-data caches (tests and data regeneration). */

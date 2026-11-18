@@ -7,6 +7,7 @@
  */
 
 import { BEAT_STATUSES } from '../data/beats.js';
+import { splitListText } from '../data/card-profile.js';
 import { FACTION_STATUSES, buildFactionIndex } from '../data/factions.js';
 import {
     LOCATION_KINDS,
@@ -151,10 +152,30 @@ function deriveAgenda(side, season, isPlayer) {
     return `Survive the events of ${season?.title ?? 'Neo Terra'}`;
 }
 
-function seedCharacter(member, { isPlayer, season }) {
+/**
+ * A card body is only promoted to live list state when the tolerant splitter
+ * finds a real list; a prose paragraph stays out of `traits`.
+ */
+function listLikeTraits(text) {
+    const items = splitListText(text);
+    return items.length >= 2 ? items : [];
+}
+
+function cardProfileFor(member, profiles) {
+    if (!profiles || typeof profiles !== 'object' || member.character?.bundle === true) {
+        return null;
+    }
+    return profiles[member.formId] ?? profiles[member.characterId] ?? null;
+}
+
+function seedCharacter(member, { isPlayer, season, profiles = null }) {
     const character = member.character;
     const form = member.form;
     const side = form?.side ?? character?.side ?? 'neutral';
+    const card = cardProfileFor(member, profiles);
+    const traits = card
+        ? listLikeTraits(card.personality || card.speech)
+        : [];
 
     return {
         charId: member.characterId,
@@ -171,20 +192,20 @@ function seedCharacter(member, { isPlayer, season }) {
         stamina: emptyResource(),
         willpower: emptyResource(),
         agenda: deriveAgenda(side, season, isPlayer),
-        goals: [],
+        goals: Array.isArray(card?.goals) ? card.goals.slice() : [],
         mood: 'neutral',
         allegiance: side,
-        appearance: '',
-        outfit: '',
-        abilities: [],
+        appearance: card?.appearance ?? '',
+        outfit: card?.attire ?? '',
+        abilities: card ? splitListText(card.abilities) : [],
         skills: [],
-        traits: [],
-        likes: [],
-        dislikes: [],
+        traits,
+        likes: Array.isArray(card?.likes) ? card.likes.slice() : [],
+        dislikes: Array.isArray(card?.dislikes) ? card.dislikes.slice() : [],
         relationships: [],
         corruption: emptyCorruption(),
         lastUpdatedTurn: 0,
-        notes: '',
+        notes: card?.background ?? '',
     };
 }
 
@@ -259,6 +280,7 @@ function seedBeat() {
  *   chatId: string,
  *   mode?: 'director'|'group'|'solo',
  *   now?: number,
+ *   profiles?: Record<string, object>|null,
  *   player?: { identity?: 'custom'|'canon', characterId?: string|null, personaNotes?: string, displayName?: string },
  * }} options
  * @returns {object}
@@ -272,6 +294,7 @@ export function createWorldState(options = {}) {
         chatId,
         mode = 'director',
         now = Date.now(),
+        profiles = null,
         player,
     } = options;
 
@@ -347,6 +370,7 @@ export function createWorldState(options = {}) {
         characters[member.characterId] = seedCharacter(member, {
             isPlayer: member.characterId === playerCharacterId,
             season,
+            profiles,
         });
     }
 

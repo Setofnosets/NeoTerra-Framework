@@ -1200,6 +1200,66 @@
     line-height: 1.4;
 }
 
+.neoterra-codex-head-actions,
+.neoterra-codex-card-profile-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.neoterra-codex-card-profile-head h5 {
+    margin: 0;
+}
+
+.neoterra-codex-card-profile .neoterra-codex-card-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.neoterra-codex-card-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0.35rem 0;
+}
+
+.neoterra-codex-card-row {
+    display: grid;
+    grid-template-columns: minmax(90px, 28%) 1fr;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.neoterra-codex-card-row span {
+    color: var(--nt-text-muted);
+    font-weight: 600;
+}
+
+.neoterra-codex-card-row p {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.neoterra-codex-form-notes,
+.neoterra-codex-sensitive {
+    margin-top: 0.5rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed var(--nt-border);
+}
+
+.neoterra-codex-card-actor {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+}
+
+.neoterra-codex-card-actor summary {
+    cursor: pointer;
+    color: var(--nt-text-muted);
+}
+
 .neoterra-codex-resource {
     margin-bottom: 0.45rem;
 }
