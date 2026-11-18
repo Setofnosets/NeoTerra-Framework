@@ -755,3 +755,144 @@ test('content gate prompt helper is re-exported from the renderer surface', () =
     assert.equal(BLOCK_HEADINGS.cast, '[NEOTERRA_CAST]');
     assert.equal(CONTEXT_MARKER, 'neoterra.context');
 });
+
+/* ------------------------------------------------------------------ *
+ * Pacing directive block
+ * ------------------------------------------------------------------ */
+
+const PACING_ANALYSIS = Object.freeze({
+    level: 'cut',
+    reasons: ['12 turns in this scene.', 'No development in 4 turns.'],
+    suggestedSlots: 2,
+    held: false,
+    canCut: true,
+    suggestion: 'cut',
+});
+
+test('the pacing block renders only at nudge/cut and names state-derived facts', () => {
+    const state = makeState();
+    const silent = renderContext(state, { settings: settingsWith(), season: SEASON });
+    assert.equal(blockById(silent, 'pacing'), null);
+    assert.doesNotMatch(silent.text, /NEOTERRA_PACING/);
+
+    const okState = makeState({ flags: { pacing: { level: 'ok', reasons: [] } } });
+    assert.equal(
+        blockById(renderContext(okState, { settings: settingsWith(), season: SEASON }), 'pacing'),
+        null,
+    );
+
+    const nudge = makeState({
+        flags: { pacing: { ...PACING_ANALYSIS, level: 'nudge' } },
+    });
+    const block = blockById(renderContext(nudge, { settings: settingsWith(), season: SEASON }), 'pacing');
+    assert.ok(block);
+    assert.equal(block.heading, '[NEOTERRA_PACING]');
+    assert.match(block.body, /12 turns in this scene\./);
+    assert.match(block.body, /No development in 4 turns\./);
+    assert.match(block.body, /Pacing level: nudge\./);
+    assert.match(block.body, /Do not invent outcomes/);
+
+    const cut = blockById(
+        renderContext(
+            makeState({ flags: { pacing: PACING_ANALYSIS } }),
+            { settings: settingsWith(), season: SEASON },
+        ),
+        'pacing',
+    );
+    assert.match(cut.body, /Pacing level: cut\./);
+});
+
+test('the pacing block is absent when disabled, in combat, or on the ending screen', () => {
+    const state = makeState({ flags: { pacing: PACING_ANALYSIS } });
+    const disabled = settingsWith();
+    disabled.context.blocks.pacing = false;
+    assert.equal(
+        blockById(renderContext(state, { settings: disabled, season: SEASON }), 'pacing'),
+        null,
+    );
+
+    const pacingOff = settingsWith();
+    pacingOff.pacing.enabled = false;
+    assert.equal(
+        blockById(renderContext(state, { settings: pacingOff, season: SEASON }), 'pacing'),
+        null,
+    );
+
+    const combat = makeState({
+        flags: { pacing: PACING_ANALYSIS },
+        meta: { ...state.meta, inCombat: true },
+        scene: { ...state.scene, combat: { round: 1 } },
+    });
+    assert.equal(
+        blockById(renderContext(combat, { settings: settingsWith(), season: SEASON }), 'pacing'),
+        null,
+    );
+
+    const ending = makeState({
+        flags: { pacing: PACING_ANALYSIS },
+        ending: { status: 'epilogue' },
+    });
+    assert.equal(
+        blockById(renderContext(ending, { settings: settingsWith(), season: SEASON }), 'pacing'),
+        null,
+    );
+});
+
+test('a held scene asks the narrator to stay in the moment', () => {
+    const state = makeState({
+        flags: {
+            clock: { hold: { active: true, reason: 'chip' } },
+            pacing: { ...PACING_ANALYSIS, level: 'nudge', held: true, suggestion: 'release-time' },
+        },
+    });
+    const block = blockById(renderContext(state, { settings: settingsWith(), season: SEASON }), 'pacing');
+    assert.match(block.body, /Time is frozen in this scene\./);
+    assert.match(block.body, /stay in the moment/);
+    assert.doesNotMatch(block.body, /cut forward in time/);
+});
+
+test('the pacing block is the first context block dropped under budget pressure', () => {
+    const state = makeState({
+        flags: { pacing: PACING_ANALYSIS },
+    });
+    const result = renderContext(state, {
+        settings: settingsWith(),
+        season: SEASON,
+        tokenBudget: {
+            total: 120,
+            scene: 60,
+            cast: 60,
+            player: 60,
+            world: 60,
+            continuity: 40,
+            lore: 40,
+            pacing: 200,
+            characterProfile: 40,
+        },
+    });
+    assert.ok(result.dropped.includes('pacing'), `dropped: ${result.dropped.join(',')}`);
+    assert.doesNotMatch(result.text, /NEOTERRA_PACING/);
+});
+
+test('the pacing block passes through the content gate', () => {
+    const state = makeState({
+        flags: {
+            pacing: {
+                level: 'nudge',
+                reasons: ['Graphic violence escalates in the plaza.', 'No development in 4 turns.'],
+                suggestedSlots: 2,
+                held: false,
+                canCut: true,
+                suggestion: 'cut',
+            },
+        },
+    });
+    const strict = blockById(
+        renderContext(state, { settings: settingsWith({ contentGate: 'strict' }), season: SEASON }),
+        'pacing',
+    );
+    assert.ok(strict);
+    assert.doesNotMatch(strict.text, /Graphic violence/i);
+    assert.match(strict.text, /No development in 4 turns\./);
+    assert.match(strict.text, /Directive:/);
+});

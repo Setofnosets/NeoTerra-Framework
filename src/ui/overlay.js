@@ -28,9 +28,11 @@ import {
     deleteMapOverride,
 } from '../data/map.js';
 import { LOCATION_STATUSES } from '../data/locations.js';
+import { isClockHeld } from '../core/world-clock.js';
 
 export const OVERLAY_HEADINGS = Object.freeze({
     act: 'Act',
+    director: 'Director',
     activity: 'Latest activity',
     threats: 'Threats',
     factions: 'Factions',
@@ -199,8 +201,88 @@ export function renderOffscreenFeed(entries = []) {
     </ul>`;
 }
 
+const DIRECTOR_LEVELS = Object.freeze(['nudge', 'cut', 'stalled']);
+
+/**
+ * Compact Director card model. Pure: it reads the persisted pacing analysis
+ * (`flags.pacing`) and the clock/combat/ending flags, never recomputing or
+ * mutating anything.
+ */
+export function buildDirectorCard(state, settings = {}) {
+    const pacing = state?.flags?.pacing;
+    if (!pacing || typeof pacing !== 'object' || Array.isArray(pacing)) {
+        return { visible: false };
+    }
+    if (!DIRECTOR_LEVELS.includes(pacing.level)) {
+        return { visible: false };
+    }
+    if (settings?.pacing?.enabled === false) {
+        return { visible: false };
+    }
+    const endingStatus = state?.ending?.status;
+    if (endingStatus === 'epilogue' || endingStatus === 'ended') {
+        return { visible: false };
+    }
+
+    const held = isClockHeld(state) || pacing.held === true;
+    const combat = state?.meta?.inCombat === true
+        || (state?.scene?.combat !== null
+            && typeof state?.scene?.combat === 'object'
+            && !Array.isArray(state?.scene?.combat)
+            && state?.scene?.combat !== undefined);
+    const reasons = Array.isArray(pacing.reasons)
+        ? pacing.reasons.filter((reason) => typeof reason === 'string' && reason.length > 0).slice(0, 3)
+        : [];
+    const canCut = !held && !combat;
+    const refusalReason = held
+        ? 'Time is frozen in this scene. Release time instead of cutting.'
+        : combat
+            ? 'Combat is active; finish the fight first.'
+            : null;
+
+    return {
+        visible: true,
+        level: pacing.level,
+        held,
+        combat,
+        canCut,
+        refusalReason,
+        reasons,
+        suggestion: held ? 'release-time' : 'cut',
+        slots: Number.isInteger(pacing.suggestedSlots) ? pacing.suggestedSlots : null,
+    };
+}
+
+/** Director card markup; empty when the analyzer is at `ok`. */
+export function renderDirectorCard(card) {
+    if (!card?.visible) {
+        return '';
+    }
+    const reasons = (card.reasons ?? []).map((reason) => `<li>${escapeOverlayHtml(reason)}</li>`).join('');
+    const action = card.held
+        ? `<button type="button" class="menu_button" data-neoterra-pacing-release>Release time</button>`
+        : `<button type="button" class="menu_button" data-neoterra-pacing-cut
+                ${card.canCut ? '' : 'disabled'}
+                title="${escapeOverlayHtml(card.refusalReason ?? 'Cut forward in time')}">Cut forward</button>`;
+    return `
+    <section class="neoterra-director-card" data-neoterra-pacing-card
+        data-level="${escapeOverlayHtml(card.level)}" data-held="${card.held ? 'true' : 'false'}">
+        <header class="neoterra-director-card-head">
+            <h5>${OVERLAY_HEADINGS.director}</h5>
+            <span class="neoterra-overlay-chip">${escapeOverlayHtml(card.level)}</span>
+            ${card.held ? '<span class="neoterra-overlay-chip is-held">time frozen</span>' : ''}
+        </header>
+        ${reasons ? `<ul class="neoterra-director-reasons">${reasons}</ul>` : ''}
+        ${card.refusalReason ? `<p class="neoterra-hint">${escapeOverlayHtml(card.refusalReason)}</p>` : ''}
+        <div class="neoterra-director-actions">
+            ${action}
+            <button type="button" class="menu_button" data-neoterra-pacing-snooze>Not now</button>
+        </div>
+    </section>`;
+}
+
 /** The complete overlay markup. `model` comes from `buildWorldOverlay`. */
-export function renderWorldOverlayMarkup(model, { collapsed = false } = {}) {
+export function renderWorldOverlayMarkup(model, { collapsed = false, director = null } = {}) {
     if (!model?.hasWorld) {
         return `
         <section class="neoterra-overlay neoterra-overlay-empty" data-neoterra-overlay>
@@ -216,6 +298,7 @@ export function renderWorldOverlayMarkup(model, { collapsed = false } = {}) {
                 aria-expanded="${collapsed ? 'false' : 'true'}" aria-label="Toggle world overlay">▾</button>
         </header>
         <div class="neoterra-overlay-body" ${collapsed ? 'hidden' : ''}>
+            ${director?.visible ? renderDirectorCard(director) : ''}
             <div class="neoterra-overlay-section" data-neoterra-overlay-section="threats">
                 <h5>${OVERLAY_HEADINGS.threats}</h5>
                 ${renderThreatOverlay(model.threats)}

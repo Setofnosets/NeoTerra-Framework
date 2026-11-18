@@ -15,6 +15,7 @@ export const CONTEXT_BLOCK_IDS = Object.freeze([
     'world',
     'continuity',
     'lore',
+    'pacing',
 ]);
 
 /**
@@ -28,6 +29,9 @@ export const BLOCK_PRIORITY = Object.freeze({
     world: 4,
     continuity: 5,
     lore: 6,
+    // The pacing nudge is the most disposable block: it is advisory and the
+    // next turn regenerates it, so it is dropped before narrative context.
+    pacing: 7,
 });
 
 export const DEFAULT_TOKEN_BUDGET = Object.freeze({
@@ -39,6 +43,7 @@ export const DEFAULT_TOKEN_BUDGET = Object.freeze({
     world: 900,
     continuity: 500,
     lore: 900,
+    pacing: 350,
     characterProfile: 1200,
 });
 

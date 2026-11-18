@@ -36,6 +36,7 @@ import {
     overrideTargetFor,
     renderActivityOverlay,
     renderBeatOverlay,
+    renderDirectorCard,
     renderEditorField,
     renderFactionOverlay,
     renderHeadlines,
@@ -47,10 +48,16 @@ import {
     resetEditorOverride,
     supportsChatStatus,
     validateEditorPatch,
+    buildDirectorCard,
 } from '../src/ui/overlay.js';
 import { LOCATION_STATUSES } from '../src/data/locations.js';
 import { DEFAULT_SETTINGS } from '../src/core/defaults.js';
 import { migrateSettings } from '../src/core/migrations.js';
+import {
+    handlePacingCut,
+    handlePacingRelease,
+    handlePacingSnooze,
+} from '../src/ui/map-panel.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -848,4 +855,148 @@ test('the S1 ledger view still resolves an act for a fresh world', () => {
     assert.equal(views.act, 'opening');
     assert.ok(views.rumors.length >= 1);
     assert.equal(views.divergence.hasDivergence, false);
+});
+
+/* ------------------------------------------------------------------ *
+ * Director card
+ * ------------------------------------------------------------------ */
+
+function pacingState(patch = {}) {
+    return worldState({
+        flags: {
+            pacing: {
+                level: 'cut',
+                reasons: ['12 turns in this scene.', 'No development in 4 turns.'],
+                suggestedSlots: 2,
+                held: false,
+                canCut: true,
+                suggestion: 'cut',
+            },
+        },
+        ...patch,
+    });
+}
+
+test('the director card is hidden at ok, disabled, and on the ending screen', () => {
+    assert.equal(buildDirectorCard(worldState(), {}).visible, false);
+    assert.equal(buildDirectorCard({}, {}).visible, false);
+    assert.equal(
+        buildDirectorCard({ flags: { pacing: { level: 'ok' } } }, {}).visible,
+        false,
+    );
+    assert.equal(
+        buildDirectorCard(pacingState(), { pacing: { enabled: false } }).visible,
+        false,
+    );
+    assert.equal(
+        buildDirectorCard(pacingState({ ending: { status: 'epilogue' } }), {}).visible,
+        false,
+    );
+});
+
+test('the director card lists reasons and offers cut, snooze, and release', () => {
+    const card = buildDirectorCard(pacingState(), {});
+    assert.equal(card.visible, true);
+    assert.equal(card.level, 'cut');
+    assert.equal(card.canCut, true);
+    assert.deepEqual(card.reasons, ['12 turns in this scene.', 'No development in 4 turns.']);
+    const markup = renderDirectorCard(card);
+    assert.match(markup, /data-neoterra-pacing-card/);
+    assert.match(markup, /data-neoterra-pacing-cut/);
+    assert.match(markup, /data-neoterra-pacing-snooze/);
+    assert.match(markup, /12 turns in this scene\./);
+    assert.match(markup, /Cut forward/);
+    assert.match(markup, /Not now/);
+    assert.doesNotMatch(markup, /Release time/);
+    assert.equal(renderDirectorCard({ visible: false }), '');
+});
+
+test('the director card disables the cut in combat with a reason', () => {
+    // A stale analysis can survive into the turn combat starts, before the
+    // analyzer has run again; the card must never offer a cut there.
+    const card = buildDirectorCard(pacingState({
+        meta: { turn: 4, inCombat: true },
+        scene: { locationId: 'central-plaza', present: [], combat: { round: 1 } },
+    }), {});
+    assert.equal(card.visible, true);
+    assert.equal(card.canCut, false);
+    assert.match(card.refusalReason, /Combat/);
+    const markup = renderDirectorCard(card);
+    assert.match(markup, /disabled/);
+    assert.match(markup, /Combat is active/);
+});
+
+test('a held scene offers Release time instead of a cut and never cuts', () => {
+    const card = buildDirectorCard(pacingState({
+        flags: {
+            clock: { hold: { active: true, reason: 'chip' } },
+            pacing: {
+                level: 'nudge',
+                reasons: ['Time is frozen in this scene.'],
+                suggestedSlots: 2,
+                held: true,
+                canCut: false,
+                suggestion: 'release-time',
+            },
+        },
+    }), {});
+    assert.equal(card.held, true);
+    assert.equal(card.canCut, false);
+    const markup = renderDirectorCard(card);
+    assert.match(markup, /data-neoterra-pacing-release/);
+    assert.doesNotMatch(markup, /data-neoterra-pacing-cut/);
+});
+
+test('the overlay markup embeds the director card above the sections', () => {
+    const model = buildWorldOverlay({ state: pacingState(), season: seasonS4, viewModel: viewModel() });
+    const markup = renderWorldOverlayMarkup(model, {
+        director: buildDirectorCard(pacingState(), {}),
+    });
+    assert.match(markup, /neoterra-director-card/);
+    assert.ok(markup.indexOf('neoterra-director-card') < markup.indexOf('data-neoterra-overlay-section="threats"'));
+    assert.doesNotMatch(renderWorldOverlayMarkup(model), /neoterra-director-card/);
+});
+
+test('pacing settings round-trip, including the prompt block and budget', () => {
+    assert.equal(DEFAULT_SETTINGS.context.blocks.pacing, true);
+    assert.equal(DEFAULT_SETTINGS.tokenBudget.pacing, 350);
+    const migrated = migrateSettings({
+        schemaVersion: 1,
+        context: { blocks: { pacing: false } },
+        tokenBudget: { pacing: 120 },
+        pacing: { enabled: false },
+    });
+    assert.equal(migrated.context.blocks.pacing, false);
+    assert.equal(migrated.tokenBudget.pacing, 120);
+    assert.equal(migrated.pacing.enabled, false);
+});
+
+test('director actions surface refusals and clear the error on success', async () => {
+    const errorState = {
+        pacing: { cutScene: async () => ({ ok: false, message: 'Combat is active.' }) },
+        pacingError: null,
+    };
+    await handlePacingCut(errorState);
+    assert.equal(errorState.pacingError, 'Combat is active.');
+
+    const successState = {
+        pacing: {
+            cutScene: async () => ({ ok: true, turn: 3 }),
+            snooze: () => ({ ok: true }),
+            releaseTime: async () => ({ ok: true }),
+        },
+        pacingError: 'stale',
+    };
+    await handlePacingCut(successState);
+    assert.equal(successState.pacingError, null);
+    handlePacingSnooze(successState);
+    assert.equal(successState.pacingError, null);
+    await handlePacingRelease(successState);
+    assert.equal(successState.pacingError, null);
+
+    const noFlow = { pacing: null, pacingError: null };
+    await handlePacingCut(noFlow);
+    handlePacingSnooze(noFlow);
+    await handlePacingRelease(noFlow);
+    assert.equal(noFlow.pacingError, null);
 });

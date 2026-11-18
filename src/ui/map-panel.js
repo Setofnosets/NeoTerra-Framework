@@ -39,6 +39,7 @@ import { loadLocations } from '../data/locations.js';
 import { loadWorldStateFromMetadata } from '../state/store.js';
 import {
     applyEditorPatch,
+    buildDirectorCard,
     buildEditorSchema,
     deleteEditorOverride,
     renderMapEditor,
@@ -48,6 +49,7 @@ import {
     validateEditorPatch,
 } from './overlay.js';
 import { mountCityMap, mountFallbackMap } from './map.js';
+import { createPacingFlow } from '../flows/pacing.js';
 
 const logger = createLogger('map-panel');
 
@@ -367,8 +369,26 @@ export async function mountMapPanel(options = {}) {
         editor: null,
         editorError: null,
         globalOverrides: null,
+        pacing: options.pacing ?? null,
+        pacingError: null,
     };
     mounted = state;
+
+    if (!state.pacing && state.store && typeof state.store.get === 'function') {
+        try {
+            state.pacing = createPacingFlow({
+                store: state.store,
+                season: options.season ?? null,
+                scene: options.scene ?? null,
+                initiative: options.initiative ?? null,
+                getSettings: typeof state.getSettings === 'function' ? state.getSettings : null,
+                log: (message, error) => logger.warn(message, error),
+            });
+        } catch (error) {
+            logger.warn('Could not create the pacing flow', error);
+            state.pacing = null;
+        }
+    }
 
     state.flow = createMachine({
         name: 'map',
@@ -465,6 +485,18 @@ export async function mountMapPanel(options = {}) {
         if (event.target.closest?.('[data-neoterra-overlay-toggle]')) {
             state.overlayCollapsed = !state.overlayCollapsed;
             paintSide();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-pacing-cut]')) {
+            void handlePacingCut(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-pacing-snooze]')) {
+            handlePacingSnooze(state);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-pacing-release]')) {
+            void handlePacingRelease(state);
             return;
         }
         if (event.target.closest?.('[data-neoterra-editor-save]')) {
@@ -1113,6 +1145,70 @@ function handleAddVirtualNode(state) {
     rebuildAfterMapChange(state, next);
 }
 
+/* ------------------------------------------------------------------ *
+ * Pacing director card
+ * ------------------------------------------------------------------ */
+
+async function handlePacingCut(state) {
+    if (!state.pacing) {
+        return;
+    }
+    state.pacingError = null;
+    let result;
+    try {
+        // No reason: the framing is authored by the flow, not an internal id.
+        result = await state.pacing.cutScene({ reason: null });
+    } catch (error) {
+        logger.warn('Pacing cut failed', error);
+        result = { ok: false, message: error?.message ?? String(error) };
+    }
+    if (result?.ok !== true) {
+        state.pacingError = result?.message ?? 'The cut was refused.';
+    } else {
+        bus.emit(EVENTS.MAP_UPDATED, { reason: 'pacing-cut', turn: result.turn ?? null });
+    }
+    refreshMapPanel();
+}
+
+function handlePacingSnooze(state) {
+    if (!state.pacing) {
+        return;
+    }
+    const result = state.pacing.snooze();
+    if (result?.ok !== true) {
+        state.pacingError = 'Could not snooze the director.';
+    } else {
+        state.pacingError = null;
+    }
+    refreshMapPanel();
+}
+
+async function handlePacingRelease(state) {
+    if (!state.pacing) {
+        return;
+    }
+    let result;
+    try {
+        result = await state.pacing.releaseTime({ reason: 'director-card' });
+    } catch (error) {
+        logger.warn('Releasing time failed', error);
+        result = { ok: false };
+    }
+    if (result?.ok !== true) {
+        state.pacingError = 'Could not release time.';
+    } else {
+        state.pacingError = null;
+        bus.emit(EVENTS.MAP_UPDATED, { reason: 'clock-release' });
+    }
+    refreshMapPanel();
+}
+
+export {
+    handlePacingCut,
+    handlePacingSnooze,
+    handlePacingRelease,
+};
+
 function readState(state) {
     if (state.store && typeof state.store.get === 'function') {
         return state.store.get();
@@ -1146,6 +1242,12 @@ function paintSide() {
         : '';
     const worldState = readState(state);
     const overlayEnabled = state.settings?.showOverlay !== false;
+    const director = overlayEnabled && worldState
+        ? buildDirectorCard(worldState, state.settings ?? {})
+        : null;
+    if (!director?.visible) {
+        state.pacingError = null;
+    }
     const overlay = overlayEnabled && state.viewModel
         ? renderWorldOverlayMarkup(
             state.overlay ?? buildWorldOverlay({
@@ -1154,7 +1256,7 @@ function paintSide() {
                 viewModel: state.viewModel,
                 settings: state.settings ?? {},
             }),
-            { collapsed: state.overlayCollapsed === true },
+            { collapsed: state.overlayCollapsed === true, director },
         )
         : '';
     const editorEnabled = state.settings?.editorEnabled !== false;
@@ -1176,7 +1278,7 @@ function paintSide() {
                 <p>${escapeHtml(state.lastIntro.text).replaceAll('\n', '<br>')}</p>
            </section>`
         : '';
-    side.innerHTML = `${error}${intro}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
+    side.innerHTML = `${error}${intro}${state.pacingError ? `<p class="neoterra-error" role="alert">${escapeHtml(state.pacingError)}</p>` : ''}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
 }
 
 async function loadAndMount(state) {

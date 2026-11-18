@@ -216,6 +216,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
         world: 900,
         continuity: 500,
         lore: 900,
+        pacing: 350,
         characterProfile: 1200,
     },
 
@@ -237,6 +238,7 @@ export const DEFAULT_SETTINGS = freezeDeep({
             world: true,
             continuity: true,
             lore: true,
+            pacing: true,
         },
     },
 

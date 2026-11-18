@@ -31,6 +31,7 @@ export const BLOCK_HEADINGS = Object.freeze({
     world: '[NEOTERRA_WORLD]',
     continuity: '[NEOTERRA_CONTINUITY]',
     lore: '[NEOTERRA_LORE]',
+    pacing: '[NEOTERRA_PACING]',
 });
 
 export const BLOCK_ORDER = Object.freeze(Object.keys(BLOCK_HEADINGS));
@@ -402,6 +403,49 @@ function renderContinuity(state, settings) {
     return makeBlock('continuity', lines, settings);
 }
 
+const PACING_BLOCK_LEVELS = Object.freeze(['nudge', 'cut', 'stalled']);
+
+/**
+ * Advisory pacing directive. It never carries state or outcomes: only the
+ * already-persisted analysis facts plus a "move the scene" instruction.
+ */
+function renderPacing(state, settings) {
+    const pacing = isObject(state?.flags?.pacing) ? state.flags.pacing : null;
+    if (!pacing || !PACING_BLOCK_LEVELS.includes(pacing.level)) {
+        return null;
+    }
+    if (settings?.pacing?.enabled === false) {
+        return null;
+    }
+    const endingStatus = state?.ending?.status;
+    if (endingStatus === 'epilogue' || endingStatus === 'ended') {
+        return null;
+    }
+    if (state?.meta?.inCombat === true || isObject(state?.scene?.combat)) {
+        return null;
+    }
+
+    const held = isClockHeld(state) || pacing.held === true;
+    const lines = [];
+    const reasons = Array.isArray(pacing.reasons)
+        ? pacing.reasons.filter((reason) => typeof reason === 'string' && reason.length > 0)
+        : [];
+    for (const reason of reasons.slice(0, 2)) {
+        lines.push(reason);
+    }
+    if (held) {
+        const alreadyExplains = reasons.some((reason) => /time is frozen/i.test(reason));
+        if (!alreadyExplains) {
+            lines.push('Time is frozen in this scene.');
+        }
+        lines.push('Directive: stay in the moment. Do not cut forward, skip time, or move the player; the player decides when to release time.');
+    } else {
+        lines.push(`Pacing level: ${pacing.level}.`);
+        lines.push('Directive: on your next reply, cut forward in time, raise a threat development, or break a stalled exchange. Do not invent outcomes, decide player actions, or move the player.');
+    }
+    return makeBlock('pacing', lines, settings);
+}
+
 function renderLore(state, options, settings) {
     const lines = [];
     const beats = selectOpenBeats(state, options.season).slice(0, 3);
@@ -523,6 +567,7 @@ export function renderContext(state, options = {}) {
         renderWorld(state, renderSettings),
         renderContinuity(state, renderSettings),
         renderLore(state, options, renderSettings),
+        renderPacing(state, renderSettings),
     ].filter((block) => block && blockEnabled(settings, options, block.id));
 
     const result = applyTokenBudget(candidates, tokenBudget);

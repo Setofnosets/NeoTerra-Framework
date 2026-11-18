@@ -767,6 +767,45 @@
     border-color: var(--nt-border-strong);
 }
 
+.neoterra-overlay-chip.is-held {
+    color: var(--nt-warning);
+    border-color: var(--nt-warning);
+}
+
+.neoterra-director-card {
+    margin: 0 0 0.5rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--nt-border-strong);
+    border-left: 3px solid var(--nt-accent);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-bg-hover);
+}
+
+.neoterra-director-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.neoterra-director-card-head h5 {
+    margin: 0;
+    color: var(--nt-accent-strong);
+}
+
+.neoterra-director-reasons {
+    margin: 0.35rem 0;
+    padding-left: 1.1rem;
+    color: var(--nt-text-muted);
+    font-size: 0.8rem;
+}
+
+.neoterra-director-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
 .neoterra-overlay-bar {
     height: 0.35rem;
     margin: 0.2rem 0;

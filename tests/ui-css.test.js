@@ -89,3 +89,13 @@ test('the world-clock chip is themed and shows a frozen state', () => {
     assert.doesNotMatch(held, /#[0-9a-fA-F]{3,8}\b/);
     assert.match(held, /var\(--nt-/);
 });
+
+test('the director card is styled with theme tokens', () => {
+    const card = ruleBody('.neoterra-director-card');
+    assert.ok(card, 'expected a .neoterra-director-card rule');
+    assert.doesNotMatch(card, /#[0-9a-fA-F]{3,8}\b/);
+    assert.match(card, /var\(--nt-/);
+    const actions = ruleBody('.neoterra-director-actions');
+    assert.ok(actions, 'expected a .neoterra-director-actions rule');
+    assert.match(actions, /display:\s*flex/);
+});

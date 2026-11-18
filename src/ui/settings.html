@@ -163,6 +163,10 @@
                     <span>Snooze length (turns)</span>
                     <input type="number" min="1" max="100" step="1" data-neoterra-path="pacing.snoozeTurns">
                 </label>
+                <label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="context.blocks.pacing">
+                    <span>Send the <code>[NEOTERRA_PACING]</code> directive to the narrator</span>
+                </label>
             </div>
             <p class="neoterra-hint">
                 A cut is always explicit and never moves the player. Frozen scenes offer
@@ -379,6 +383,10 @@
                 <label class="neoterra-field">
                     <span>Lore block</span>
                     <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.lore">
+                </label>
+                <label class="neoterra-field">
+                    <span>Pacing directive block</span>
+                    <input type="number" min="0" step="100" data-neoterra-path="tokenBudget.pacing">
                 </label>
             </div>
 

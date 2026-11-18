@@ -33,6 +33,7 @@ import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
 import { createWorldTick } from '../flows/world-tick.js';
+import { createPacingFlow } from '../flows/pacing.js';
 import { createStorylineTracker } from '../agents/storyline.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
@@ -621,6 +622,15 @@ function buildMapRuntime(context, panelRef) {
         now: Date.now,
         log: (message, error) => logger.warn(message, error),
     });
+    const pacing = sharedInteraction?.pacing ?? createPacingFlow({
+        store,
+        season,
+        scene,
+        initiative,
+        getSettings: () => getSettings(context),
+        now: Date.now,
+        log: (message, error) => logger.warn(message, error),
+    });
     mapRuntime = {
         chatId,
         store,
@@ -631,6 +641,7 @@ function buildMapRuntime(context, panelRef) {
         runner,
         tracker: sharedInteraction?.tracker ?? null,
         travel,
+        pacing,
     };
     return mapRuntime;
 }
@@ -818,6 +829,9 @@ async function mountMapPanelComponent(context) {
                 ...(whole.map ?? {}),
                 contentGate: whole.contentGate,
                 contentLimits: whole.contentLimits,
+                // The director card and the panel's fallback pacing flow must
+                // see the user's pacing settings, not only the map slice.
+                pacing: whole.pacing,
             };
         };
         const panel = await mountMapPanel({
@@ -827,6 +841,9 @@ async function mountMapPanelComponent(context) {
             settings: mapSettingsNow(),
             getSettings: mapSettingsNow,
             store: runtime?.store ?? null,
+            pacing: runtime?.pacing ?? null,
+            scene: runtime?.scene ?? null,
+            initiative: runtime?.initiative ?? null,
             onTravel,
             // The toolbar X used to only send CLOSE to the panel's own state
             // machine, so nothing visible happened. The host closes the shell.
