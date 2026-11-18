@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `neoterra-experience-audit`
-- Status: draft — decisions incorporated; pending spike sign-offs
+- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`.
 - Date: 2026-11-18
 - Audit basis: full static read of `src/`, `data/`, `docs/`, and `tools/`; live inspection of SillyTavern at `http://127.0.0.1:8000/` against the installed extension (664 installed character cards, one existing S1 Director chat); DOM/computed-style inspection of the shell, Season tab, identity step, Map, and Codex.
 - Not verified in this session: `npm run check` and the full Node test suite were not executed. Treat test health as unverified until the first implementation step runs them.
@@ -254,7 +254,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 
 ### Milestone 1 — Coherent flow
 
-#### 1. Publish the audit and correct the docs
+#### 1. Publish the audit and correct the docs — ✅ done (`28dea98`)
 - **Files:** `docs/experience-audit.md` (new), `README.md`, `docs/scene-output.md`, `docs/adding-a-season.md`
 - **Depends on:** none
 - **Parallelizable:** yes
