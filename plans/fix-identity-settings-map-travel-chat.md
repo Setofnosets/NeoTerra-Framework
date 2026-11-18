@@ -15,7 +15,7 @@
 - [x] 7. Hand a location change back to the chat (arrival + encounter) — done (d9b6322)
 - [x] 8. Run the per-turn trackers, advance the clock, refresh map state, then offer CYOA — done (1839eeb)
 - [x] 9. Give encounters explicit Engage/Talk/Avoid actions — done (41e3638)
-- [x] 10. Close the map on a successful location change — done (82d90ed)
+- [x] 10. Close the map on a successful location change — done (381bb9a)
 - [x] 11. Document the new flow and update the changelog — done (fc85437)
 
 ## Summary
