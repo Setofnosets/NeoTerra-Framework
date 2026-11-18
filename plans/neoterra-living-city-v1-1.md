@@ -4,7 +4,7 @@ Off-screen world tick, newspaper, pacing/scene director, relationship graph, fog
 
 ## Meta
 - **Slug:** `neoterra-living-city-v1-1`
-- **Status:** in progress — Step 1 complete (319e3fb); next: Step 2
+- **Status:** in progress — Step 2 complete; next: Step 3
 - **Date:** 2026-11-18
 - **Base:** `plans/neoterra-framework-v1.md` (V1 complete, Steps 1–20)
 - **Target:** SillyTavern third-party extension, plain ESM, no bundler, no runtime deps
@@ -544,7 +544,7 @@ without code changes.
 
 ### Progress
 - [x] Step 1 — World clock, fiction time, and the time brake
-- [ ] Step 2 — Off-screen world tick engine and agenda data
+- [x] Step 2 — Off-screen world tick engine and agenda data (05b2313)
 - [ ] Step 3 — Off-screen activity feed in the world overlay
 - [ ] Step 4 — Pacing analyzer and explicit scene cut
 - [ ] Step 5 — Pacing surface: director card and `[NEOTERRA_PACING]`
@@ -580,6 +580,7 @@ without code changes.
 - **Risk:** high (silently rebalances every timeline; a wrong rate makes threats win too fast or makes the city feel static)
 - **Model/Effort routing:** implement-hard, high effort
 - **Commit message sketch:** `feat(world): advance faction and threat agendas off-screen`
+- **Commit:** `05b2313`
 
 ---
 
