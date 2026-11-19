@@ -274,6 +274,12 @@ export function renderSubmenuMarkup(submenu) {
         <dl class="neoterra-map-facts">
             ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
         </dl>
+        ${submenu.isPlayerHere
+            ? `<div class="neoterra-map-player-here" data-neoterra-map-player-here>
+                <span class="neoterra-map-player-here-ring" aria-hidden="true"></span>
+                <strong>You are here</strong>
+            </div>`
+            : ''}
         ${present.length > 0
             ? `<div class="neoterra-map-present"><strong>Present:</strong>
                 ${avatarStripMarkup(present, { size: 'sm' })}

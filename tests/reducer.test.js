@@ -37,6 +37,58 @@ function seed(seasonId) {
     });
 }
 
+test('presence never lists a player-controlled character', () => {
+    const state = seed('s1dark');
+    const playerId = state.player.characterId;
+    const npcId = 's1dark.aurelia.season-dark-version';
+
+    // SET_LOCATION moves the player and resyncs presence.
+    const moved = applyWorldEvent(
+        state,
+        { type: 'SET_LOCATION', locationId: 'central-plaza', characterId: playerId },
+        CONTEXT,
+    );
+    assert.ok(!moved.locations['central-plaza'].present.includes(playerId));
+    assert.ok(moved.scene.present.every((id) => moved.characters[id].controlledBy !== 'player'));
+    assert.ok(!moved.scene.present.includes(playerId));
+
+    // MOVE_CHARACTER of an NPC at the player's place still lists that NPC.
+    const atPlayerPlace = applyWorldEvent(
+        state,
+        { type: 'MOVE_CHARACTER', characterId: npcId, locationId: state.scene.locationId },
+        CONTEXT,
+    );
+    assert.ok(atPlayerPlace.locations[state.scene.locationId].present.includes(npcId));
+    assert.ok(!atPlayerPlace.locations[state.scene.locationId].present.includes(playerId));
+    assert.ok(atPlayerPlace.scene.present.includes(npcId));
+    assert.ok(!atPlayerPlace.scene.present.includes(playerId));
+
+    // A generated NPC joins presence; a generated player-controlled character
+    // (the identity step reuses this handler) never does.
+    const template = state.characters[npcId];
+    const generatedNpc = { ...cloneWorldState(template), charId: 'gen.npc', locationId: state.scene.locationId };
+    const withNpc = applyWorldEvent(
+        state,
+        { type: 'ADD_GENERATED_CHARACTER', character: generatedNpc, profile: { name: 'Gen NPC' } },
+        CONTEXT,
+    );
+    assert.ok(withNpc.locations[state.scene.locationId].present.includes('gen.npc'));
+
+    const generatedPlayer = {
+        ...cloneWorldState(template),
+        charId: 'gen.played',
+        controlledBy: 'player',
+        locationId: state.scene.locationId,
+    };
+    const withPlayer = applyWorldEvent(
+        state,
+        { type: 'ADD_GENERATED_CHARACTER', character: generatedPlayer, profile: { name: 'Gen Played' } },
+        CONTEXT,
+    );
+    assert.ok(!withPlayer.locations[state.scene.locationId].present.includes('gen.played'));
+    assert.ok(!withPlayer.scene.present.includes('gen.played'));
+});
+
 test('reducer is pure and deterministic', () => {
     const state = seed('s1');
     const before = cloneWorldState(state);

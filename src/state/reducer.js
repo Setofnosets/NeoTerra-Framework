@@ -143,21 +143,36 @@ function discoverySource(source) {
 }
 
 function syncPresence(state) {
-    for (const location of Object.values(state.locations)) {
-        location.present = [];
-    }
-    for (const characterId of Object.keys(state.characters).sort()) {
-        const character = state.characters[characterId];
-        if (character.locationId && state.locations[character.locationId]) {
-            state.locations[character.locationId].present.push(characterId);
+    // Presence is NPC-only by construction: the played character is a person,
+    // not a stage prop, and never appears in `locations[].present` or
+    // `scene.present`. Tolerate a partial document (no locations/characters/
+    // scene) so a hand-built state cannot crash the reducer.
+    const locations = isObject(state?.locations) ? state.locations : null;
+    const characters = isObject(state?.characters) ? state.characters : {};
+    for (const location of Object.values(locations ?? {})) {
+        if (isObject(location)) {
+            location.present = [];
         }
     }
-    const sceneLocationId = state.scene?.locationId;
-    state.scene.present = sceneLocationId
-        ? Object.keys(state.characters)
-            .filter((characterId) => state.characters[characterId].locationId === sceneLocationId)
-            .sort()
-        : [];
+    for (const characterId of Object.keys(characters).sort()) {
+        const character = characters[characterId];
+        if (!isObject(character) || character.controlledBy === 'player') {
+            continue;
+        }
+        if (character.locationId && isObject(locations?.[character.locationId])) {
+            locations[character.locationId].present.push(characterId);
+        }
+    }
+    if (isObject(state?.scene)) {
+        const sceneLocationId = state.scene.locationId;
+        state.scene.present = sceneLocationId
+            ? Object.keys(characters)
+                .filter((characterId) => isObject(characters[characterId])
+                    && characters[characterId].controlledBy !== 'player'
+                    && characters[characterId].locationId === sceneLocationId)
+                .sort()
+            : [];
+    }
 }
 
 function syncPlayerMirror(state) {
@@ -1024,6 +1039,17 @@ const HANDLERS = Object.freeze({
         const participants = Array.isArray(event.participants)
             ? event.participants.slice()
             : state.scene.present.slice();
+        // Presence is NPC-only. The default participant list must still include
+        // the canon player, or a caller that omits `participants` would start a
+        // fight with no player actor.
+        const playerCharacterId = state.player?.identity === 'canon'
+            ? state.player.characterId
+            : null;
+        if (typeof playerCharacterId === 'string'
+            && playerCharacterId.length > 0
+            && !participants.includes(playerCharacterId)) {
+            participants.push(playerCharacterId);
+        }
         for (const characterId of participants) {
             // A custom persona has no character record; the combat flow
             // represents it as "player" and adopts the reducer contract.

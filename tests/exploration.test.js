@@ -173,6 +173,7 @@ test('a discovered district hides its unvisited venues and their details', () =>
     assert.equal(submenu.factionId, null);
     assert.equal(submenu.districtName, null);
     assert.deepEqual(submenu.present, []);
+    assert.equal(submenu.isPlayerHere, false);
     assert.equal(submenu.travel.enabled, true, 'rumoured destinations are blind trips');
     assert.equal(submenu.travel.blindTrip, true);
 });
@@ -199,6 +200,7 @@ test('a hidden location never exposes live cast, district, or a travel button', 
     assert.equal(submenu.districtId, null);
     assert.equal(submenu.districtName, null);
     assert.deepEqual(submenu.present, []);
+    assert.equal(submenu.isPlayerHere, false);
     assert.equal(submenu.travel.enabled, false);
     assert.match(submenu.travel.reason, /Uncharted/);
 });
@@ -219,6 +221,26 @@ test('a virtual node stays reachable from a visited connection when its region i
     assert.equal(submenu.travel.enabled, true);
     assert.equal(submenu.travel.blindTrip, true);
     assert.equal(submenu.description, null);
+});
+
+test('fog never reveals that the player is at a hidden location', () => {
+    const base = seed();
+    const state = {
+        ...base,
+        player: { ...base.player, locationId: 'neon-docks' },
+        scene: { ...base.scene, locationId: 'neon-docks' },
+    };
+    const vm = viewModel(state);
+    const exploration = { regions: {}, keyLocations: {}, updatedAt: 0 };
+    const fogged = applyMapFog(vm, exploration, { mode: 'hard', showRumoredLabels: false });
+    const here = buildMapSubmenu(
+        { kind: 'namedLocation', id: 'neon-docks' },
+        fogged,
+        { state },
+    );
+    assert.equal(here.visibility, 'unknown');
+    assert.deepEqual(here.present, []);
+    assert.equal(here.isPlayerHere, false);
 });
 
 test('bridge visibility follows the endpoints', () => {

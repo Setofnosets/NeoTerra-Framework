@@ -282,6 +282,11 @@ function orderFacet(items, key, order) {
 }
 
 function matchesFilters(item, filters) {
+    // The played character is always reachable: filters never hide the sheet
+    // that carries the form swap, re-derive, goals, and identity actions.
+    if (item.isPlayer) {
+        return true;
+    }
     if (filters.query) {
         const query = String(filters.query).trim().toLowerCase();
         if (query && !item.searchText.includes(query)) {
@@ -1515,7 +1520,7 @@ function renderDetail(detail, state) {
             ${listMarkup(values, empty)}
         </section>`;
 
-    return `<article class="neoterra-codex-detail" data-neoterra-codex-detail="${escapeCodexHtml(detail.characterId)}">
+    return `<article class="neoterra-codex-detail" data-neoterra-codex-detail="${escapeCodexHtml(detail.characterId)}"${detail.isPlayer ? ' data-neoterra-codex-player-section="1"' : ''}>
         <header class="neoterra-codex-detail-head">
             <div class="neoterra-codex-detail-portrait">${generatedPortraitMarkup({
                 portraitUrl: detail.portraitUrl,

@@ -392,6 +392,107 @@ test('submenu markup renders title, facts, present cast, and travel state', () =
     assert.match(empty, /Select a district/);
 });
 
+test('presence and "you are here" exclude the player on the map', () => {
+    const playerId = 's1.leila.renya';
+    const npcId = 's1.aurelia.longshot';
+    const state = {
+        player: { identity: 'canon', characterId: playerId, locationId: 'central-plaza' },
+        characters: {
+            [playerId]: { charId: playerId, controlledBy: 'player', locationId: 'central-plaza' },
+            [npcId]: { charId: npcId, controlledBy: 'npc', locationId: 'central-plaza' },
+        },
+        locations: {
+            'central-plaza': { present: [playerId, npcId], visited: true, connections: [] },
+            'petrabyte-tower': { present: [playerId], visited: true, connections: [] },
+        },
+        scene: { locationId: 'central-plaza', present: [playerId, npcId] },
+    };
+    const live = buildMapViewModel({
+        regions,
+        bridges,
+        keyLocations,
+        overrides,
+        districts,
+        locations,
+        state,
+        index: featureIndex,
+    });
+    const plaza = live.namedLocations.find((view) => view.id === 'central-plaza');
+    assert.deepEqual(plaza.present, [npcId]);
+    assert.equal(live.playerLocationId, 'central-plaza');
+    // Raw state is never mutated by the view model.
+    assert.deepEqual(state.locations['central-plaza'].present, [playerId, npcId]);
+
+    const here = buildMapSubmenu({ kind: 'namedLocation', id: 'central-plaza' }, live, { state });
+    assert.equal(here.isPlayerHere, true);
+    assert.ok(!here.present.includes(playerId));
+    assert.deepEqual(here.present, [npcId]);
+
+    const elsewhere = buildMapSubmenu({ kind: 'namedLocation', id: 'petrabyte-tower' }, live, { state });
+    assert.equal(elsewhere.isPlayerHere, false);
+    assert.ok(!elsewhere.present.includes(playerId));
+
+    const region = buildMapSubmenu({ kind: 'region', id: 'region:center' }, live, { state });
+    assert.equal(region.isPlayerHere, false);
+
+    const bridge = buildMapSubmenu({ kind: 'bridge', id: 'bridge:bridge-i' }, live, { state });
+    assert.equal(bridge.isPlayerHere, false);
+
+    const hereHtml = renderSubmenuMarkup(here);
+    assert.match(hereHtml, /data-neoterra-map-player-here/);
+    assert.match(hereHtml, /You are here/);
+    assert.doesNotMatch(hereHtml, /data-neoterra-map-player-here[\s\S]*Leila Renya/);
+    assert.doesNotMatch(renderSubmenuMarkup(elsewhere), /data-neoterra-map-player-here/);
+
+    // A place with no NPCs still shows the marker.
+    const tomb = {
+        ...state,
+        player: { ...state.player, locationId: 'petrabyte-tower' },
+        scene: { locationId: 'petrabyte-tower', present: [playerId] },
+        locations: {
+            ...state.locations,
+            'petrabyte-tower': { present: [playerId], visited: true, connections: [] },
+        },
+    };
+    const tombVm = buildMapViewModel({
+        regions,
+        bridges,
+        keyLocations,
+        overrides,
+        districts,
+        locations,
+        state: tomb,
+        index: featureIndex,
+    });
+    const alone = buildMapSubmenu({ kind: 'namedLocation', id: 'petrabyte-tower' }, tombVm, { state: tomb });
+    assert.equal(alone.isPlayerHere, true);
+    assert.deepEqual(alone.present, []);
+    assert.match(renderSubmenuMarkup(alone), /data-neoterra-map-player-here/);
+
+    // The scene is the authority: a custom persona's mirror location may be
+    // null (or stale), and the marker still follows the scene.
+    const custom = {
+        ...state,
+        player: { identity: 'custom', characterId: null, locationId: null, displayName: 'The Player' },
+        scene: { locationId: 'central-plaza', present: [] },
+        locations: { 'central-plaza': { present: [], visited: true, connections: [] } },
+    };
+    const customVm = buildMapViewModel({
+        regions,
+        bridges,
+        keyLocations,
+        overrides,
+        districts,
+        locations,
+        state: custom,
+        index: featureIndex,
+    });
+    assert.equal(customVm.playerLocationId, 'central-plaza');
+    assert.equal(
+        buildMapSubmenu({ kind: 'namedLocation', id: 'central-plaza' }, customVm, { state: custom }).isPlayerHere,
+        true,
+    );
+});
 /* ------------------------------------------------------------------ *
  * Leaflet-free rendering
  * ------------------------------------------------------------------ */

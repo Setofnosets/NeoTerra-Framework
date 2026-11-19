@@ -286,6 +286,24 @@ test('Play-as confirmation dialog and codex markup are rendered safely', () => {
     assert.match(markup, /data-neoterra-form-swap-target/);
 });
 
+test('the played character is always reachable in the codex', () => {
+    const store = makeStore('s1dark', { identity: 'canon', characterId: CAROL });
+    const impossible = viewFor(store, 's1dark', {
+        filters: { query: 'zzzz-no-such-name', side: 'hero', status: 'dead' },
+        selectedId: CAROL,
+    });
+    assert.ok(impossible.items.some((item) => item.characterId === CAROL));
+    assert.ok(impossible.filtered.some((item) => item.characterId === CAROL));
+    assert.equal(impossible.selected.isPlayer, true);
+
+    const markup = renderCodexMarkup(impossible);
+    assert.match(markup, /data-neoterra-codex-player-section="1"/);
+
+    // A non-player detail never carries the marker.
+    const other = viewFor(store, 's1dark', { selectedId: 's1dark.aurelia.season-dark-version' });
+    assert.doesNotMatch(renderCodexMarkup(other), /data-neoterra-codex-player-section/);
+});
+
 test('codex reads aliases, tags, and abilities from the active form', () => {
     const store = makeStore('s1dark', { identity: 'canon', characterId: CAROL });
     const before = viewFor(store, 's1dark', { profiles, selectedId: CAROL });

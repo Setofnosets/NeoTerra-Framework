@@ -456,6 +456,11 @@ export function createWorldState(options = {}) {
         locationsState[location.id] = seedLocation(location, startLocationId);
     }
     for (const character of Object.values(characters)) {
+        // Presence is NPC-only: the played character lives in `state.player`
+        // and `state.characters`, never on the stage roster.
+        if (character.controlledBy === 'player') {
+            continue;
+        }
         if (character.locationId && locationsState[character.locationId]) {
             locationsState[character.locationId].present.push(character.charId);
         }
@@ -477,6 +482,7 @@ export function createWorldState(options = {}) {
 
     const present = roster
         .filter((member) => member.locationId === startLocationId)
+        .filter((member) => member.characterId !== playerCharacterId)
         .map((member) => member.characterId);
 
     let playerState;

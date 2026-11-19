@@ -3327,6 +3327,31 @@ body.neoterra-dialog-open {
     color: var(--nt-text-muted);
 }
 
+.neoterra-map-player-here {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0.35rem 0;
+    font-size: 0.85rem;
+}
+
+.neoterra-map-player-here-ring {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--nt-accent, #38bdf8);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+.neoterra-home-player-here {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: var(--nt-text-muted);
+}
+
 .neoterra-settings-row {
     display: flex;
     flex-wrap: wrap;

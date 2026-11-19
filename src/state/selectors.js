@@ -18,6 +18,44 @@ function presentIds(state) {
         .map((character) => character.charId);
 }
 
+/**
+ * True when `id` names the character the player is currently playing.
+ *
+ * The single presence rule for every surface: a character is the player when
+ * the canon identity points at it or its `controlledBy` is `'player'`. Never
+ * throws on a null/partial state.
+ */
+export function isPlayerCharacter(state, id) {
+    if (typeof id !== 'string' || id.length === 0) {
+        return false;
+    }
+    if (state?.player?.characterId === id) {
+        return true;
+    }
+    return state?.characters?.[id]?.controlledBy === 'player';
+}
+
+/**
+ * Presence ids with every player character removed. Input order is preserved,
+ * duplicates and non-string entries are dropped, and a fresh array is always
+ * returned so callers can never mutate state.
+ */
+export function selectPresenceIds(state, ids) {
+    const present = [];
+    const seen = new Set();
+    for (const id of ids ?? []) {
+        if (typeof id !== 'string' || id.length === 0 || seen.has(id)) {
+            continue;
+        }
+        if (isPlayerCharacter(state, id)) {
+            continue;
+        }
+        seen.add(id);
+        present.push(id);
+    }
+    return present;
+}
+
 /** CharacterStates currently on stage (falls back to location residents). */
 export function selectPresentCast(state) {
     return presentIds(state)

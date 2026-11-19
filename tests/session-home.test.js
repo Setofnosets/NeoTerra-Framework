@@ -22,7 +22,10 @@ function worldState(overrides = {}) {
             timeOfDay: 'evening',
             inCombat: false,
         },
-        scene: { locationId: 'central-plaza', present: ['s1.vaiva.vaiva'] },
+        scene: {
+            locationId: 'central-plaza',
+            present: ['s1.vaiva.vaiva', 's1.aurelia.longshot'],
+        },
         locations: { 'central-plaza': { name: 'Central Plaza' } },
         characters: {
             's1.vaiva.vaiva': {
@@ -30,6 +33,16 @@ function worldState(overrides = {}) {
                 displayName: 'Vaiva',
                 formId: 's1.vaiva.vaiva',
                 status: 'active',
+                controlledBy: 'player',
+                locationId: 'central-plaza',
+            },
+            's1.aurelia.longshot': {
+                charId: 's1.aurelia.longshot',
+                displayName: 'Aurelia Longshot',
+                formId: 's1.aurelia.longshot',
+                status: 'active',
+                controlledBy: 'npc',
+                locationId: 'central-plaza',
             },
         },
         threats: [
@@ -87,9 +100,14 @@ test('buildSessionHomeView summarizes the live world', () => {
     assert.equal(view.threat.name, 'The Clarity Signal');
     assert.equal(view.threat.stage, 'broadcast');
     assert.equal(view.threat.progress, 42);
+    // Deliberate semantic change (step 1): presence is NPC-only, so the played
+    // character no longer appears in the Session Home cast list; the fixture
+    // now carries a separate NPC and the player is marked "You are here".
     assert.deepEqual(view.present, [
-        { id: 's1.vaiva.vaiva', name: 'Vaiva', initials: 'V' },
+        { id: 's1.aurelia.longshot', name: 'Aurelia Longshot', initials: 'AL' },
     ]);
+    assert.deepEqual(view.presentNpcs, view.present);
+    assert.equal(view.playerHere, true);
     assert.equal(view.previouslyOn, 'The season begins. Vaiva was spotted at the plaza.');
     assert.deepEqual(
         view.actions.map((action) => action.id),
@@ -122,6 +140,45 @@ test('renderSessionHomeMarkup exposes the primary and secondary actions', () => 
     assert.match(markup, /The Clarity Signal/);
     assert.match(markup, /Central Plaza/);
     assert.match(renderSessionHomeMarkup(null), /No world is active/);
+});
+
+test('the Present card marks the player and never lists them as cast', () => {
+    const view = buildSessionHomeView({ state: worldState(), season });
+    const markup = renderSessionHomeMarkup(view);
+    assert.match(markup, /data-neoterra-home-player-here/);
+    assert.match(markup, /You are here/);
+    const cast = markup.slice(markup.indexOf('neoterra-home-cast'));
+    assert.doesNotMatch(cast, /Vaiva/);
+    assert.match(cast, /Aurelia Longshot/);
+
+    // A custom persona whose player.locationId is null falls back to the scene.
+    const custom = worldState({
+        player: { identity: 'custom', displayName: 'Vex', locationId: null },
+        scene: { locationId: 'central-plaza', present: ['s1.vaiva.vaiva'] },
+    });
+    const customView = buildSessionHomeView({ state: custom, season });
+    assert.equal(customView.playerHere, true);
+    assert.deepEqual(customView.present, []);
+    const emptyMarkup = renderSessionHomeMarkup(customView);
+    assert.match(emptyMarkup, /data-neoterra-home-player-here/);
+    assert.doesNotMatch(emptyMarkup, /Nobody else is on stage/);
+
+    // The scene is the authority for the player's place (assumption 2): a stale
+    // or mismatched mirror `player.locationId` cannot move the marker away from
+    // the stage the card is describing. With no scene location there is no
+    // place to mark.
+    const mirrorMismatch = buildSessionHomeView({
+        state: worldState({ player: { identity: 'custom', displayName: 'Vex', locationId: 'elsewhere' } }),
+        season,
+    });
+    assert.equal(mirrorMismatch.playerHere, true);
+
+    const noSceneView = buildSessionHomeView({
+        state: worldState({ scene: { locationId: null, present: [] } }),
+        season,
+    });
+    assert.equal(noSceneView.playerHere, false);
+    assert.doesNotMatch(renderSessionHomeMarkup(noSceneView), /data-neoterra-home-player-here/);
 });
 
 test('readLastTab restores a known tab and rejects unknown values', () => {

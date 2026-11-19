@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '../core/logger.js';
-import { selectOpenBeats, selectPresentCast } from '../state/selectors.js';
+import { isPlayerCharacter, selectOpenBeats, selectPresentCast } from '../state/selectors.js';
 
 const logger = createLogger('session-home');
 
@@ -106,10 +106,18 @@ export function buildSessionHomeView({
     const openBeats = selectOpenBeats(state, season);
     const beat = openBeats[0] ?? null;
     const threat = mainThreatOf(state);
-    const present = selectPresentCast(state).map((entry) => {
-        const name = characterName(entry);
-        return { id: entry.charId ?? entry.id ?? name, name, initials: initialsOf(name) };
-    });
+    const presentNpcs = selectPresentCast(state)
+        .filter((entry) => !isPlayerCharacter(state, entry?.charId ?? entry?.id ?? null))
+        .map((entry) => {
+            const name = characterName(entry);
+            return { id: entry.charId ?? entry.id ?? name, name, initials: initialsOf(name) };
+        });
+    // The scene is the authority for where the player physically is: a custom
+    // persona's mirror `locationId` is seeded once and not maintained by
+    // SET_LOCATION, so prefer the scene and fall back to the mirror.
+    const playerLocationId = state.scene?.locationId ?? player.locationId ?? null;
+    const playerHere = typeof state.scene?.locationId === 'string'
+        && state.scene.locationId === playerLocationId;
     const registryEntry = character?.charId && registry
         ? asArray(registry.entries).find((entry) => entry.id === character.charId) ?? null
         : null;
@@ -148,7 +156,9 @@ export function buildSessionHomeView({
                 progress: Number.isFinite(threat.progress) ? threat.progress : 0,
             }
             : null,
-        present,
+        present: presentNpcs,
+        presentNpcs,
+        playerHere,
         previouslyOn: buildPreviouslyOn(state, season),
         badEnd: anyBadEnd
             ? { type: anyBadEnd.type ?? anyBadEnd.badEndType ?? null }
@@ -189,12 +199,17 @@ function renderChips(view) {
 }
 
 function renderPresent(view) {
-    if (view.present.length === 0) {
-        return '<p class="neoterra-empty">Nobody else is on stage.</p>';
+    const npcs = Array.isArray(view.presentNpcs) ? view.presentNpcs : (view.present ?? []);
+    const marker = view.playerHere
+        ? '<p class="neoterra-home-player-here" data-neoterra-home-player-here>You are here</p>'
+        : '';
+    if (npcs.length === 0) {
+        return marker || '<p class="neoterra-empty">Nobody else is on stage.</p>';
     }
     return `
+    ${marker}
     <ul class="neoterra-home-cast">
-        ${view.present.map((entry) => `
+        ${npcs.map((entry) => `
         <li class="neoterra-home-cast-member" data-neoterra-home-character="${escapeHtml(entry.id)}">
             <span class="neoterra-home-avatar" aria-hidden="true">${escapeHtml(entry.initials)}</span>
             <span>${escapeHtml(entry.name)}</span>

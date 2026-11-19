@@ -11,6 +11,7 @@ import {
     CURRENT_WORLD_STATE_VERSION,
     backfillCharacterFacets,
     migrateWorldState,
+    stripPlayerFromPresence,
 } from '../src/state/migrations.js';
 import {
     createWorldState,
@@ -28,6 +29,7 @@ import {
     saveWorldStateToMetadata,
 } from '../src/state/store.js';
 import {
+    isPlayerCharacter,
     selectBadEnds,
     selectBeat,
     selectCharacter,
@@ -36,6 +38,7 @@ import {
     selectNpcPool,
     selectOpenBeats,
     selectPlayerView,
+    selectPresenceIds,
     selectPresentCast,
     selectThreat,
 } from '../src/state/selectors.js';
@@ -188,15 +191,102 @@ test('roster, locations, factions, threats, and beats are seeded from data', () 
     assert.equal(state.locations[season.startLocationId].visited, true);
     assert.equal(state.locations['petrabyte-tower'].visited, season.startLocationId === 'petrabyte-tower');
     assert.equal(state.scene.locationId, season.startLocationId);
+    // Presence is NPC-only: the played character is never on the stage roster.
     assert.deepEqual(
         state.scene.present.sort(),
         season.roster
             .filter((member) => member.locationId === season.startLocationId)
+            .filter((member) => state.characters[member.characterId].controlledBy !== 'player')
             .map((member) => member.characterId)
             .sort(),
     );
     assert.ok(state.threats.every((threat) => threat.stage === 0 && threat.status === 'active'));
     assert.ok(Object.values(state.beats).every((beat) => beat.status === 'open'));
+});
+
+test('presence is NPC-only for every playable seed', () => {
+    for (const seasonId of PLAYABLE_SEASON_IDS) {
+        const state = seed(seasonId);
+        const playerId = state.player.characterId;
+        for (const location of Object.values(state.locations)) {
+            assert.ok(
+                !location.present.includes(playerId),
+                `${seasonId}: ${location.id} lists the player`,
+            );
+        }
+        assert.ok(
+            !state.scene.present.includes(playerId),
+            `${seasonId}: scene.present lists the player`,
+        );
+        for (const id of state.scene.present) {
+            assert.notEqual(state.characters[id]?.controlledBy, 'player');
+        }
+    }
+
+    // A custom persona has no CharacterState, so it can never be seeded into
+    // presence either.
+    const custom = seed('s1dark', {
+        player: { identity: 'custom', displayName: 'Vex' },
+    });
+    for (const location of Object.values(custom.locations)) {
+        assert.ok(location.present.every((id) => custom.characters[id]?.controlledBy === 'npc'));
+    }
+    assert.ok(custom.scene.present.every((id) => custom.characters[id]?.controlledBy === 'npc'));
+});
+
+test('isPlayerCharacter and selectPresenceIds are the single presence rule', () => {
+    const state = seed('s1dark');
+    const playerId = state.player.characterId;
+    const npcId = state.scene.present.find((id) => id !== playerId) ?? 'npc';
+    const controlled = { charId: 'ghost.player', controlledBy: 'player' };
+    const withGhost = { ...state, characters: { ...state.characters, [controlled.charId]: controlled } };
+
+    assert.equal(isPlayerCharacter(state, playerId), true);
+    assert.equal(isPlayerCharacter(withGhost, 'ghost.player'), true);
+    assert.equal(isPlayerCharacter(state, npcId), false);
+    assert.equal(isPlayerCharacter(state, ''), false);
+    assert.equal(isPlayerCharacter(state, null), false);
+    assert.equal(isPlayerCharacter(null, playerId), false);
+
+    assert.deepEqual(
+        selectPresenceIds(withGhost, [playerId, npcId, 'ghost.player', npcId, 42, null, '']),
+        [npcId],
+    );
+    // Preserves input order and returns a fresh array even when nothing changes.
+    const ordered = selectPresenceIds(state, ['b', 'a', 'b']);
+    assert.deepEqual(ordered, ['b', 'a']);
+    assert.notEqual(selectPresenceIds(state, ['a']), selectPresenceIds(state, ['a']));
+    assert.deepEqual(selectPresenceIds(state, null), []);
+    assert.deepEqual(selectPresenceIds(null, ['x']), ['x']);
+});
+
+test('migrateWorldState strips the player from presence exactly once', () => {
+    const playerId = 's1dark.carol.bleeding-heart';
+    const stored = {
+        schemaVersion: CURRENT_WORLD_STATE_VERSION,
+        player: { identity: 'canon', characterId: playerId },
+        characters: { [playerId]: { charId: playerId, controlledBy: 'player' } },
+        locations: {
+            'clarity-hq': { present: [playerId, 'npc.a'] },
+            'central-plaza': { present: [] },
+        },
+        scene: { locationId: 'clarity-hq', present: ['npc.a', playerId] },
+    };
+
+    const cleaned = migrateWorldState(stored);
+    assert.deepEqual(cleaned.locations['clarity-hq'].present, ['npc.a']);
+    assert.deepEqual(cleaned.scene.present, ['npc.a']);
+    // The input document is untouched.
+    assert.deepEqual(stored.locations['clarity-hq'].present, [playerId, 'npc.a']);
+
+    const again = migrateWorldState(cleaned);
+    assert.deepEqual(again, cleaned);
+    assert.deepEqual(stripPlayerFromPresence(cleaned), cleaned);
+
+    // A clean document is returned untouched (same reference).
+    const clean = { schemaVersion: 2, locations: {}, scene: { present: [] } };
+    assert.equal(stripPlayerFromPresence(clean), clean);
+    assert.deepEqual(migrateWorldState(clean), clean);
 });
 
 test('custom persona is the default without a default player character', () => {

@@ -23,6 +23,7 @@ import {
 } from './beats.js';
 import { applyContentGate } from '../core/content-gate.js';
 import { computeRegionVisibility, regionState } from '../state/exploration.js';
+import { selectPresenceIds } from '../state/selectors.js';
 
 export const CANONICAL_MAP = Object.freeze({
     path: 'NeoTerra.png',
@@ -1292,7 +1293,7 @@ export function buildMapViewModel({
             // override is only a fallback.
             factionId: live?.factionId ?? override?.factionId ?? location.factionId ?? null,
             status: live?.status ?? override?.status ?? location.defaultStatus ?? 'unknown',
-            present: Array.isArray(live?.present) ? live.present.slice() : [],
+            present: selectPresenceIds(state, Array.isArray(live?.present) ? live.present : []),
             visited: live?.visited === true,
             connections: Array.isArray(location.connections) ? location.connections.slice() : [],
             labelHidden: false,
@@ -1323,7 +1324,7 @@ export function buildMapViewModel({
             travel: Array.isArray(node.travel) ? node.travel.slice() : ['walk'],
             factionId: live?.factionId ?? null,
             status: live?.status ?? 'unknown',
-            present: Array.isArray(live?.present) ? live.present.slice() : [],
+            present: selectPresenceIds(state, Array.isArray(live?.present) ? live.present : []),
             visited: live?.visited === true,
             connections: Array.isArray(node.connections) ? node.connections.slice() : [],
             chatOnly: true,
@@ -1335,6 +1336,7 @@ export function buildMapViewModel({
         canvas: { width: CANONICAL_MAP.width, height: CANONICAL_MAP.height },
         image: CANONICAL_MAP.path,
         bounds: mapBounds(),
+        playerLocationId: state?.scene?.locationId ?? state?.player?.locationId ?? null,
         regions: regionViews,
         bridges: bridgeViews,
         keyLocations: keyViews,
@@ -1502,12 +1504,25 @@ export function buildMapSubmenu(selection, viewModel, options = {}) {
     // A fogged feature must not re-read live presence from raw state: the view
     // model already blanked it for rumoured/unknown features.
     const present = visibility === 'discovered'
-        ? (liveLocation?.present?.length ? liveLocation.present : null)
-            ?? (feature.present?.length ? feature.present : null)
-            ?? (feature.kind === 'namedLocation' && locationId === state?.scene?.locationId
-                ? state?.scene?.present ?? []
-                : [])
+        ? selectPresenceIds(state,
+            (liveLocation?.present?.length
+                ? selectPresenceIds(state, liveLocation.present)
+                : null)
+                ?? (feature.present?.length ? feature.present : null)
+                ?? (feature.kind === 'namedLocation' && locationId === state?.scene?.locationId
+                    ? state?.scene?.present ?? []
+                    : []))
         : [];
+    // The scene is the authority: a custom persona's mirror location is not
+    // maintained by location changes.
+    const playerLocationId = state?.scene?.locationId ?? state?.player?.locationId ?? null;
+    // A named location (or a key location resolving to one) is "you are here"
+    // only when it is discovered: fogged selections never expose the player's
+    // position.
+    const isPlayerHere = visibility === 'discovered'
+        && (feature.kind === 'namedLocation' || feature.kind === 'keyLocation')
+        && typeof locationId === 'string'
+        && locationId === playerLocationId;
     const connected = feature.connections ?? (liveLocation?.connections ?? []);
     // A virtual node has no polygon: it stays reachable through an authored
     // connection from the current location even when its region is uncharted.
@@ -1540,6 +1555,7 @@ export function buildMapSubmenu(selection, viewModel, options = {}) {
         factionName: feature.factionName ?? null,
         status: feature.status ?? null,
         present,
+        isPlayerHere,
         keyLocationIds: visibility === 'discovered' ? (feature.keyLocationIds ?? []) : [],
         bridgeIds: visibility === 'discovered' ? (feature.bridgeIds ?? []) : [],
         connects: feature.connects ?? [],

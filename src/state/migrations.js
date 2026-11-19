@@ -9,6 +9,7 @@
 export const CURRENT_WORLD_STATE_VERSION = 2;
 
 import { abilitySummaryLines } from '../data/card-facets.js';
+import { isPlayerCharacter } from './selectors.js';
 const STATUSES = Object.freeze([
     'active',
     'offscreen',
@@ -271,6 +272,51 @@ export function backfillCharacterFacets(raw, profiles) {
 }
 
 /**
+ * Remove the played character from every presence array.
+ *
+ * Presence is NPC-only by construction, so a stored chat authored before that
+ * rule may still list the player in `locations[].present` or `scene.present`.
+ * This is a fill-only semantic cleanup: it is not a `schemaVersion` bump (the
+ * document is already v2), it preserves the order of everything else, and a
+ * clean document is returned untouched so a second run is a no-op.
+ *
+ * @param {object} document
+ * @returns {object} the same document when clean, a clone when something changed
+ */
+export function stripPlayerFromPresence(document) {
+    if (!isObject(document)) {
+        return document;
+    }
+    const hasLocations = isObject(document.locations);
+    const hasScenePresent = Array.isArray(document.scene?.present);
+    if (!hasLocations && !hasScenePresent) {
+        return document;
+    }
+    const changed = (list) => Array.isArray(list)
+        && list.length !== list.filter((id) => !isPlayerCharacter(document, id)).length;
+
+    const needsCleanup = (hasLocations
+        && Object.values(document.locations).some((location) => changed(location?.present ?? null)))
+        || (hasScenePresent && changed(document.scene.present));
+    if (!needsCleanup) {
+        return document;
+    }
+
+    const next = clone(document);
+    if (isObject(next.locations)) {
+        for (const location of Object.values(next.locations)) {
+            if (isObject(location) && Array.isArray(location.present)) {
+                location.present = location.present.filter((id) => !isPlayerCharacter(next, id));
+            }
+        }
+    }
+    if (isObject(next.scene) && Array.isArray(next.scene.present)) {
+        next.scene.present = next.scene.present.filter((id) => !isPlayerCharacter(next, id));
+    }
+    return next;
+}
+
+/**
  * Migrate an arbitrary stored document to the current WorldState version.
  *
  * @param {unknown} raw
@@ -304,6 +350,7 @@ export function migrateWorldState(raw) {
     }
 
     document.schemaVersion = CURRENT_WORLD_STATE_VERSION;
+    document = stripPlayerFromPresence(document);
     return normalizeCharacterFacets(document);
 }
 

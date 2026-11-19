@@ -49,6 +49,7 @@ import { loadLocations } from '../data/locations.js';
 import { loadDistricts } from '../data/map.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
 import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
+import { selectPresenceIds } from '../state/selectors.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
 import { createInitiative } from '../flows/initiative.js';
@@ -732,12 +733,14 @@ function sceneMetaFor(live, { locationId = null, locationName = null, state: pro
         ? state?.characters?.[player.characterId] ?? null
         : null;
     const pov = character?.displayName ?? player?.displayName ?? null;
+    // Presence is NPC-only: the fallback must not re-add the player when the
+    // stored `scene.present` is empty at a player-only location.
     const present = Array.isArray(state?.scene?.present) && state.scene.present.length > 0
-        ? state.scene.present
-        : Object.values(state?.characters ?? {})
+        ? selectPresenceIds(state, state.scene.present)
+        : selectPresenceIds(state, Object.values(state?.characters ?? {})
             .filter((entry) => resolvedLocation && entry?.locationId === resolvedLocation)
             .map((entry) => entry.charId)
-            .filter(Boolean);
+            .filter(Boolean));
     return buildSceneMeta({
         locationId: resolvedLocation,
         locationName: name,
