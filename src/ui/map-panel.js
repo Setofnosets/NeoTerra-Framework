@@ -390,6 +390,9 @@ export async function mountMapPanel(options = {}) {
         pacing: options.pacing ?? null,
         pacingError: null,
         newspaperReader: null,
+        // Hosted: the panel fills a floating window whose chrome owns drag and
+        // resize. Its own geometry, drag handle, and resize grip are disabled.
+        hosted: options.hosted === true,
     };
     mounted = state;
     void initAvatars({ registry: options.registry ?? null, ctx }).then(() => paintSide()).catch(() => {});
@@ -466,6 +469,7 @@ export async function mountMapPanel(options = {}) {
     });
 
     root.innerHTML = renderShellMarkup(state);
+    root.classList.toggle('neoterra-map-hosted', state.hosted);
     applyGeometry(state);
 
     root.addEventListener('click', (event) => {
@@ -738,7 +742,7 @@ function clampToHost(state) {
 }
 
 function applyGeometry(state) {
-    if (!hasDom()) {
+    if (!hasDom() || state.hosted === true) {
         return;
     }
     const element = state.root.querySelector('[data-neoterra-map]');
@@ -1386,6 +1390,14 @@ function openNewspaperReader(state) {
     return reader;
 }
 
+/** Open the reader for the currently mounted map (HUD/News entry point). */
+export function openNewspaperFromPanel() {
+    if (!mounted) {
+        return null;
+    }
+    return openNewspaperReader(mounted);
+}
+
 /** Close the reader from the shell teardown path. */
 export function disposeNewspaperReader() {
     const state = mounted;
@@ -1558,7 +1570,7 @@ async function loadAndMount(state) {
 }
 
 function mountDragResize(state) {
-    if (!hasDom()) {
+    if (!hasDom() || state.hosted === true) {
         return;
     }
     const element = state.root.querySelector('[data-neoterra-map]');

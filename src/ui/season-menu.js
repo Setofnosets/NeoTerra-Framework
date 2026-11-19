@@ -12,6 +12,8 @@ import { resolveActiveChatId } from '../core/live-context.js';
 import { loadRegistry } from '../data/registry.js';
 import { directorCardStatus, downloadDirectorCard } from './director-card.js';
 import { avatarMarkup, initAvatars } from './avatar.js';
+import { applyUiPreset, UI_PRESETS } from '../core/defaults.js';
+import { getSettings, saveSettings } from '../core/settings.js';
 import {
     SeasonStartError,
     applyCharacterFocus,
@@ -356,6 +358,12 @@ export function renderSeasonMenuMarkup(entries, options = {}) {
             </label>
             <button type="button" class="menu_button" data-neoterra-season-refresh>Refresh</button>
         </div>
+        <div class="neoterra-season-presets" role="group" aria-label="Recommended presets">
+            <span class="neoterra-season-presets-label">Recommended</span>
+            ${UI_PRESETS.map((preset) => `
+            <button type="button" class="neoterra-preset-button" data-neoterra-preset="${escapeHtml(preset.id)}"
+                title="${escapeHtml(preset.description)}">${escapeHtml(preset.label)}</button>`).join('')}
+        </div>
         ${error ? `<p class="neoterra-error" role="alert">${escapeHtml(error)}</p>` : ''}
         ${loading ? '<p class="neoterra-loading">Loading seasons…</p>' : ''}
         ${cards.length > 0 ? `<div class="neoterra-season-grid">${cards}</div>`
@@ -580,6 +588,23 @@ export async function mountSeasonMenu(options = {}) {
         const target = event.target;
         if (target.closest?.('[data-neoterra-season-refresh]')) {
             load();
+            return;
+        }
+        const presetId = target.closest?.('[data-neoterra-preset]')?.dataset.neoterraPreset;
+        if (presetId) {
+            const liveCtx = state.getContext?.() ?? state.ctx ?? getContext();
+            try {
+                const next = applyUiPreset(getSettings(liveCtx), presetId);
+                saveSettings(liveCtx, next);
+                const preset = UI_PRESETS.find((entry) => entry.id === presetId);
+                state.setupNotice = preset
+                    ? `Preset applied: ${preset.label}. ${preset.description}`
+                    : 'Preset applied.';
+            } catch (error) {
+                state.error = error?.message ?? String(error);
+                logger.warn('Could not apply the UI preset', error);
+            }
+            paint();
             return;
         }
         if (target.closest?.('[data-neoterra-download-director]')) {

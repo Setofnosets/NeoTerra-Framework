@@ -724,11 +724,23 @@ export async function runTurnPipeline({
     recentMessages = [],
     tickTurns = 1,
     worldTick = null,
+    onStage = null,
     log = null,
 } = {}) {
     if (!store || typeof store.get !== 'function') {
         return { ok: false, reason: 'no-store' };
     }
+    // Progress is best-effort: a throwing observer must never break the turn.
+    const emitStage = (stage, status, detail = {}) => {
+        if (typeof onStage !== 'function') {
+            return;
+        }
+        try {
+            onStage({ stage, status, ...detail });
+        } catch (error) {
+            logWarning(log, 'Turn stage callback failed', error);
+        }
+    };
     let settings = {};
     try {
         settings = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
@@ -789,6 +801,7 @@ export async function runTurnPipeline({
     // keeps its exact length.
     let ticked = false;
     if (Number.isFinite(tickTurns) && tickTurns > 0) {
+        emitStage('clock', 'start', { turns: tickTurns });
         try {
             const current = store.get();
             const tick = tickTurns === 1
@@ -796,19 +809,25 @@ export async function runTurnPipeline({
                 : buildClockTick({ state: current, settings, turns: tickTurns });
             store.dispatch(tick);
             ticked = true;
+            emitStage('clock', 'done');
         } catch (error) {
             logWarning(log, 'Could not advance the world clock', error);
             errors.push({ stage: 'tick', error: error?.message ?? String(error) });
+            emitStage('clock', 'failed', { error: error?.message ?? String(error) });
         }
+    } else {
+        emitStage('clock', 'skipped', { reason: 'no-ticks' });
     }
 
     // Stage 1.5: the off-screen world tick. It only runs after a successful
     // clock stage; while time is held the flow itself reports `time-held`.
     let worldTickReport = { ran: false, reason: 'absent' };
     if (typeof worldTick?.run === 'function' && ticked) {
+        emitStage('world-tick', 'start');
         try {
             const report = await worldTick.run({});
             worldTickReport = isObject(report) ? report : { ran: false, reason: 'invalid-report' };
+            emitStage('world-tick', 'done', { ran: worldTickReport.ran === true });
         } catch (error) {
             worldTickReport = {
                 ran: false,
@@ -820,6 +839,7 @@ export async function runTurnPipeline({
                 stage: 'world-tick',
                 error: error?.message ?? String(error),
             });
+            emitStage('world-tick', 'failed', { error: error?.message ?? String(error) });
         }
     }
 
@@ -827,6 +847,7 @@ export async function runTurnPipeline({
     // `flags.pacing` and never changes story state.
     let pacingReport = { ran: false, reason: 'absent' };
     if (settings?.pacing?.enabled !== false) {
+        emitStage('pacing', 'start');
         try {
             const analysis = analyzePacing({ state: store.get(), settings });
             const recorded = recordPacing(store, analysis);
@@ -842,12 +863,18 @@ export async function runTurnPipeline({
                 logWarning(log, 'Could not record the pacing analysis; state unchanged',
                     recorded.error);
                 errors.push({ stage: 'pacing', error: recorded.error ?? 'record failed' });
+                emitStage('pacing', 'failed', { error: recorded.error ?? 'record failed' });
+            } else {
+                emitStage('pacing', 'done', { level: analysis.level });
             }
         } catch (error) {
             pacingReport = { ran: false, reason: 'failed', error: error?.message ?? String(error) };
             logWarning(log, 'Pacing analysis failed; state unchanged', error);
             errors.push({ stage: 'pacing', error: error?.message ?? String(error) });
+            emitStage('pacing', 'failed', { error: error?.message ?? String(error) });
         }
+    } else {
+        emitStage('pacing', 'skipped', { reason: 'disabled' });
     }
 
     // Stage 2: the player tracker. Disabled means no run call at all; a failed
@@ -855,6 +882,7 @@ export async function runTurnPipeline({
     const enabled = settings?.agents?.stateTracker?.enabled !== false;
     let trackerReport = { ran: false, reason: 'disabled' };
     if (enabled && typeof tracker?.run === 'function') {
+        emitStage('tracker', 'start');
         try {
             const result = await tracker.run({
                 state: store.get(),
@@ -872,6 +900,9 @@ export async function runTurnPipeline({
             };
             if (applied?.ok !== true) {
                 errors.push({ stage: 'tracker', error: applied?.error ?? 'tracker apply failed' });
+                emitStage('tracker', 'failed', { error: applied?.error ?? 'tracker apply failed' });
+            } else {
+                emitStage('tracker', 'done', { source: result?.source ?? null });
             }
         } catch (error) {
             const aborted = isAbortError(error);
@@ -885,20 +916,26 @@ export async function runTurnPipeline({
                 stage: 'tracker',
                 error: error?.message ?? String(error),
             });
+            emitStage('tracker', 'failed', { error: error?.message ?? String(error) });
         }
     } else if (enabled) {
         trackerReport = { ran: false, reason: 'no-tracker' };
+        emitStage('tracker', 'skipped', { reason: 'no-tracker' });
+    } else {
+        emitStage('tracker', 'skipped', { reason: 'disabled' });
     }
 
     // Stage 3: the storyline keeps its own cadence inside `initiative`.
     let storyline = { ran: false, reason: 'absent' };
     if (typeof initiative?.afterTurn === 'function') {
+        emitStage('storyline', 'start');
         try {
             const result = await initiative.afterTurn({ recentProse: message });
             storyline = {
                 ran: result?.ran === true,
                 reason: result?.reason ?? null,
             };
+            emitStage('storyline', 'done', { ran: storyline.ran, reason: storyline.reason });
         } catch (error) {
             const aborted = isAbortError(error);
             storyline = {
@@ -911,14 +948,19 @@ export async function runTurnPipeline({
                 stage: 'storyline',
                 error: error?.message ?? String(error),
             });
+            emitStage('storyline', 'failed', { error: error?.message ?? String(error) });
         }
+    } else {
+        emitStage('storyline', 'skipped', { reason: 'absent' });
     }
 
     // Stage 4: refresh the present cast; manual pins/removals win in scene.js.
     let cast = null;
     if (typeof scene?.refreshCast === 'function') {
+        emitStage('cast', 'start');
         try {
             cast = await scene.refreshCast({ runDirector: false });
+            emitStage('cast', 'done');
         } catch (error) {
             cast = null;
             logWarning(log, 'Cast refresh failed after a message', error);
@@ -926,7 +968,10 @@ export async function runTurnPipeline({
                 stage: 'cast',
                 error: error?.message ?? String(error),
             });
+            emitStage('cast', 'failed', { error: error?.message ?? String(error) });
         }
+    } else {
+        emitStage('cast', 'skipped', { reason: 'absent' });
     }
 
     let turn = null;

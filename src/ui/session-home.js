@@ -159,7 +159,7 @@ export function buildSessionHomeView({
             { id: 'map', label: 'Map' },
             { id: 'characters', label: 'Cast' },
             { id: 'player', label: 'Player' },
-            { id: 'journal', label: 'Journal', disabled: true, note: 'Journal arrives with the Journal step.' },
+            { id: 'journal', label: 'Journal' },
         ],
         secondaryActions: [
             { id: 'new-timeline', label: 'New timeline' },

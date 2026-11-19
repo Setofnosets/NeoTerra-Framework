@@ -67,6 +67,7 @@ export function buildSceneKey(...parts) {
  *   text: string,
  *   key?: string|null,
  *   extra?: object,
+ *   meta?: object|null,
  *   now?: number|Date,
  * }} options
  */
@@ -75,6 +76,7 @@ export function buildSceneChatMessage({
     text,
     key = null,
     extra = {},
+    meta = null,
     avatarUrl = null,
     now = Date.now,
 } = {}) {
@@ -85,6 +87,7 @@ export function buildSceneChatMessage({
         kind: sceneKind,
         key: typeof key === 'string' && key.length > 0 ? key : null,
         ...(isObject(extra) ? extra : {}),
+        ...(isObject(meta) ? { meta } : {}),
     };
     return {
         name: SCENE_MESSAGE_NAME,

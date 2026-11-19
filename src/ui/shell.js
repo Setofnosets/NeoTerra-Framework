@@ -26,7 +26,7 @@ import {
     refreshSettingsPanel,
     revealSettingsPanel,
 } from './settings.js';
-import { disposeMapPanel, disposeNewspaperReader, mountMapPanel } from './map-panel.js';
+import { disposeMapPanel, disposeNewspaperReader, mountMapPanel, openNewspaperFromPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData, loadCardExemplars, resolveCodexRegistry } from './codex-data.js';
 import { mountRelationships } from './relationships.js';
@@ -36,6 +36,12 @@ import {
     mountPlayerPanel,
     disposePlayerPanel as disposeMountedPlayerPanel,
 } from './player-panel.js';
+import { mountHud, disposeHud } from './hud.js';
+import { createWindowManager } from './window-manager.js';
+import { mountJournal } from './journal.js';
+import { mountCommandPalette } from './command-palette.js';
+import { mountTurnStatus } from './turn-status.js';
+import { buildErrorToasts, diffWorldState, mountToasts } from './toasts.js';
 import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
 import { loadRegistry } from '../data/registry.js';
 import { loadLocations } from '../data/locations.js';
@@ -88,6 +94,12 @@ import {
     postSceneMessage,
 } from './chat-output.js';
 import {
+    applySceneDecorations,
+    buildSceneMeta,
+    decorateSceneElement,
+    extractSceneMeta,
+} from './scene-decorator.js';
+import {
     createCombatFlow,
     registerCombatIntegrations,
     unregisterCombatIntegrations,
@@ -128,6 +140,20 @@ const TAB_PLACEHOLDERS = Object.freeze({
 
 /** Tabs whose panel is a live mountable component instead of a placeholder. */
 const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'domain', 'player', 'settings']);
+
+/**
+ * Gameplay surfaces that live in floating windows instead of the modal shell.
+ * They stay in `SHELL_TABS` for slash-command and last-tab compatibility, but
+ * the shell nav renders only the remaining tabs.
+ */
+const WINDOW_TABS = new Set(['map', 'characters', 'relations', 'journal']);
+
+const WINDOW_SPECS = Object.freeze({
+    map: { title: 'City Map', initial: { x: 96, y: 64, width: 1100, height: 680 } },
+    characters: { title: 'Character Codex', initial: { x: 140, y: 56, width: 980, height: 720 } },
+    relations: { title: 'Relations', initial: { x: 180, y: 72, width: 860, height: 620 } },
+    journal: { title: 'Journal', initial: { x: 200, y: 60, width: 820, height: 700 } },
+});
 
 let ctx = null;
 let abort = null;
@@ -205,13 +231,14 @@ export function rememberLastTab(tabId) {
 }
 
 function shellMarkup() {
-    const tabs = SHELL_TABS.map(tab => `
+    const navTabs = SHELL_TABS.filter((tab) => !WINDOW_TABS.has(tab.id));
+    const tabs = navTabs.map(tab => `
         <button type="button" role="tab" class="neoterra-tab" id="neoterra-tab-${tab.id}"
             data-neoterra-tab="${tab.id}" aria-controls="neoterra-panel-${tab.id}"
             aria-selected="${tab.id === activeTab ? 'true' : 'false'}"
             tabindex="${tab.id === activeTab ? '0' : '-1'}">${tab.label}</button>`).join('');
 
-    const panels = SHELL_TABS.map(tab => {
+    const panels = navTabs.map(tab => {
         const placeholder = TAB_PLACEHOLDERS[tab.id];
         const live = LIVE_PANELS.has(tab.id);
         return `
@@ -435,10 +462,22 @@ function mountShell() {
     // The sheet reflects the same per-chat document the map and the turn
     // pipeline write: refresh it whenever the world announces a change.
     playerRefreshOff?.();
-    playerRefreshOff = bus.on(EVENTS.MAP_UPDATED, () => {
+    const offMapRefresh = bus.on(EVENTS.MAP_UPDATED, () => {
         playerPanel?.refresh?.();
         sessionHomePanel?.refresh?.();
+        journalPanel?.refresh?.();
+        refreshHud();
     });
+    const offSettingsRefresh = bus.on(EVENTS.SETTINGS_CHANGED, (event) => {
+        refreshHud();
+        if (!event?.path || event.path === '*' || event.path === 'ui.cinematicChat') {
+            decorateSceneFrames(refreshContext());
+        }
+    });
+    playerRefreshOff = () => {
+        offMapRefresh();
+        offSettingsRefresh();
+    };
 
     // Apply authored-data tab visibility once at mount: before a chat exists
     // the Domain tab must already be hidden, not only after the first click.
@@ -504,6 +543,7 @@ async function handleSeasonEntered(result) {
         }),
         key,
         extra: { seasonId, turn },
+        meta: sceneMetaFor(live, { state: result?.state ?? null }),
     });
 
     // The post is synchronous up to `saveChat`, so re-check the chat right
@@ -517,6 +557,7 @@ async function handleSeasonEntered(result) {
         avatarUrl: resolveSceneAvatar(live),
     });
     if (posted.posted || posted.deduped) {
+        decorateSceneAt(live, posted.index);
         closeShell();
     }
     document.getElementById('send_textarea')?.focus?.();
@@ -631,6 +672,383 @@ function hasWorldInChat(context) {
     return Boolean(context?.chatMetadata?.neoterra?.worldState);
 }
 
+/* ------------------------------------------------------------------ */
+/* Scene-card decoration                                               */
+/* ------------------------------------------------------------------ */
+
+function cinematicChatEnabled(context) {
+    try {
+        return getSettings(context)?.ui?.cinematicChat !== false;
+    } catch (error) {
+        logger.debug('Could not read cinematic chat setting', error);
+        return true;
+    }
+}
+
+/** Structured scene meta from the live world: location, time, POV, present. */
+function sceneMetaFor(live, { locationId = null, locationName = null, state: providedState = null } = {}) {
+    const neoterra = live?.chatMetadata?.neoterra ?? {};
+    const state = providedState ?? neoterra.worldState ?? null;
+    const resolvedLocation = locationId ?? state?.scene?.locationId ?? null;
+    const name = locationName
+        ?? (resolvedLocation ? state?.locations?.[resolvedLocation]?.name ?? null : null);
+    const player = state?.player ?? null;
+    const character = player?.identity === 'canon' && player.characterId
+        ? state?.characters?.[player.characterId] ?? null
+        : null;
+    const pov = character?.displayName ?? player?.displayName ?? null;
+    const present = Array.isArray(state?.scene?.present) && state.scene.present.length > 0
+        ? state.scene.present
+        : Object.values(state?.characters ?? {})
+            .filter((entry) => resolvedLocation && entry?.locationId === resolvedLocation)
+            .map((entry) => entry.charId)
+            .filter(Boolean);
+    return buildSceneMeta({
+        locationId: resolvedLocation,
+        locationName: name,
+        timeSlot: state?.meta?.timeOfDay ?? null,
+        pov,
+        present,
+    });
+}
+
+/** Decorate one freshly posted (or re-rendered) frame without touching `mes`. */
+export function decorateSceneAt(live, index) {
+    if (!hasDom() || !Number.isInteger(index) || index < 0) {
+        return false;
+    }
+    const messages = Array.isArray(live?.chat) ? live.chat : [];
+    const model = extractSceneMeta(messages[index]);
+    if (!model) {
+        return false;
+    }
+    const element = document.querySelector(`.mes[mesid="${index}"]`);
+    if (!element) {
+        return false;
+    }
+    return decorateSceneElement(element, model, { cinematic: cinematicChatEnabled(live) });
+}
+
+/** Re-decorate the whole open chat (reload, chat switch, render event sweep). */
+export function decorateSceneFrames(context = null) {
+    if (!hasDom()) {
+        return { decorated: 0, runs: [] };
+    }
+    const live = context ?? refreshContext();
+    const root = document.getElementById('chat');
+    return applySceneDecorations({
+        root,
+        messages: Array.isArray(live?.chat) ? live.chat : [],
+        cinematic: cinematicChatEnabled(live),
+        doc: document,
+    });
+}
+
+/* ------------------------------------------------------------------ */
+/* Persistent session HUD                                              */
+/* ------------------------------------------------------------------ */
+
+let hudPanel = null;
+let hudChatId = null;
+
+function hudEnabled(context) {
+    try {
+        return getSettings(context)?.ui?.hudEnabled !== false;
+    } catch (error) {
+        logger.debug('Could not read the HUD setting', error);
+        return true;
+    }
+}
+
+/**
+ * Mount or refresh the gameplay HUD. It is hidden on a chat without a world and
+ * rebuilt per chat so a switch cannot paint the previous timeline's meters.
+ */
+function refreshHud(context = null) {
+    if (!hasDom()) {
+        return null;
+    }
+    const live = context ?? refreshContext();
+    if (!hasWorldInChat(live) || !hudEnabled(live ?? ctx)) {
+        hudPanel?.dispose?.();
+        hudPanel = null;
+        hudChatId = null;
+        disposeHud();
+        return null;
+    }
+    const chatId = currentChatId(live);
+    if (hudPanel && hudChatId === chatId) {
+        hudPanel.refresh();
+        return hudPanel;
+    }
+    hudPanel?.dispose?.();
+    hudPanel = null;
+    hudChatId = chatId;
+    hudPanel = mountHud({
+        getContext: refreshContext,
+        getSettings: (requested) => {
+            try {
+                return getSettings(requested ?? refreshContext() ?? ctx);
+            } catch (error) {
+                logger.debug('Could not read settings for the HUD', error);
+                return null;
+            }
+        },
+        onAction: (action) => handleHudAction(action),
+        onToggleCollapsed: (collapsed) => {
+            const current = refreshContext() ?? ctx;
+            try {
+                setSetting(current, 'ui.hudCollapsed', collapsed === true);
+            } catch (error) {
+                logger.warn('Could not save the HUD collapse state', error);
+            }
+            hudPanel?.refresh();
+        },
+    });
+    return hudPanel;
+}
+
+function handleHudAction(action) {
+    if (!action) {
+        return;
+    }
+    if (action === 'map' || action === 'characters') {
+        openWindowTab(action);
+        return;
+    }
+    if (action === 'player') {
+        openShell(action);
+        return;
+    }
+    if (action === 'newspaper') {
+        openWindowTab('map');
+        // The map mount is async and the reader control only exists when an
+        // edition is present; retry briefly instead of clicking a stale node.
+        let attempts = 0;
+        const openReader = () => {
+            if (openNewspaperFromPanel()) {
+                return;
+            }
+            attempts += 1;
+            if (attempts < 8) {
+                setTimeout(openReader, 250);
+            }
+        };
+        setTimeout(openReader, 250);
+        return;
+    }
+    if (action === 'journal') {
+        openWindowTab('journal');
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Command palette                                                     */
+/* ------------------------------------------------------------------ */
+
+let commandPalette = null;
+
+function openCommandPalette() {
+    if (!hasDom()) {
+        return null;
+    }
+    commandPalette?.dispose?.();
+    commandPalette = mountCommandPalette({
+        onAction: (action) => handlePaletteAction(action),
+        onClose: () => {
+            commandPalette = null;
+        },
+    });
+    return commandPalette;
+}
+
+function handlePaletteAction(action) {
+    if (!action?.id) {
+        return;
+    }
+    if (action.id === 'travel') {
+        openWindowTab('map');
+        return;
+    }
+    if (action.id === 'cast') {
+        openWindowTab('characters');
+        return;
+    }
+    if (action.id === 'player') {
+        openShell('player');
+        return;
+    }
+    if (action.id === 'journal') {
+        openWindowTab('journal');
+        return;
+    }
+    if (action.id === 'newspaper') {
+        handleHudAction('newspaper');
+        return;
+    }
+    if (action.id === 'new-timeline') {
+        void startNewTimeline();
+        return;
+    }
+    if (action.command) {
+        // Rest/Patrol post a normal player message until the deterministic
+        // downtime flow lands.
+        closeShell();
+        sendChoiceText(action.command);
+    }
+}
+
+function disposeCommandPalette() {
+    commandPalette?.dispose?.();
+    commandPalette = null;
+}
+
+function disposeHudPanel() {
+    hudPanel?.dispose?.();
+    hudPanel = null;
+    hudChatId = null;
+    disposeHud();
+}
+
+/* ------------------------------------------------------------------ */
+/* Floating gameplay windows                                           */
+/* ------------------------------------------------------------------ */
+
+let windowManager = null;
+
+function ensureWindowManager() {
+    if (!hasDom()) {
+        return null;
+    }
+    if (windowManager) {
+        return windowManager;
+    }
+    windowManager = createWindowManager({
+        getScope: () => currentChatId(refreshContext()) ?? 'global',
+    });
+    // The no-world map CTA lives inside a window; delegate it here so it can
+    // close the window and open the Story wizard without a tab-host handler.
+    windowManager?.layer?.addEventListener('click', (event) => {
+        if (!event.target.closest?.('[data-neoterra-start-season]')) {
+            return;
+        }
+        windowManager?.close('map');
+        storyGridRequested = true;
+        openShell('season');
+    });
+    return windowManager;
+}
+
+function windowMountFor(tabId) {
+    if (tabId === 'map') {
+        return (host) => mountMapPanelComponent(refreshContext() ?? ctx, host, { hosted: true });
+    }
+    if (tabId === 'characters') {
+        return (host) => mountCodexPanelComponent(refreshContext() ?? ctx, host);
+    }
+    if (tabId === 'relations') {
+        return (host) => mountRelationsPanelComponent(refreshContext() ?? ctx, host);
+    }
+    if (tabId === 'journal') {
+        return (host) => mountJournalPanelComponent(refreshContext() ?? ctx, host);
+    }
+    return null;
+}
+
+function windowDisposeFor(tabId) {
+    if (tabId === 'map') {
+        disposeMapPanel();
+        mountedMapChatId = null;
+        return;
+    }
+    if (tabId === 'characters') {
+        disposeCodex();
+        mountedCodexChatId = null;
+        return;
+    }
+    if (tabId === 'relations') {
+        disposeRelationsPanel();
+        mountedRelationsChatId = null;
+        return;
+    }
+    if (tabId === 'journal') {
+        disposeJournalPanel();
+    }
+}
+
+/** Open Map, Codex, or Relations over the chat; the shell stays closed. */
+export function openWindowTab(tabId) {
+    if (!WINDOW_TABS.has(tabId) || !hasDom()) {
+        return null;
+    }
+    // A window over a full-screen modal is unreachable, so the shell closes
+    // first: the chat remains scrollable and the send form stays usable.
+    closeShell();
+    const wm = ensureWindowManager();
+    if (!wm) {
+        return openShellLegacyTab(tabId);
+    }
+    const spec = WINDOW_SPECS[tabId];
+    const handle = wm.open({
+        id: tabId,
+        title: spec.title,
+        initial: spec.initial,
+        mount: windowMountFor(tabId),
+        onClose: () => windowDisposeFor(tabId),
+    });
+    wm.focus(tabId);
+    bus.emit(EVENTS.WINDOW_OPENED, { id: tabId });
+    return handle;
+}
+
+/** Fallback for environments without a mountable window layer. */
+function openShellLegacyTab(tabId) {
+    const root = document.getElementById(UI_IDS.ROOT);
+    if (!root) {
+        return null;
+    }
+    root.hidden = false;
+    root.classList.add('is-open');
+    activeTab = tabId;
+    root.dataset.activeTab = tabId;
+    for (const tab of root.querySelectorAll('[role="tab"]')) {
+        tab.setAttribute('aria-selected', tab.dataset.neoterraTab === tabId ? 'true' : 'false');
+    }
+    for (const panel of root.querySelectorAll('[data-neoterra-panel]')) {
+        panel.hidden = panel.dataset.neoterraPanel !== tabId;
+    }
+    return null;
+}
+
+/**
+ * Closing the map surface means closing its window when hosted, or the shell
+ * when an older layout mounted it as a tab.
+ */
+function closeMapSurface() {
+    if (windowManager?.isOpen('map')) {
+        windowManager.close('map');
+        return true;
+    }
+    return closeShell();
+}
+
+/** Rebuild an open window's content after its cached runtime was dropped. */
+function remountWindow(tabId) {
+    if (!windowManager?.isOpen(tabId)) {
+        return;
+    }
+    windowManager.close(tabId, { silent: true });
+    // The silent close skipped onClose, so the module-level panel singleton
+    // must be dropped here or the remount early-returns a detached controller.
+    windowDisposeFor(tabId);
+    openWindowTab(tabId);
+}
+
+function closeWindowLayer() {
+    windowManager?.dispose();
+    windowManager = null;
+}
+
 function disposeSessionHome() {
     sessionHomePanel?.dispose?.();
     sessionHomePanel = null;
@@ -649,6 +1067,10 @@ function handleSessionHomeAction(action) {
     }
     if (action === 'map' || action === 'characters' || action === 'player') {
         setActiveTab(action);
+        return;
+    }
+    if (action === 'journal') {
+        openWindowTab('journal');
         return;
     }
     if (action === 'season') {
@@ -877,6 +1299,11 @@ export async function postTravelOutcome(context, runtime, result, {
             turn,
             encounter: result?.state?.scene?.encounter ?? null,
         },
+        meta: sceneMetaFor(live, {
+            locationId: result?.to ?? null,
+            locationName: result?.toName ?? null,
+            state: result?.state ?? null,
+        }),
     });
     // Attach before posting so the persisted frame carries the travel record.
     if (result?.messageExtra) {
@@ -889,6 +1316,9 @@ export async function postTravelOutcome(context, runtime, result, {
     if (!posted.posted && !posted.deduped) {
         return posted;
     }
+    // The arrival frame is decorated while the message element is fresh; a
+    // reload re-runs the same decorator from the render subscription.
+    decorateSceneAt(live, posted.index);
     // Announce the move before the choices round-trip so the map never waits on
     // an agent call to reflect the new location.
     try {
@@ -959,7 +1389,7 @@ function buildMapTravelHandler(context, runtime, panelRef) {
                 logger.debug('Could not read map.closeOnTravel', error);
             }
             if (shouldClose) {
-                closeShell();
+                closeMapSurface();
             }
         };
         if (result.alreadyThere === true) {
@@ -985,11 +1415,10 @@ async function mountMapPanelForActiveChat() {
     return mountMapPanelComponent(refreshContext());
 }
 
-async function mountMapPanelComponent(context) {
+async function mountMapPanelComponent(context, host = document.querySelector('[data-neoterra-map-host]'), { hosted = false } = {}) {
     if (!hasDom()) {
         return null;
     }
-    const host = document.querySelector('[data-neoterra-map-host]');
     if (!host) {
         return null;
     }
@@ -1050,6 +1479,7 @@ async function mountMapPanelComponent(context) {
             pacing: runtime?.pacing ?? null,
             scene: runtime?.scene ?? null,
             initiative: runtime?.initiative ?? null,
+            hosted,
             onFogChange: (enabled) => {
                 try {
                     setSetting(refreshContext() ?? context, 'map.showFogOfWar', enabled === true);
@@ -1059,8 +1489,9 @@ async function mountMapPanelComponent(context) {
             },
             onTravel,
             // The toolbar X used to only send CLOSE to the panel's own state
-            // machine, so nothing visible happened. The host closes the shell.
-            onClose: () => closeShell(),
+            // machine, so nothing visible happened. The host closes the map
+            // window (or the shell in the legacy tab layout).
+            onClose: () => closeMapSurface(),
         });
         ref.panel = panel;
         return panel;
@@ -1077,11 +1508,10 @@ async function mountMapPanelComponent(context) {
 
 let mountedCodexChatId = null;
 
-async function mountCodexPanelComponent(context) {
+async function mountCodexPanelComponent(context, host = document.querySelector('[data-neoterra-codex-host]')) {
     if (!hasDom()) {
         return null;
     }
-    const host = document.querySelector('[data-neoterra-codex-host]');
     if (!host) {
         return null;
     }
@@ -1187,11 +1617,10 @@ async function mountRelationsPanelForActiveChat() {
     return mountRelationsPanelComponent(refreshContext());
 }
 
-async function mountRelationsPanelComponent(context) {
+async function mountRelationsPanelComponent(context, host = document.querySelector('[data-neoterra-relations-host]')) {
     if (!hasDom()) {
         return null;
     }
-    const host = document.querySelector('[data-neoterra-relations-host]');
     if (!host) {
         return null;
     }
@@ -1224,6 +1653,54 @@ async function mountRelationsPanelComponent(context) {
     } catch (error) {
         logger.warn('Could not mount the relationship graph', error);
         host.innerHTML = '<p class="neoterra-error" role="alert">The relationship graph could not be mounted.</p>';
+        return null;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Journal                                                             */
+/* ------------------------------------------------------------------ */
+
+let journalPanel = null;
+let mountedJournalChatId = null;
+
+function disposeJournalPanel() {
+    journalPanel?.dispose?.();
+    journalPanel = null;
+    mountedJournalChatId = null;
+}
+
+async function mountJournalPanelComponent(context, host = null) {
+    if (!hasDom()) {
+        return null;
+    }
+    if (!host) {
+        return null;
+    }
+    const chatId = currentChatId(context);
+    if (mountedJournalChatId && mountedJournalChatId !== chatId) {
+        disposeJournalPanel();
+    }
+    mountedJournalChatId = chatId;
+    if (journalPanel) {
+        journalPanel.refresh();
+        return journalPanel;
+    }
+    try {
+        journalPanel = mountJournal({
+            root: host,
+            getState: () => liveWorldState(),
+            getSeason: () => currentSeasonDefinition(),
+            onClose: () => {
+                if (windowManager?.isOpen('journal')) {
+                    windowManager.close('journal');
+                }
+            },
+        });
+        return journalPanel;
+    } catch (error) {
+        logger.warn('Could not mount the journal', error);
+        host.innerHTML = '<p class="neoterra-error" role="alert">The journal could not be mounted.</p>';
         return null;
     }
 }
@@ -1428,9 +1905,14 @@ function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
     if (!keepCodex) {
         disposeCodex();
     }
-    if (isShellOpen() && getActiveTab() === 'map') {
-        void mountMapPanelForActiveChat();
+    // A hosted window keeps its frame but its cached panel was just dropped:
+    // rebuild it so the open window cannot paint a stale world.
+    remountWindow('map');
+    if (!keepCodex) {
+        remountWindow('characters');
     }
+    remountWindow('relations');
+    remountWindow('journal');
     if (isShellOpen() && getActiveTab() === 'player') {
         void mountPlayerPanelForActiveChat();
     }
@@ -1687,10 +2169,14 @@ async function handleEncounterAction(actionId) {
             state,
             encounter: model.encounter,
             chatId: runtime.chatId,
-            post: (message, key) => postSceneMessage(live, message, {
-                dedupeKey: key,
-                avatarUrl: resolveSceneAvatar(live),
-            }),
+            post: async (message, key) => {
+                const posted = await postSceneMessage(live, message, {
+                    dedupeKey: key,
+                    avatarUrl: resolveSceneAvatar(live),
+                });
+                decorateSceneAt(live, posted?.index);
+                return posted;
+            },
             requestChoices: (index) => requestChoicesFor(live, index, { mode: 'combat' }),
             onPosted: () => {
                 bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-start' });
@@ -1734,10 +2220,11 @@ async function handleEncounterAction(actionId) {
             text: buildCombatResolutionFrameText({ state: ended, result }),
             key,
         });
-        await postSceneMessage(live, message, {
+        const postedResolution = await postSceneMessage(live, message, {
             dedupeKey: key,
             avatarUrl: resolveSceneAvatar(live),
         });
+        decorateSceneAt(live, postedResolution?.index);
         bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-end' });
         await refreshInteractionUi(live);
     }
@@ -1796,9 +2283,66 @@ function chatStillCurrent(chatId) {
     return !current || currentChatId(current) === chatId;
 }
 
+/* ------------------------------------------------------------------ */
+/* Turn progress and delta toasts                                      */
+/* ------------------------------------------------------------------ */
+
+let turnStatusController = null;
+let toastStack = null;
+
+/** JSON-safe snapshot; WorldState is plain data, so this is cheap and exact. */
+function snapshotWorldState(state) {
+    if (!state || typeof state !== 'object') {
+        return null;
+    }
+    try {
+        return typeof structuredClone === 'function'
+            ? structuredClone(state)
+            : JSON.parse(JSON.stringify(state));
+    } catch (error) {
+        logger.debug('Could not snapshot the world state for the turn diff', error);
+        return null;
+    }
+}
+
+function ensureTurnStatusHost() {
+    let host = document.getElementById('neoterra-turn-status-host');
+    if (host) {
+        return host;
+    }
+    host = document.createElement('div');
+    host.id = 'neoterra-turn-status-host';
+    host.className = 'neoterra-turn-status-host';
+    const form = document.getElementById('send_form');
+    if (form) {
+        form.prepend(host);
+    } else {
+        document.body.append(host);
+    }
+    return host;
+}
+
+function beginTurnStatus() {
+    turnStatusController?.dispose?.();
+    turnStatusController = mountTurnStatus({ host: ensureTurnStatusHost() });
+    turnStatusController?.start?.();
+    return turnStatusController;
+}
+
+function ensureToasts() {
+    toastStack ??= mountToasts();
+    return toastStack;
+}
+
+function disposeTurnSurfaces() {
+    turnStatusController?.dispose?.();
+    turnStatusController = null;
+    toastStack?.dispose?.();
+    toastStack = null;
+}
+
 /** Drop a runtime the queued turn created for a chat that is no longer open. */
-function abortStaleTurnRuntime(chatId) {
-    if (!chatId) {
+function abortStaleTurnRuntime(chatId) {    if (!chatId) {
         return;
     }
     if (mapRuntime?.chatId === chatId) {
@@ -1836,26 +2380,47 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
         messageIndex,
         identity: messageTurnIdentity(message),
     });
+    let turnResult = null;
+    let status = null;
     if (isNewTurn) {
         const messages = Array.isArray(live?.chat) ? live.chat : [];
-        const result = await runTurnPipeline({
-            store: runtime.store,
-            tracker: runtime.tracker,
-            initiative: runtime.initiative,
-            scene: runtime.scene,
-            getSettings: () => getSettings(live),
-            message: typeof message?.mes === 'string' ? message.mes : '',
-            recentMessages: recentMessagesBefore(messages, messageIndex),
-            tickTurns: 1,
-            worldTick: runtime.worldTick,
-            log: (m, e) => logger.warn(m, e),
-        });
+        const beforeState = snapshotWorldState(runtime.store.get());
+        status = beginTurnStatus();
+        try {
+            turnResult = await runTurnPipeline({
+                store: runtime.store,
+                tracker: runtime.tracker,
+                initiative: runtime.initiative,
+                scene: runtime.scene,
+                getSettings: () => getSettings(live),
+                message: typeof message?.mes === 'string' ? message.mes : '',
+                recentMessages: recentMessagesBefore(messages, messageIndex),
+                tickTurns: 1,
+                worldTick: runtime.worldTick,
+                onStage: (event) => status?.event(event),
+                log: (m, e) => logger.warn(m, e),
+            });
+        } catch (error) {
+            status?.finish({ errors: [{ stage: 'pipeline', error: error?.message ?? String(error) }] });
+            throw error;
+        }
         if (!chatStillCurrent(chatId)) {
             logger.debug('Chat changed during the turn pipeline; skipping the UI handoff');
+            status?.finish({ errors: turnResult?.errors ?? [] });
             abortStaleTurnRuntime(chatId);
             return;
         }
-        bus.emit(EVENTS.MAP_UPDATED, { reason: 'turn', turn: result?.turn ?? null });
+        // Batch the visible deltas once per turn; the toast stack dedupes ids so
+        // a repeated MAP_UPDATED cannot repeat a line.
+        try {
+            ensureToasts().push([
+                ...diffWorldState(beforeState, runtime.store.get()),
+                ...buildErrorToasts(turnResult?.errors ?? [], { detailsHref: '#neoterra-agent-log' }),
+            ]);
+        } catch (error) {
+            logger.debug('Could not build state-delta toasts', error);
+        }
+        bus.emit(EVENTS.MAP_UPDATED, { reason: 'turn', turn: turnResult?.turn ?? null });
         mapRuntime?.panelRef?.refresh?.();
         // The newspaper is detached: a slow agent call must never delay CYOA.
         if (runtime.newsroom && typeof runtime.newsroom.publish === 'function') {
@@ -1876,15 +2441,26 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
     }
     if (!chatStillCurrent(chatId)) {
         logger.debug('Chat changed before the choices request; skipping');
+        status?.finish({ errors: turnResult?.errors ?? [] });
         abortStaleTurnRuntime(chatId);
         return;
     }
     const messages = Array.isArray(live?.chat) ? live.chat : [];
-    const view = await runtime.controller.request({
-        messages,
-        messageIndex,
-        swipeId: Number.isInteger(message?.swipe_id) ? message.swipe_id : 0,
-    });
+    status?.event({ stage: 'choices', status: 'start' });
+    let view = null;
+    try {
+        view = await runtime.controller.request({
+            messages,
+            messageIndex,
+            swipeId: Number.isInteger(message?.swipe_id) ? message.swipe_id : 0,
+        });
+        status?.event({ stage: 'choices', status: 'done' });
+    } catch (error) {
+        status?.event({ stage: 'choices', status: 'failed', error: error?.message ?? String(error) });
+        throw error;
+    } finally {
+        status?.finish({ errors: turnResult?.errors ?? [] });
+    }
     if (view?.visible) {
         choicesBar?.refresh?.();
     }
@@ -1942,6 +2518,49 @@ function unsubscribeInteractionEvents() {
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* Scene render subscription                                          */
+/* ------------------------------------------------------------------ */
+
+let sceneRenderSubscription = null;
+
+/** Decorate frames as ST re-renders them (reload, swipe, chat open). */
+function subscribeSceneRendering(context) {
+    unsubscribeSceneRendering();
+    const eventSource = context?.eventSource ?? context?.eventTypes;
+    const on = typeof eventSource?.on === 'function' ? eventSource.on.bind(eventSource) : null;
+    if (!on) {
+        return;
+    }
+    const event = context?.eventTypes?.CHARACTER_MESSAGE_RENDERED ?? 'character_message_rendered';
+    const handler = (messageIndex) => {
+        const live = refreshContext();
+        const messages = Array.isArray(live?.chat) ? live.chat : [];
+        const index = Number.isInteger(messageIndex) ? messageIndex : messages.length - 1;
+        decorateSceneAt(live, index);
+    };
+    try {
+        on(event, handler);
+        sceneRenderSubscription = { eventSource, event, handler };
+    } catch (error) {
+        logger.debug('CHARACTER_MESSAGE_RENDERED subscription unavailable', error);
+    }
+}
+
+function unsubscribeSceneRendering() {
+    const subscription = sceneRenderSubscription;
+    sceneRenderSubscription = null;
+    if (!subscription) {
+        return;
+    }
+    try {
+        const off = subscription.eventSource?.removeListener ?? subscription.eventSource?.off;
+        off?.call?.(subscription.eventSource, subscription.event, subscription.handler);
+    } catch (error) {
+        logger.debug('Could not remove the scene-render listener', error);
+    }
+}
+
 /**
  * Hand off to SillyTavern's Extensions drawer. The shell is a full-screen
  * modal, so it must close first or it keeps occluding the page behind it.
@@ -1995,6 +2614,13 @@ export function getActiveTab() {
 }
 
 export function setActiveTab(tabId) {
+    // Map, Codex, Relations, and Journal live in floating windows; the shell
+    // nav no longer renders their tabs (Journal was never a tab). Opening one
+    // closes the modal so the chat and the window are both usable.
+    if (WINDOW_TABS.has(tabId)) {
+        openWindowTab(tabId);
+        return true;
+    }
     if (!SHELL_TABS.some(tab => tab.id === tabId)) {
         return false;
     }
@@ -2063,6 +2689,13 @@ export function openShell(tabId = null) {
         return false;
     }
     previousFocus = document.activeElement;
+    // A gameplay surface goes straight to its floating window: the modal never
+    // opens, so the chat stays interactive.
+    const requested = tabId ?? readLastTab(refreshContext()) ?? 'season';
+    if (WINDOW_TABS.has(requested)) {
+        openWindowTab(requested);
+        return true;
+    }
     // Unhide before switching tabs so lazily mounted panels (the map) measure a
     // real viewport instead of a zero-size hidden container.
     root.hidden = false;
@@ -2070,7 +2703,7 @@ export function openShell(tabId = null) {
     // Restore the last surface used in this chat; the Story tab defaults to
     // Session Home when a world exists, so a reload never forces a season
     // re-selection.
-    const target = tabId ?? readLastTab(refreshContext()) ?? 'season';
+    const target = requested;
     setActiveTab(target);
     root.querySelector('.neoterra-close')?.focus?.();
     bus.emit(EVENTS.SHELL_OPENED, { tab: activeTab });
@@ -2114,6 +2747,14 @@ function registerSlashCommand(context) {
         aliases: ['nt'],
         callback: async (_args, value) => {
             const requested = String(value ?? '').trim().toLowerCase();
+            if (!requested) {
+                openCommandPalette();
+                return '';
+            }
+            if (WINDOW_TABS.has(requested)) {
+                openWindowTab(requested);
+                return '';
+            }
             openShell(SHELL_TABS.some(tab => tab.id === requested) ? requested : 'season');
             return '';
         },
@@ -2187,6 +2828,7 @@ async function resetChatWorld(context = null) {
     // Cancel pending debounced saves from every live store before clearing the
     // document; otherwise a stale timer can write the old world back.
     disposeChatRuntimes();
+    closeWindowLayer();
     disposeCodex();
     if (chatId) {
         try {
@@ -2227,6 +2869,7 @@ async function resetChatWorld(context = null) {
     disposeMapPanel();
     disposeCodex();
     disposeRelationsPanel();
+    disposeJournalPanel();
     disposeDomainPanel();
     disposePlayerPanelComponent();
     disposeChoicesBar();
@@ -2270,6 +2913,7 @@ function exposeDebugApi(context) {
         },
         resetWorld: () => resetChatWorld(context),
         openSettings: openSettingsPanel,
+        openPalette: openCommandPalette,
         refreshWorld: () => {
             invalidateChatRuntimes(context);
             bus.emit(EVENTS.MAP_UPDATED, { reason: 'world-refresh' });
@@ -2311,6 +2955,7 @@ export async function initialize(options = {}) {
         mountTopButton();
         mountClockChipForShell();
         mountShell();
+        refreshHud(ctx);
         void mountSeasonPanel(ctx);
         registerSlashCommand(ctx);
         registerCombatIntegrations({
@@ -2321,6 +2966,8 @@ export async function initialize(options = {}) {
         });
         subscribeChatChanges(ctx);
         subscribeInteractionEvents(ctx);
+        subscribeSceneRendering(ctx);
+        window.setTimeout(() => decorateSceneFrames(refreshContext()), 250);
         exposeDebugApi(ctx);
         await mountSettingsPanel(ctx, {
             signal: abort.signal,
@@ -2332,6 +2979,19 @@ export async function initialize(options = {}) {
         // stale mount as live (and never tear down a newer mount's panel).
         if (generation !== mountGeneration) {
             return false;
+        }
+
+        // First-run wizard: open the Story surface once on a fresh install with
+        // no world. The flag is per-user, so upgrading an existing install does
+        // not reopen it on every chat.
+        try {
+            const settings = getSettings(refreshContext() ?? ctx);
+            if (settings?.ui?.firstRunWizardSeen !== true && !hasWorldInChat(refreshContext() ?? ctx)) {
+                setSetting(refreshContext() ?? ctx, 'ui.firstRunWizardSeen', true);
+                openShell('season');
+            }
+        } catch (error) {
+            logger.debug('Could not open the first-run wizard', error);
         }
 
         mounted = true;
@@ -2369,11 +3029,15 @@ function subscribeChatChanges(context) {
     }
     const handler = () => {
         disposeChatRuntimes();
+        disposeTurnSurfaces();
+        disposeCommandPalette();
+        closeWindowLayer();
         mountedCodexChatId = null;
         disposeMapPanel();
         disposeCodex();
         mountedRelationsChatId = null;
         disposeRelationsPanel();
+        disposeJournalPanel();
         mountedDomainChatId = null;
         disposeDomainPanel();
         mountedPlayerChatId = null;
@@ -2414,7 +3078,10 @@ function subscribeChatChanges(context) {
         }
         refreshSettingsPanel();
         clockChip?.refresh?.();
+        disposeHudPanel();
+        refreshHud(refreshContext());
         void refreshInteractionUi(refreshContext());
+        window.setTimeout(() => decorateSceneFrames(refreshContext()), 200);
     };
     try {
         // ST 1.19 ships camelCase event names (`chat_id_changed`); older builds
@@ -2452,8 +3119,10 @@ export function dispose() {
     unregisterCombatIntegrations({ ctx });
     unsubscribeChatChanges();
     unsubscribeInteractionEvents();
+    unsubscribeSceneRendering();
     disposeClockChip();
     disposeChatRuntimes();
+    closeWindowLayer();
     mountedCodexChatId = null;
     mountedRelationsChatId = null;
     mountedDomainChatId = null;
@@ -2466,17 +3135,22 @@ export function dispose() {
     disposeMapPanel();
     disposeCodex();
     disposeRelationsPanel();
+    disposeJournalPanel();
     disposeDomainPanel();
     disposePlayerPanelComponent();
     playerRefreshOff?.();
     playerRefreshOff = null;
     disposeSettingsPanel();
+    disposeHudPanel();
+    disposeTurnSurfaces();
+    disposeCommandPalette();
     disposeChoicesBar();
     disposeEncounterBar();
     encounterBar = null;
     disposeEndingPanel();
     document.getElementById('neoterra-choices-host')?.remove();
     document.getElementById('neoterra-encounter-host')?.remove();
+    document.getElementById('neoterra-turn-status-host')?.remove();
     document.getElementById('neoterra-ending-host')?.remove();
 
     if (hasDom()) {

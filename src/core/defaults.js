@@ -326,10 +326,94 @@ export const DEFAULT_SETTINGS = freezeDeep({
         editorEnabled: true,
     },
 
+    // Gameplay UI surfaces. Settings, export/import, and agent configuration are
+    // not part of this block: they stay in the Extensions drawer.
+    ui: {
+        // The HUD is a collapsible right rail; visible only while a world exists.
+        hudEnabled: true,
+        hudCollapsed: false,
+        // Cinematic chat decorations for Neo Terra scene frames (header/portraits).
+        cinematicChat: true,
+        // First-run wizard opens once; the flag is per user.
+        firstRunWizardSeen: false,
+    },
+
     debug: false,
 });
 
 /** Return a fresh, mutable copy of the default settings. */
 export function cloneDefaults() {
     return structuredClone(DEFAULT_SETTINGS);
+}
+
+/** Recommended first-run presets (applied to a settings document). */
+export const UI_PRESETS = Object.freeze([
+    {
+        id: 'cinematic',
+        label: 'Cinematic',
+        description: 'Clock, world tick, pacing, choices, HUD, and scene cards on.',
+    },
+    {
+        id: 'classic',
+        label: 'Classic',
+        description: 'The V1.1 defaults: deterministic trackers, no extra chrome.',
+    },
+    {
+        id: 'sandbox',
+        label: 'Sandbox',
+        description: 'Loose deadlines and pacing; play without canon pressure.',
+    },
+]);
+
+/**
+ * Apply a recommended preset. Unknown ids return a clone of the input; the
+ * caller owns persistence so this stays pure and testable.
+ */
+export function applyUiPreset(settings, id) {
+    const base = settings && typeof settings === 'object'
+        ? structuredClone(settings)
+        : cloneDefaults();
+    if (id === 'cinematic') {
+        return {
+            ...base,
+            clock: { ...(base.clock ?? {}), enabled: true },
+            worldTick: { ...(base.worldTick ?? {}), enabled: true },
+            pacing: { ...(base.pacing ?? {}), enabled: true },
+            cyoa: { ...(base.cyoa ?? {}), enabled: true },
+            ui: {
+                ...(base.ui ?? {}),
+                hudEnabled: true,
+                hudCollapsed: false,
+                cinematicChat: true,
+            },
+            agents: {
+                ...(base.agents ?? {}),
+                stateTracker: { ...(base.agents?.stateTracker ?? {}), enabled: true },
+                storyline: { ...(base.agents?.storyline ?? {}), enabled: true },
+            },
+        };
+    }
+    if (id === 'sandbox') {
+        return {
+            ...base,
+            beatDeadlinePressure: 'off',
+            pacing: { ...(base.pacing ?? {}), enabled: false },
+            clock: { ...(base.clock ?? {}), enabled: false },
+            agents: {
+                ...(base.agents ?? {}),
+                storyline: { ...(base.agents?.storyline ?? {}), enabled: false },
+            },
+        };
+    }
+    if (id === 'classic') {
+        return {
+            ...base,
+            clock: { ...(base.clock ?? {}), enabled: true },
+            worldTick: { ...(base.worldTick ?? {}), enabled: true },
+            pacing: { ...(base.pacing ?? {}), enabled: true },
+            cyoa: { ...(base.cyoa ?? {}), enabled: true },
+            ui: { ...(base.ui ?? {}), hudEnabled: true, cinematicChat: false },
+        };
+    }
+    return base;
 }

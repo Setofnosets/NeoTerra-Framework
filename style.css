@@ -3326,3 +3326,965 @@ body.neoterra-dialog-open {
         grid-template-columns: 1fr;
     }
 }
+
+/* ---------- Persistent session HUD ---------- */
+
+.neoterra-hud {
+    position: fixed;
+    top: 5rem;
+    right: 0.75rem;
+    z-index: 3400;
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    max-height: min(72vh, 720px);
+    color: var(--nt-text);
+    font-family: var(--nt-font);
+    pointer-events: none;
+}
+
+.neoterra-hud[hidden] {
+    display: none !important;
+}
+
+.neoterra-hud-inner {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: inherit;
+    pointer-events: auto;
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    box-shadow: var(--nt-shadow-soft);
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+}
+
+.neoterra-hud-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    align-self: flex-end;
+    margin-bottom: 0.3rem;
+    padding: 0.25rem 0.55rem;
+    color: var(--nt-text-muted);
+    font-size: 0.72rem;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.neoterra-hud-toggle:hover,
+.neoterra-hud-toggle:focus-visible {
+    color: var(--nt-accent);
+    border-color: var(--nt-border-strong);
+    outline: none;
+}
+
+.neoterra-hud-inner[data-collapsed='true'] .neoterra-hud-body {
+    display: none;
+}
+
+.neoterra-hud-inner[data-collapsed='true'] {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.neoterra-hud-inner[data-collapsed='true'] .neoterra-hud-toggle {
+    margin-bottom: 0;
+}
+
+.neoterra-hud-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    min-height: 0;
+    padding: 0.75rem;
+    overflow-y: auto;
+}
+
+.neoterra-hud-header {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+}
+
+.neoterra-hud-portrait .neoterra-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+}
+
+.neoterra-hud-heading {
+    min-width: 0;
+}
+
+.neoterra-hud-era {
+    margin: 0;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-hud-title {
+    margin: 0.05rem 0;
+    font-size: 0.98rem;
+    line-height: 1.2;
+}
+
+.neoterra-hud-player,
+.neoterra-hud-when {
+    margin: 0;
+    font-size: 0.76rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-hud-section h4 {
+    margin: 0 0 0.3rem;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-hud-location {
+    margin: 0;
+    font-size: 0.84rem;
+}
+
+.neoterra-hud-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.neoterra-hud-meter-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+    color: var(--nt-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.neoterra-hud-meter-track {
+    height: 6px;
+    margin-top: 0.2rem;
+    background: var(--nt-bg-deep);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.neoterra-hud-meter-fill {
+    display: block;
+    height: 100%;
+    background: var(--nt-accent-strong);
+    transition: width var(--nt-transition);
+}
+
+.neoterra-hud-corruption-fill {
+    background: var(--nt-danger);
+}
+
+.neoterra-hud-threat-fill {
+    background: var(--nt-warning);
+}
+
+.neoterra-hud-threat-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.neoterra-hud-threat-progress {
+    color: var(--nt-warning);
+    font-variant-numeric: tabular-nums;
+}
+
+.neoterra-hud-threat-stage {
+    margin: 0.15rem 0 0;
+    font-size: 0.72rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-hud-beat {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.5rem;
+    align-items: baseline;
+    font-size: 0.8rem;
+}
+
+.neoterra-hud-beat-act,
+.neoterra-hud-deadline {
+    padding: 0.05rem 0.4rem;
+    font-size: 0.66rem;
+    color: var(--nt-text-muted);
+    background: var(--nt-bg-deep);
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+}
+
+.neoterra-hud-deadline {
+    color: var(--nt-warning);
+    border-color: var(--nt-warning);
+}
+
+.neoterra-hud-present {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.neoterra-hud-present-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.74rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-hud-empty {
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-hud-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--nt-border);
+}
+
+.neoterra-hud-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.35rem 0.2rem;
+    color: var(--nt-text-muted);
+    font-size: 0.68rem;
+    background: var(--nt-bg-elevated);
+    border: 1px solid transparent;
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+}
+
+.neoterra-hud-action:hover,
+.neoterra-hud-action:focus-visible {
+    color: var(--nt-accent);
+    border-color: var(--nt-border);
+    outline: none;
+}
+
+.neoterra-hud-action i {
+    font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+    .neoterra-hud {
+        top: auto;
+        right: 0;
+        bottom: 4.75rem;
+        left: 0;
+        width: auto;
+        max-height: 52vh;
+    }
+
+    .neoterra-hud-toggle {
+        margin: 0 0.6rem 0.3rem;
+    }
+
+    .neoterra-hud-body {
+        border-top: 1px solid var(--nt-border);
+    }
+
+    .neoterra-hud-inner[data-collapsed='true'] {
+        align-self: flex-end;
+        margin-right: 0.6rem;
+    }
+}
+
+/* ---------- Floating window layer ---------- */
+
+.neoterra-window-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 3500;
+    pointer-events: none;
+    font-family: var(--nt-font);
+    color: var(--nt-text);
+}
+
+.neoterra-window-layer[data-count='0'] {
+    display: none;
+}
+
+.neoterra-window {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    pointer-events: auto;
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-md);
+    box-shadow: var(--nt-shadow);
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+}
+
+.neoterra-window[data-active='true'] {
+    border-color: var(--nt-border-strong);
+    box-shadow: var(--nt-shadow), var(--nt-glow);
+}
+
+.neoterra-window-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0.4rem 0.35rem 0.7rem;
+    cursor: grab;
+    background: var(--nt-bg-elevated);
+    border-bottom: 1px solid var(--nt-border);
+    user-select: none;
+    touch-action: none;
+}
+
+.neoterra-window[data-layout='sheet'] .neoterra-window-bar {
+    cursor: default;
+}
+
+.neoterra-window-title {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--nt-accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.neoterra-window-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.neoterra-window-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.neoterra-window-body > * {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.neoterra-window[data-minimized='true'] .neoterra-window-body,
+.neoterra-window[data-minimized='true'] .neoterra-window-resize {
+    display: none;
+}
+
+.neoterra-window[data-minimized='true'] {
+    height: auto !important;
+    min-height: 0;
+}
+
+.neoterra-window-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 1rem;
+    height: 1rem;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 50%, var(--nt-border-strong) 50%);
+    touch-action: none;
+}
+
+.neoterra-window[data-layout='sheet'] {
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0;
+    border: none;
+}
+
+.neoterra-window[data-layout='sheet'] .neoterra-window-resize {
+    display: none;
+}
+
+.neoterra-window[data-layout='sheet'][data-minimized='true'] {
+    inset: auto 0 0 0 !important;
+    height: auto !important;
+}
+
+/* A hosted map fills the window: the window bar owns drag and resize. */
+.neoterra-map-hosted .neoterra-map {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.neoterra-map-hosted .neoterra-map-toolbar {
+    cursor: default;
+}
+
+.neoterra-map-hosted .neoterra-map-resize {
+    display: none;
+}
+
+.neoterra-map-hosted .neoterra-map-side {
+    width: 260px;
+    flex-basis: 260px;
+}
+
+@media (max-width: 720px) {
+    .neoterra-window[data-layout='sheet'] .neoterra-window-bar {
+        padding: 0.55rem 0.6rem 0.55rem 0.8rem;
+    }
+
+    .neoterra-window[data-layout='sheet'] .neoterra-window-title {
+        font-size: 1rem;
+    }
+
+    .neoterra-window[data-layout='sheet'] .neoterra-window-body {
+        overflow-y: auto;
+    }
+}
+
+/* ---------- Scene cards ---------- */
+
+.neoterra-scene-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0 0 0.6rem;
+    padding: 0.5rem 0.65rem;
+    background: linear-gradient(135deg, rgba(18, 34, 56, 0.9), rgba(10, 18, 32, 0.9));
+    border: 1px solid var(--nt-border);
+    border-left: 3px solid var(--nt-accent);
+    border-radius: var(--nt-radius-sm);
+}
+
+.neoterra-scene-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.neoterra-scene-badge {
+    padding: 0.08rem 0.45rem;
+    font-family: var(--nt-font);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    color: var(--nt-text-muted);
+    background: var(--nt-bg-deep);
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.neoterra-scene-kind {
+    color: var(--nt-accent-contrast);
+    font-weight: 600;
+    background: var(--nt-accent);
+    border-color: var(--nt-accent);
+    text-transform: uppercase;
+}
+
+.neoterra-scene-location {
+    color: var(--nt-text);
+    font-weight: 600;
+    font-size: 0.76rem;
+}
+
+.neoterra-scene-when {
+    color: var(--nt-warning);
+    border-color: rgba(251, 191, 36, 0.4);
+}
+
+.neoterra-scene-pov {
+    color: var(--nt-text-faint);
+}
+
+.neoterra-scene-strip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.neoterra-scene-strip .neoterra-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--nt-border-strong);
+}
+
+.neoterra-scene-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.9rem 0 0.5rem;
+    color: var(--nt-text-faint);
+    font-family: var(--nt-font);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.neoterra-scene-divider::before,
+.neoterra-scene-divider::after {
+    content: '';
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--nt-border), transparent);
+}
+
+.neoterra-cinematic .mes.neoterra-scene-message .mesAvatarWrapper,
+.neoterra-cinematic .mes.neoterra-scene-message .avatar,
+.neoterra-cinematic .mes.neoterra-scene-message .mes_timer,
+.neoterra-cinematic .mes.neoterra-scene-message .mesIDDisplay {
+    display: none !important;
+}
+
+.neoterra-cinematic .mes.neoterra-scene-message {
+    border-left: 2px solid var(--nt-accent-glow);
+    padding-left: 0.6rem;
+}
+
+@media (max-width: 720px) {
+    .neoterra-scene-card-header {
+        align-items: flex-start;
+    }
+
+    .neoterra-scene-badge {
+        font-size: 0.62rem;
+    }
+}
+
+/* ---------- Turn progress and toasts ---------- */
+
+.neoterra-turn-status-host {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.neoterra-turn-status {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.4rem;
+    padding: 0.32rem 0.7rem;
+    font-family: var(--nt-font);
+    font-size: 0.72rem;
+    color: var(--nt-text-muted);
+    background: var(--nt-bg-translucent);
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+}
+
+.neoterra-turn-status[data-failed='true'] {
+    color: var(--nt-danger);
+    border-color: var(--nt-danger);
+    background: var(--nt-danger-soft);
+}
+
+.neoterra-turn-status[data-stale='true'] {
+    color: var(--nt-warning);
+    border-color: var(--nt-warning);
+    background: var(--nt-warning-soft);
+}
+
+.neoterra-turn-title {
+    font-weight: 600;
+    color: var(--nt-accent);
+}
+
+.neoterra-turn-status[data-failed='true'] .neoterra-turn-title {
+    color: var(--nt-danger);
+}
+
+.neoterra-turn-spinner {
+    width: 0.65rem;
+    height: 0.65rem;
+    border: 2px solid var(--nt-border);
+    border-top-color: var(--nt-accent);
+    border-radius: 50%;
+    animation: neoterra-turn-spin 0.9s linear infinite;
+}
+
+.neoterra-turn-status[data-failed='true'] .neoterra-turn-spinner {
+    animation: none;
+    border-color: var(--nt-danger);
+}
+
+@keyframes neoterra-turn-spin {
+    to { transform: rotate(360deg); }
+}
+
+.neoterra-turn-stages {
+    display: inline-flex;
+    gap: 0.3rem;
+}
+
+.neoterra-turn-stage {
+    padding: 0.05rem 0.4rem;
+    background: var(--nt-bg-deep);
+    border-radius: 999px;
+    border: 1px solid var(--nt-border);
+    font-size: 0.64rem;
+}
+
+.neoterra-turn-stage.is-failed {
+    color: var(--nt-danger);
+    border-color: var(--nt-danger);
+}
+
+.neoterra-toasts {
+    position: fixed;
+    left: 0.75rem;
+    bottom: 5.5rem;
+    z-index: 3650;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    width: min(320px, calc(100vw - 1.5rem));
+    pointer-events: none;
+    font-family: var(--nt-font);
+}
+
+.neoterra-toast {
+    pointer-events: auto;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.74rem;
+    color: var(--nt-text);
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border);
+    border-left: 3px solid var(--nt-accent);
+    border-radius: var(--nt-radius-sm);
+    box-shadow: var(--nt-shadow-soft);
+}
+
+.neoterra-toast[data-tone='warning'] {
+    border-left-color: var(--nt-warning);
+}
+
+.neoterra-toast[data-tone='danger'] {
+    border-left-color: var(--nt-danger);
+}
+
+.neoterra-toast-title {
+    display: block;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-toast-message {
+    display: block;
+    margin-top: 0.1rem;
+}
+
+.neoterra-toast-details {
+    color: var(--nt-accent);
+}
+
+@media (max-width: 720px) {
+    .neoterra-toasts {
+        left: 0.5rem;
+        right: 0.5rem;
+        width: auto;
+        bottom: 9rem;
+    }
+
+    .neoterra-turn-status {
+        font-size: 0.66rem;
+    }
+}
+
+/* ---------- Journal ---------- */
+
+.neoterra-journal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    min-height: 0;
+    padding: 0.75rem;
+    overflow-y: auto;
+    font-family: var(--nt-font);
+    color: var(--nt-text);
+}
+
+.neoterra-journal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.neoterra-journal-head h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.05rem;
+    color: var(--nt-accent);
+}
+
+.neoterra-journal-recap {
+    margin: 0;
+    color: var(--nt-text-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.neoterra-journal-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--nt-border);
+}
+
+.neoterra-journal-toolbar .neoterra-field {
+    min-width: 180px;
+    flex: 1 1 220px;
+}
+
+.neoterra-journal-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.neoterra-journal-filter {
+    padding: 0.22rem 0.55rem;
+    font-size: 0.7rem;
+    color: var(--nt-text-muted);
+    background: transparent;
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.neoterra-journal-filter.is-active,
+.neoterra-journal-filter:hover,
+.neoterra-journal-filter:focus-visible {
+    color: var(--nt-accent-contrast);
+    background: var(--nt-accent);
+    border-color: var(--nt-accent);
+    outline: none;
+}
+
+.neoterra-journal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.neoterra-journal-entry {
+    padding: 0.45rem 0.6rem;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-left: 3px solid var(--nt-border-strong);
+    border-radius: var(--nt-radius-sm);
+}
+
+.neoterra-journal-entry[data-type='travel'] {
+    border-left-color: var(--nt-accent);
+}
+
+.neoterra-journal-entry[data-type='rumor'] {
+    border-left-color: var(--nt-warning);
+}
+
+.neoterra-journal-entry[data-type='newspaper'] {
+    border-left-color: var(--nt-text-faint);
+}
+
+.neoterra-journal-entry-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-journal-text {
+    margin: 0.2rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+    .neoterra-journal-head {
+        flex-direction: column;
+    }
+
+    .neoterra-journal-toolbar {
+        align-items: stretch;
+    }
+}
+
+/* ---------- Presets and command palette ---------- */
+
+.neoterra-season-presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 0.75rem;
+}
+
+.neoterra-season-presets-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-preset-button {
+    padding: 0.22rem 0.6rem;
+    font-size: 0.72rem;
+    color: var(--nt-text-muted);
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.neoterra-preset-button:hover,
+.neoterra-preset-button:focus-visible {
+    color: var(--nt-accent);
+    border-color: var(--nt-border-strong);
+    outline: none;
+}
+
+#neoterra-command-palette {
+    position: fixed;
+    inset: 0;
+    z-index: 3900;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+    font-family: var(--nt-font);
+}
+
+.neoterra-palette-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--nt-backdrop);
+    backdrop-filter: blur(3px);
+}
+
+.neoterra-palette-panel {
+    position: relative;
+    width: min(520px, 92vw);
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--nt-bg-panel);
+    border: 1px solid var(--nt-border-strong);
+    border-radius: var(--nt-radius-md);
+    box-shadow: var(--nt-shadow);
+}
+
+.neoterra-palette-search {
+    display: block;
+    padding: 0.6rem;
+    border-bottom: 1px solid var(--nt-border);
+}
+
+.neoterra-palette-search input {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.92rem;
+    color: var(--nt-text);
+    background: var(--nt-bg-deep);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+}
+
+.neoterra-palette-search input:focus {
+    outline: none;
+    border-color: var(--nt-accent);
+    box-shadow: var(--nt-focus-ring);
+}
+
+.neoterra-palette-results {
+    display: flex;
+    flex-direction: column;
+    padding: 0.35rem;
+    overflow-y: auto;
+}
+
+.neoterra-palette-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    color: var(--nt-text);
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+}
+
+.neoterra-palette-item.is-selected,
+.neoterra-palette-item:hover,
+.neoterra-palette-item:focus-visible {
+    background: var(--nt-accent-soft);
+    border-color: var(--nt-border);
+    outline: none;
+}
+
+.neoterra-palette-label {
+    font-size: 0.86rem;
+}
+
+.neoterra-palette-command {
+    font-size: 0.68rem;
+    color: var(--nt-text-faint);
+    white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+    #neoterra-command-palette {
+        padding-top: 6vh;
+    }
+}

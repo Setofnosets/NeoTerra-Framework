@@ -95,7 +95,7 @@ test('buildSessionHomeView summarizes the live world', () => {
         view.actions.map((action) => action.id),
         ['continue', 'map', 'characters', 'player', 'journal'],
     );
-    assert.equal(view.actions.find((action) => action.id === 'journal').disabled, true);
+    assert.equal(view.actions.find((action) => action.id === 'journal').disabled, undefined);
     assert.deepEqual(view.secondaryActions.map((action) => action.id), ['new-timeline']);
 });
 

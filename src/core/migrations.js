@@ -286,9 +286,30 @@ function normalizePacing(pacing, defaults) {
     };
 }
 
+function normalizeUi(source, defaults = {}) {
+    const flag = (value, fallback) => {
+        if (typeof value === 'string') {
+            const text = value.trim().toLowerCase();
+            if (text === 'true') {
+                return true;
+            }
+            if (text === 'false') {
+                return false;
+            }
+        }
+        return asBoolean(value, fallback);
+    };
+    return {
+        ...source,
+        hudEnabled: flag(source.hudEnabled, defaults.hudEnabled !== false),
+        hudCollapsed: flag(source.hudCollapsed, defaults.hudCollapsed === true),
+        cinematicChat: flag(source.cinematicChat, defaults.cinematicChat !== false),
+        firstRunWizardSeen: flag(source.firstRunWizardSeen, defaults.firstRunWizardSeen === true),
+    };
+}
+
 /** Normalize known settings fields after defaults and migrations are applied. */
-export function normalizeSettings(settings) {
-    const defaults = DEFAULT_SETTINGS;
+export function normalizeSettings(settings) {    const defaults = DEFAULT_SETTINGS;
     return {
         ...settings,
         contentGate: asEnum(settings.contentGate, CONTENT_GATE_LEVELS, defaults.contentGate),
@@ -332,6 +353,7 @@ export function normalizeSettings(settings) {
                 ? settings.contentLimits.characters
                 : {},
         },
+        ui: normalizeUi(isPlainObject(settings.ui) ? settings.ui : {}, defaults.ui),
         map: {
             ...(isPlainObject(settings.map) ? settings.map : {}),
             showFogOfWar: asBoolean(settings.map?.showFogOfWar, defaults.map.showFogOfWar),
