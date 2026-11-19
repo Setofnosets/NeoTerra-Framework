@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `character-creator-spike`
-- Status: **implemented (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; all three steps done: `f38dac8`, `c1927ed`, `<step3-hash>`
+- Status: **implemented (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; all three steps done: `f38dac8`, `c1927ed`, `15af622`
 - Date: 2026-11-18
 - Evidence: `plans/character-creator-spike-report.md` (6 live generations, scores, failure taxonomy)
 - Upstream: `plans/neoterra-experience-audit.md` (proposal B.11, spike A, decision 6)
@@ -93,7 +93,7 @@
 - **Risk:** medium
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(codex): preview, keep, and export generated character cards`
-- **Status:** done — pending hash (2026-11-18)
+- **Status:** done — `15af622` (2026-11-18)
 
 ## Verification & Testing
 - **Automated (after every step):**
