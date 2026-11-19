@@ -32,11 +32,13 @@ small schema-constrained agents that never free-write state.
   against reloads mid-pass.
 - **Agents** — every call is validated JSON; failures are logged, never
   applied. **Wired today:** State Tracker (every assistant turn), Storyline
-  Tracker (its own cadence), Choices Agent (opt-in), the Epilogue Agent, and the
-  Form Architect (missing-form profiles on transform).
-  **Library only, not wired into play yet:** Architect, Cast Director (cast
-  refresh runs with the Director disabled), Lore Agent, Continuity Auditor, Bad
-  End Detector UI, and the agent log panel.
+  Tracker (its own cadence), Cast Director (travel/arrival and scene cadence),
+  Lore Agent (every 10 turns or act change, feeding the Journal), Continuity
+  Auditor (act boundaries), Choices Agent (opt-in), the Epilogue Agent (behind
+  `ending.dynamic`), Bad End Detector + panel (opt-in), the Form Architect
+  (missing-form profiles on transform), and the Architect season-start pass
+  (opt-in via `agents.architect.seasonStart`). The agent log opens from any
+  error toast or `/neoterra log`.
 - **Portraits** — a generated avatar manifest, a per-user **Sync portraits**
   action, and resolution from installed SillyTavern cards. Ambiguous short names
   fall back to initials instead of swapping portraits. See
@@ -75,10 +77,21 @@ small schema-constrained agents that never free-write state.
   of war, a **Relations** graph tab, and a generic **Domain** sensorium for
   villain-POV seasons. All state lives under `WorldState.flags.*`; every
   feature can be switched off without touching a chat.
+- **Experience layer (V1.2)** — a persistent, collapsible HUD, floating
+  Map/Codex/Relations/Journal windows, cinematic scene cards, a turn-progress
+  chip with state-delta toasts, a Journal/recap, a first-run wizard, and a
+  keyboard command palette.
+- **Living world (V1.2)** — Cast Director arrivals/departures, Lore recaps,
+  act-boundary continuity findings, the opt-in Bad End panel, an agent log
+  drawer, optional season-start Architect passes, optional side beats,
+  deterministic downtime actions, and season-specific ending-pilot epilogues.
 
 > **Experience audit:** [docs/experience-audit.md](docs/experience-audit.md)
 > records the 2026-11-18 audit of the in-play experience, the intended-vs-actual
 > matrix, every known gap with a file:line anchor, and the remediation plan.
+>
+> **Manual QA:** [docs/qa.md](docs/qa.md) is the release checklist, including
+> mobile at 390×844, content gate, export/import, and agent-failure paths.
 
 ---
 
@@ -118,13 +131,13 @@ read Leaflet from a CDN, npm, or another extension's global.
    world book, selects the Director card, and posts an opening scene frame plus
    a **"Season started / You are / Goals / Current situation / Your move"**
    kickoff into the chat. The shell closes and focuses the input.
-4. Play normally. State Tracker runs every assistant turn and Storyline runs
-   every six turns or on a location change; both cadences are configurable. The
-   Cast Director setting exists, but the per-turn cast refresh currently runs
-   with the Director disabled, and the Lore Agent is not wired into the turn
-   loop yet. Every assistant turn advances the clock, runs the off-screen world
-   tick and pacing analysis, and refreshes the map before CYOA choices are
-   requested.
+4. Play normally. State Tracker runs every assistant turn; Storyline runs on
+   its own cadence (default every six turns or on a location change); the Cast
+   Director runs on travel/arrival and on its scene cadence; Lore runs every ten
+   turns or on an act change and writes the Journal recap; the Auditor runs at
+   act boundaries. All cadences and enable flags are configurable. Every
+   assistant turn advances the clock, runs the off-screen world tick and pacing
+   analysis, and refreshes the map before CYOA choices are requested.
 
 The chat is the primary surface: travel posts a `Location changed: X → Y`
 arrival frame (with the encounter, if any), and a small action bar offers

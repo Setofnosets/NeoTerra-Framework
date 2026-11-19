@@ -702,7 +702,7 @@ async function mountSeasonPanel(context) {
     }
 }
 
-function hasWorldInChat(context) {
+export function hasWorldInChat(context) {
     return Boolean(context?.chatMetadata?.neoterra?.worldState);
 }
 

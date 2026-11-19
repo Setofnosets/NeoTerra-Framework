@@ -1,8 +1,9 @@
 # Neo Terra experience audit
 
 - **Date:** 2026-11-18
-- **Status:** recorded 2026-11-18; decisions approved; spike sign-offs pending
-  (see the plan's status line).
+- **Status:** historical audit. The remediation plan in
+  `plans/neoterra-experience-audit.md` is implemented as of 1.2.0; findings below
+  describe the pre-1.2.0 state and are kept as the audit record.
 - **Scope:** the whole shipped extension — `src/`, `data/`, `docs/`, `tools/` —
   plus a live pass against SillyTavern 1.19.x at `http://127.0.0.1:8000/` with
   the extension installed (664 installed character cards, one existing S1

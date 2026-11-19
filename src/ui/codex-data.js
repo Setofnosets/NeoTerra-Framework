@@ -206,3 +206,17 @@ export async function loadCardExemplars({
 export function clearCardExemplarCache() {
     EXEMPLAR_CACHE.clear();
 }
+
+/**
+ * Build the generated-forms export payload. Kept pure so the export button and
+ * the regression suite share one contract.
+ */
+export function buildGeneratedFormsExport(state) {
+    const all = state?.flags?.generatedForms ?? {};
+    return {
+        kind: 'neoterra-generated-forms',
+        schemaVersion: 1,
+        chatId: state?.chatId ?? null,
+        generatedForms: all,
+    };
+}

@@ -18,6 +18,7 @@ import { createLogger } from '../core/logger.js';
 import { applyFormProfileOverlay } from '../state/form-profiles.js';
 import { buildGeneratedCharacterEvent } from '../agents/character-creator.js';
 import { avatarMarkup, initAvatars, initialsFor } from './avatar.js';
+import { buildGeneratedFormsExport } from './codex-data.js';
 import { downloadJson } from './download.js';
 
 const logger = createLogger('codex-ui');
@@ -2231,8 +2232,7 @@ export function mountCodex({
 
     const exportGeneratedForms = () => {
         const current = store.get();
-        const all = current?.flags?.generatedForms ?? {};
-        const payload = { kind: 'neoterra-generated-forms', schemaVersion: 1, chatId: current?.chatId ?? null, generatedForms: all };
+        const payload = buildGeneratedFormsExport(current);
         downloadJson(`neoterra-generated-forms-${String(current?.chatId ?? 'chat').slice(0, 40).replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`, payload);
     };
 

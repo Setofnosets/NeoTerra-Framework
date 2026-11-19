@@ -1,6 +1,6 @@
 {
   "name": "neoterra-framework",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Neo Terra Framework — seasons, world state, cast, map, and agents for SillyTavern.",

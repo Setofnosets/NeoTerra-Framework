@@ -252,3 +252,40 @@ test('the season grid and identity picker are fully styled', () => {
         assert.match(rule, /var\(--nt-/, `${selector} should use theme tokens`);
     }
 });
+
+test('mobile breakpoints cover the HUD sheet, windows, scene cards, and palette', () => {
+    const blocks = [...css.matchAll(/@media \(max-width: 720px\)\s*\{([\s\S]*?)\n\}/g)].map((match) => match[1]);
+    assert.ok(blocks.length >= 3, 'expected multiple 720px breakpoints');
+    const inMobile = (selector) => blocks.some((block) => block.includes(selector));
+    assert.ok(inMobile('.neoterra-hud'), 'HUD sheet rule at 720px');
+    assert.ok(inMobile('.neoterra-scene-card-header'), 'scene card rule at 720px');
+    assert.ok(inMobile('.neoterra-palette-item'), 'palette touch targets at 720px');
+    assert.ok(inMobile('#neoterra-shell button'), 'shell touch targets at 720px');
+
+    const sheet = css.match(/\.neoterra-window\[data-layout='sheet'\]\s*\{([\s\S]*?)\}/);
+    assert.ok(sheet, 'expected a window sheet rule');
+    assert.match(sheet[1], /inset:\s*0\s*!important/);
+    assert.match(sheet[1], /width:\s*auto\s*!important/);
+});
+
+test('the season card header wraps instead of overflowing on a narrow screen', () => {
+    const header = ruleBody('.neoterra-season-card-header');
+    assert.ok(header, 'expected a .neoterra-season-card-header rule');
+    assert.match(header, /flex-wrap:\s*wrap/);
+    const title = ruleBody('.neoterra-season-title');
+    assert.ok(title, 'expected a .neoterra-season-title rule');
+    assert.match(title, /min-width:\s*0/);
+    assert.match(title, /overflow-wrap:\s*anywhere/);
+});
+
+test('the bad-end host is a fixed overlay and empties cleanly', () => {
+    const host = ruleBody('.neoterra-bad-end-host');
+    assert.ok(host, 'expected a .neoterra-bad-end-host rule');
+    assert.match(host, /position:\s*fixed/);
+    assert.match(host, /pointer-events:\s*none/);
+    assert.ok(css.includes('.neoterra-bad-end-host:empty'));
+    const child = css.match(/\.neoterra-bad-end-host \.neoterra-bad-end\s*\{([\s\S]*?)\}/);
+    assert.ok(child, 'expected a sized bad-end child rule');
+    assert.match(child[1], /pointer-events:\s*auto/);
+});
+

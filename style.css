@@ -2854,12 +2854,20 @@ body.neoterra-dialog-open {
 
 .neoterra-season-card-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
 }
 
+.neoterra-season-card-header .neoterra-badge {
+    flex: 0 0 auto;
+}
+
 .neoterra-season-title {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
     margin: 0;
     font-size: 1.05rem;
     line-height: 1.25;
@@ -4289,5 +4297,19 @@ body.neoterra-dialog-open {
 @media (max-width: 720px) {
     #neoterra-command-palette {
         padding-top: 6vh;
+    }
+
+    /* Touch targets: every gameplay control stays at least 40px tall. */
+    #neoterra-shell button,
+    .neoterra-window-bar button,
+    .neoterra-hud-action,
+    .neoterra-palette-item,
+    .neoterra-toast-details,
+    .neoterra-journal-filter {
+        min-height: 40px;
+    }
+
+    .neoterra-palette-item {
+        padding-block: 0.5rem;
     }
 }

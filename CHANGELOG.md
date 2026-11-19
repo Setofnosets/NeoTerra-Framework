@@ -4,9 +4,43 @@ All notable changes to the Neo Terra Framework are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] - 2026-11-19
+
+**The Living World.** The experience audit's plan is implemented: a session
+HUD, floating windows, scene cards, progress/toasts, a Journal, onboarding, and
+the living-world agents. World mutations remain additive under `flags.*`; UI
+state is split between `chatMetadata.neoterra.ui` (last tab), localStorage
+(window geometry, avatar overrides), and settings.
 
 ### Added
+
+- **Session HUD and windows** — a collapsible gameplay rail (hidden without a
+  world) plus draggable/resizable Map, Codex, Relations, Journal, and agent-log
+  windows with persisted geometry and full-screen mobile sheets.
+- **Session Home and last-surface memory** — an existing world opens Session
+  Home (season/act/time/location/player/threat/present cast, "Previously on")
+  and the last tab per chat is restored. "New timeline" creates a new chat
+  instead of replacing by default.
+- **Scene cards and turn feedback** — structured location/time/POV/present
+  headers with portraits, cinematic chat grouping, a staged "Director is
+  updating" chip, and batched state-delta toasts.
+- **Journal and recap** — deterministic world timeline plus the Lore recap, with
+  filters, search, and Markdown export.
+- **First-run wizard and command palette** — staged season/character/confirm
+  onboarding with presets, and a keyboard-first gameplay palette.
+- **Living-world agents** — Cast Director on travel/arrival and scene cadence,
+  Lore on a 10-turn/act cadence feeding the Journal, the Auditor at act
+  boundaries, the Bad End panel, an agent-log drawer, and an opt-in
+  season-start Architect pass.
+- **Content depth pilot** — two optional side beats each for S1/S1Dark, a
+  deterministic downtime flow (Rest, Train, Patrol, Investigate, Socialize,
+  Work) with a civilian-life event table, differentiated post-victory arcs, and
+  season-specific deterministic epilogues. Dynamic ending prose stays behind
+  `ending.dynamic` (off; review required).
+- **QA** — `tests/experience-regression.test.js` and `docs/qa.md` covering the
+  P0 fixes and the release checklist, including 390×844 mobile.
+
+<!-- legacy V1.2 feature notes retained below -->
 
 - **Portraits** - a generated `data/characters/avatars.json` manifest, a PNG
   card scanner (`npm run build:avatars`), per-user **Sync portraits**, a
