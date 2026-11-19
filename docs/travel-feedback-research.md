@@ -43,18 +43,37 @@ Screenshots (captured from the live page):
 - **The prototype toast + Return pulse is the right keep-open variant.** It mirrored the scene-card information at the point of attention and gave a clear next action. It needs production implementation (no injected DOM) before it can be judged as a default.
 - **Backend latency dominates the absolute numbers.** With a responsive model the arrival frame would land much sooner; the relative ordering (frame → map close; keep-open with no cue) is unaffected.
 
+## Follow-up (1.3): the cues are shipped
+
+Steps 1–4 of `plans/travel-feedback-followup.md` implemented the three cues for
+real, driven by the travel flow:
+
+- `buildArrivalSummary` derives destination, district, time slot, turns, and the
+  encounter guard from `WorldState` (and persists the prose under
+  `chatMetadata.neoterra.ui.map`), so the card survives close–reopen.
+- The travel handler pushes a destination toast (`travel:<from>:<to>:<lastAt>`)
+  with a Return-to-chat action only while the map stays open.
+- The Return button pulses once per arrival (a static **New arrival** badge under
+  `prefers-reduced-motion`).
+- The sidebar renders a structured arrival card after a remount and hides it
+  only for the arrival the player dismissed.
+- `map.arrivalFeedback` (default `true`) switches all three cues off together.
+
+Re-run evidence: `plans/spikes/travel-feedback/notes.md` §"Follow-up (1.3)".
+On the same `Neo Terra — Director` chat the keep-open run showed the toast
+(43.39 s), the Return cue (43.39 s), and the sidebar card immediately, with the
+map still in front; close-on-travel showed the toast after the window closed
+and one HUD → Map click to reopen. The absolute numbers still include the
+backend timeout, as before.
+
 ## Recommendation
 
-**Keep `map.closeOnTravel: true` as the default for now.** The current close-on-travel behavior is still justified after the HUD/scene-card changes because keep-open has no arrival toast and the sidebar does not announce the arrival.
+**Keep `map.closeOnTravel: true` as the default.** The cues remove the
+orientation gap that made keep-open strictly worse, but the default does not
+need to move: the scene card behind the map is still one click away, and users
+who prefer keep-open already have the setting. The cues ship for those users;
+the default stays `true` (approved 2026-11-19).
 
-Before changing the default:
-
-1. Ship a real **arrival toast** (destination + "Return to chat") driven by the travel flow, not the turn diff.
-2. Add a **Return-to-chat pulse** on the map toolbar when an arrival happens while the map is open.
-3. Add the arrival summary to the map sidebar (destination, time slot, encounter/no-encounter) so keep-open has in-window evidence.
-4. Re-run these three scripted runs and review the report with the user.
-
-This is a recommendation only; the production default was not modified by the spike.
 
 ## Reproduction sketch
 

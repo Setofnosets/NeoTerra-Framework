@@ -65,3 +65,51 @@ for them ships in this milestone.
 - `/neoterra` opens the palette with exactly the eight gameplay actions.
 - HUD collapse toggle updated the persisted `ui.hudCollapsed` setting; the CSS
   body collapse was verified after the fix in `src/ui/hud.js` (inner marker).
+
+## Follow-up (1.3) — production cues re-run
+
+Re-ran the scripted travel modes on the same `Neo Terra — Director` chat after
+steps 1–4 shipped (`5cec295`, `da48b78`, `b61e3fc`, `b25c093`). `map.closeOnTravel`
+and `map.arrivalFeedback` were toggled only for the run and restored afterwards.
+The host was the same SillyTavern 1.19.0 instance at `http://127.0.0.1:8000/`.
+The simulated backend still returns HTTP 400 for the choices/cast/storyline
+agents, so the absolute times include that timeout, exactly as in the first
+spike. The cues themselves are fired from the travel flow before the CYOA
+round-trip, so their delta from the frame is what matters.
+
+Reduced motion was on in the capture browser (`prefers-reduced-motion: reduce`
+matched), so the Return cue is the static **New arrival** badge instead of the
+animation. Screenshots could not be captured in this session (the browser
+desktop window was not visible to the screenshot tool); the DOM evidence below
+is the raw output from `run-travel-feedback.js`.
+
+| Run | Mode | Frame | Toast | Return action | Map | Return cue | Sidebar card | Clicks to reopen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | close-on-travel (default) | 26.45 s | 26.55 s (`travel:petrabyte-tower:clarity-hq:1795098820551`, "Night · Downtown · Hostiles: Clarity Incorporated, The Beast Conversion Program") | **no** (informational) | closed at 26.55 s | n/a | persisted for the reopen path | 1 (HUD → Map) |
+| 2 | keep-open (`closeOnTravel:false`) | 43.24 s | 43.39 s (`travel:clarity-hq:petrabyte-tower:1795098779275`, "Evening · Downtown · No hostiles") | **yes** ("Return to chat") | stays open | badge `New arrival` at 43.39 s (reduced motion) | "PetraByte Tower / Evening · Downtown · 1 turn / No hostiles detected / Full arrival text" | 0 |
+| 3 | keep-open then close → reopen | 43.24 s | same arrival | yes | stays open | badge persists | same card renders from `WorldState` after remount; `Full arrival text` reachable | 1 (after close) |
+
+Additional checks:
+
+- Keep-open toast action: clicking **Return to chat** closed the map window and
+  focused `#send_textarea`. The toast element was removed afterwards.
+- Close-on-travel: the toast appeared after the map window had already closed
+  and stayed for its 9 s lifetime, proving the stack is outside the window.
+- Dismissal: clicking the card's dismiss wrote
+  `chatMetadata.neoterra.ui.map.arrivalDismissedKey = travel:petrabyte-tower:clarity-hq:1795098730393`;
+  the card was absent after a close → reopen. A later travel has a new key and
+  renders again.
+- `map.arrivalFeedback:false`: the map remount rendered no card and no legacy
+  prose block; no cues are pushed by `announce`.
+- The arrival prose + arrival-time facts persist under
+  `chatMetadata.neoterra.ui.map.lastArrivalIntro` (`key`, `text`, `timeSlot`,
+  `district`, `turns`, `hasEncounter`, `hostiles`), so the card does not borrow
+  the live clock or encounter after a remount.
+
+**Does keep-open now orient the player without reopening the map?** Yes. In run
+2 the map stayed in front, the toast named the destination, slot, district and
+encounter, the Return button carried the arrival cue, and the sidebar card was
+visible without a click. The default nevertheless stays
+`map.closeOnTravel: true` (approved 2026-11-19); see
+`docs/travel-feedback-research.md`.
+

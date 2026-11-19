@@ -158,13 +158,21 @@ the panel never closes the shell.
   disabled travel.
 - The map toolbar carries a **Return to chat** button in both travel modes, so
   keep-open never traps the player in the map.
-- The arrival summary stays in the sidebar (`data-neoterra-map-intro`) until it
-  is dismissed, or until the map panel is remounted (switching tabs rebuilds
-  the panel).
+- The sidebar shows a structured arrival card (`data-neoterra-arrival-summary`):
+  destination, district, time slot, travel turns, the encounter line, and a
+  **Full arrival text** disclosure that keeps the prose reachable
+  (`details[data-neoterra-map-intro]`). The card is derived from `WorldState`
+  and the persisted `chatMetadata.neoterra.ui.map.lastArrivalIntro`, so it
+  renders after close → reopen and after a tab switch.
+- Dismissing the card writes `chatMetadata.neoterra.ui.map.arrivalDismissedKey`;
+  it stays hidden only for that arrival, and the next travel has a new key.
+  With no travel history there is no card. `map.arrivalFeedback:false` hides it
+  (and the toast/Return cue) without a revert.
 - The top **active** main threat's stage and progress render as a compact badge
   above the overlay. A defeated/contained threat is not shown as current.
-- `map.closeOnTravel` defaults to `true`; Spike B measures whether the new
-  HUD/scene-card feedback justifies changing that default.
+- `map.closeOnTravel` defaults to `true`. Spike B's follow-up re-run is recorded
+  in `docs/travel-feedback-research.md`; the decision (2026-11-19) is to keep
+  the default and ship the cues for keep-open users.
 - **Deferred:** a dedicated district-control overlay toggle with a faction
   legend is not part of Milestone 1. The Map keeps the existing faction layer
   and per-district editor until the HUD/window pass revisits the overlay.

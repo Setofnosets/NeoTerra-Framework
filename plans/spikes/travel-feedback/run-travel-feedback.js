@@ -3,12 +3,15 @@
  *
  * Paste the body of `runTravelFeedback` into the live SillyTavern tab after the
  * Neo Terra map window is open. It runs the three travel modes and returns raw
- * timings. It never persists a default change: `map.closeOnTravel` is restored
- * after every run.
+ * timings plus the shipped arrival cues (destination toast, Return pulse/static
+ * badge under reduced motion, and the structured sidebar card).
+ *
+ * It never persists a default change: `map.closeOnTravel` is restored after
+ * every run, and `map.arrivalFeedback` is only read.
  *
  * Usage (browser console):
  *   copy the function below, call `await runTravelFeedback({ mode: 'close' })`
- *   then `{ mode: 'keep-open' }` and `{ mode: 'keep-open-toast' }`.
+ *   then `{ mode: 'keep-open' }` and `{ mode: 'keep-open-reopen' }`.
  */
 export async function runTravelFeedback({ mode = 'close', destinationTitle = null } = {}) {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -20,6 +23,32 @@ export async function runTravelFeedback({ mode = 'close', destinationTitle = nul
     const original = settingsRoot.map.closeOnTravel;
     settingsRoot.map.closeOnTravel = mode !== 'close';
     ctx.saveSettingsDebounced?.();
+
+    const readCues = (t0) => {
+        const toast = document.querySelector('#neoterra-toasts [data-neoterra-toast^="travel:"]');
+        const returnButton = document.querySelector('[data-neoterra-map-return]');
+        const card = document.querySelector('[data-neoterra-arrival-summary]');
+        return {
+            t: +(performance.now() - t0).toFixed(0),
+            toast: toast
+                ? {
+                    id: toast.dataset.neoterraToast,
+                    text: toast.innerText.replace(/\n/g, ' | ').slice(0, 240),
+                    hasAction: !!toast.querySelector('[data-neoterra-toast-action]'),
+                }
+                : null,
+            pulse: returnButton?.classList?.contains('is-pulsing') === true,
+            arrivalCue: returnButton?.dataset?.neoterraArrivalCue ?? null,
+            reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+            card: card
+                ? {
+                    key: card.dataset.arrivalKey,
+                    text: card.innerText.replace(/\n/g, ' | ').slice(0, 300),
+                    hasIntro: !!card.querySelector('details[data-neoterra-map-intro]'),
+                }
+                : null,
+        };
+    };
 
     try {
         if (!document.querySelector('[data-neoterra-window="map"]')) {
@@ -46,31 +75,39 @@ export async function runTravelFeedback({ mode = 'close', destinationTitle = nul
         document.querySelector('[data-neoterra-map-travel]')?.click();
         let frameAt = null;
         let mapClosedAt = null;
-        let toastAt = null;
-        let frameText = null;
-        for (let i = 0; i < 350; i += 1) {
+        let cues = null;
+        for (let i = 0; i < 700; i += 1) {
             await sleep(100);
             const live = window.SillyTavern.getContext();
             if (live.chat.length > beforeLen && frameAt === null) {
-                frameAt = performance.now() - start;
-                frameText = live.chat[live.chat.length - 1]?.mes?.slice(0, 240) ?? null;
-                if (mode === 'keep-open-toast') {
-                    // Prototype only. Production mode needs a real arrival toast.
-                    const toast = document.createElement('div');
-                    toast.className = 'neoterra-toast neoterra-spike-toast';
-                    toast.innerHTML = `<span class="neoterra-toast-title">Arrival</span><span class="neoterra-toast-message">You arrived at ${selected}.</span>`;
-                    (document.getElementById('neoterra-toasts') ?? document.body).append(toast);
-                    document.querySelector('[data-neoterra-map-return]')?.style?.setProperty('box-shadow', '0 0 0 3px rgba(94,234,212,0.55)');
-                    toastAt = performance.now() - start;
-                }
+                frameAt = +(performance.now() - start).toFixed(0);
             }
             if (!document.querySelector('[data-neoterra-window="map"]') && mapClosedAt === null) {
-                mapClosedAt = performance.now() - start;
+                mapClosedAt = +(performance.now() - start).toFixed(0);
             }
-            if (frameAt !== null && (mapClosedAt !== null || mode !== 'close')) {
+            const now = readCues(start);
+            if (cues === null && (now.toast || now.card)) {
+                cues = now;
+            }
+            if (frameAt !== null && cues !== null && (mode === 'close' ? mapClosedAt !== null : true)) {
                 break;
             }
         }
+
+        let reopened = null;
+        if (mode === 'keep-open-reopen') {
+            const clickStart = performance.now();
+            document.querySelector('[data-neoterra-map-close]')?.click();
+            await sleep(300);
+            document.querySelector('[data-neoterra-hud-action="map"]')?.click();
+            await sleep(1500);
+            reopened = {
+                clicks: 1,
+                ms: +(performance.now() - clickStart).toFixed(0),
+                card: document.querySelector('[data-neoterra-arrival-summary]')?.dataset?.arrivalKey ?? null,
+            };
+        }
+
         const live = window.SillyTavern.getContext();
         return {
             ok: true,
@@ -78,16 +115,16 @@ export async function runTravelFeedback({ mode = 'close', destinationTitle = nul
             selected,
             frameAt,
             mapClosedAt,
-            toastAt,
+            cues,
             mapOpen: !!document.querySelector('[data-neoterra-window="map"]'),
             location: live.chatMetadata?.neoterra?.worldState?.scene?.locationId ?? null,
-            frameText,
+            timeSlot: live.chatMetadata?.neoterra?.worldState?.meta?.timeOfDay ?? null,
+            travel: live.chatMetadata?.neoterra?.worldState?.flags?.travel ?? null,
+            uiMap: live.chatMetadata?.neoterra?.ui?.map ?? null,
+            reopened,
         };
     } finally {
         settingsRoot.map.closeOnTravel = original;
         ctx.saveSettingsDebounced?.();
-        document.querySelector('.neoterra-spike-toast')?.remove();
-        const ret = document.querySelector('[data-neoterra-map-return]');
-        ret?.style?.removeProperty?.('box-shadow');
     }
 }
