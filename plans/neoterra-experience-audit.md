@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `neoterra-experience-audit`
-- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`; steps 3–6 (mount the Player, add Session Home, make the Map self-sufficient, style the Season/Identity screens) are complete in `aac320c`; Milestone 2 steps 7–13 (portraits, PNG ingestion, guests, character picker, form profiles, Form Architect, form-data completion) are complete in `8ce80db`. Spike A (character creator reliability) is complete — **amber**, with the best-effort override granted 2026-11-18; evidence in `plans/character-creator-spike-report.md`, follow-up implementation plan in `plans/character-creator-spike.md`.
+- Status: draft — decisions incorporated; Milestones 1–3 and both spikes are complete. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`; steps 3–6 (mount the Player, add Session Home, make the Map self-sufficient, style the Season/Identity screens) are complete in `aac320c`; Milestone 2 steps 7–13 (portraits, PNG ingestion, guests, character picker, form profiles, Form Architect, form-data completion) are complete in `8ce80db`. Spike A (character creator reliability) is complete — **amber**, with the best-effort override granted 2026-11-18; evidence in `plans/character-creator-spike-report.md`, follow-up implementation plan in `plans/character-creator-spike.md`. Milestone 3 steps 14–19 (session HUD, floating windows, scene cards, turn progress + toasts, Journal, first-run presets + command palette) are complete in `cce25b4`. Spike B (travel feedback) is complete in `cce25b4` — the recommendation is to keep close-on-travel; live evidence in `docs/travel-feedback-research.md` and `plans/spikes/travel-feedback/`.
 - Date: 2026-11-18
 - Audit basis: full static read of `src/`, `data/`, `docs/`, and `tools/`; live inspection of SillyTavern at `http://127.0.0.1:8000/` against the installed extension (664 installed character cards, one existing S1 Director chat); DOM/computed-style inspection of the shell, Season tab, identity step, Map, and Codex.
 - Not verified in this session: `npm run check` and the full Node test suite were not executed. Treat test health as unverified until the first implementation step runs them.
@@ -460,7 +460,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 
 ### Milestone 3 — Invasive UI
 
-#### 14. Add the persistent session HUD
+#### 14. Add the persistent session HUD — ✅ done (`cce25b4`)
 - **Files:** `src/ui/hud.js` (new), `src/ui/shell.js`, `style.css`, `tests/hud.test.js`
 - **Depends on:** 4 (Session Home data), 3 (Player sheet), 7 (avatars)
 - **Parallelizable:** no
@@ -475,7 +475,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(ui): add a persistent Neo Terra session HUD`
 
-#### 15. Add the floating window manager
+#### 15. Add the floating window manager — ✅ done (`cce25b4`)
 - **Files:** `src/ui/window-manager.js` (new), `src/ui/shell.js`, `src/ui/map-panel.js`, `src/ui/codex.js`, `src/ui/relationships.js`, `style.css`, `tests/window-manager.test.js`
 - **Depends on:** 14 (HUD actions)
 - **Parallelizable:** no
@@ -491,7 +491,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(ui): move map, codex, and relations into floating windows`
 
-#### 16. Render scene cards and present-cast headers
+#### 16. Render scene cards and present-cast headers — ✅ done (`cce25b4`)
 - **Files:** `src/ui/chat-output.js`, `src/ui/scene-decorator.js` (new), `src/ui/shell.js`, `style.css`, `tests/scene-decorator.test.js`
 - **Depends on:** 7 (avatars), 15 (windows) for the full experience
 - **Parallelizable:** yes
@@ -506,7 +506,9 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(chat): render scene cards with location and present-cast headers`
 
-#### B. Travel feedback and map-close spike
+#### B. Travel feedback and map-close spike — ✅ done (`cce25b4`)
+
+**Outcome:** complete; the recommendation is to keep close-on-travel (no default change). Evidence: `docs/travel-feedback-research.md` and `plans/spikes/travel-feedback/`.
 **Preliminary finding.** The current close-on-travel is a sensible workaround: the map changes, but the player gets little confirmation beyond the sidebar. With the HUD, arrival toast, and scene card in place, the map may no longer need to close to prove that something happened. The spike must measure this rather than assume it.
 
 - **Files:** `docs/travel-feedback-research.md` (new), `plans/spikes/travel-feedback/` (test script, notes)
@@ -521,7 +523,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `docs(spike): measure travel feedback and map-close behavior`
 
-#### 17. Add turn progress and state toasts
+#### 17. Add turn progress and state toasts — ✅ done (`cce25b4`)
 - **Files:** `src/agents/state-tracker.js`, `src/ui/turn-status.js` (new), `src/ui/toasts.js` (new), `src/ui/shell.js`, `style.css`, `tests/turn-status.test.js`
 - **Depends on:** 15 (window layer) for placement; 16 for scene deltas
 - **Parallelizable:** yes
@@ -534,7 +536,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(chat): show turn progress and state-delta toasts`
 
-#### 18. Add the Journal and recap
+#### 18. Add the Journal and recap — ✅ done (`cce25b4`)
 - **Files:** `src/ui/journal.js` (new), `src/ui/shell.js`, `src/ui/hud.js`, `src/agents/lore.js`, `src/flows/scene.js`, `style.css`, `tests/journal.test.js`
 - **Depends on:** 16 (scene metadata). Generated recaps need step 20 (Lore wiring); the deterministic fallback lands in this step.
 - **Parallelizable:** yes
@@ -548,7 +550,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(journal): add a recap and world-event journal`
 
-#### 19. Add the first-run wizard and command palette
+#### 19. Add the first-run wizard and command palette — ✅ done (`cce25b4`)
 - **Files:** `src/ui/season-menu.js`, `src/ui/command-palette.js` (new), `src/ui/shell.js`, `src/core/defaults.js`, `src/ui/settings.html`, `src/ui/settings.js`, `style.css`, `tests/onboarding.test.js`
 - **Depends on:** 6 (styled season cards), 10 (picker), 4 (Session Home)
 - **Parallelizable:** no
