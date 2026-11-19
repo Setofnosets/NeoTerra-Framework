@@ -240,6 +240,14 @@ export const DEFAULT_SETTINGS = freezeDeep({
             maxTokens: 1600,
             cadence: 'onTransform',
         },
+        characterCreator: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.9,
+            maxTokens: 4000,
+            cadence: 'onRequest',
+        },
     },
 
     tokenBudget: {

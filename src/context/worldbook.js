@@ -86,6 +86,17 @@ function locationName(location) {
     return location.name ?? location.id ?? null;
 }
 
+function shorten(value, max = 180) {
+    const source = String(value ?? '').replace(/\s+/g, ' ').trim();
+    if (!source) {
+        return '';
+    }
+    if (source.length <= max) {
+        return source;
+    }
+    return `${source.slice(0, max - 1).trimEnd()}…`;
+}
+
 /**
  * Build the fact lines for one character. Empty fields are omitted so a seeded
  * character does not produce a wall of blank labels.
@@ -135,6 +146,18 @@ export function buildProfileLines({ entry = null, character = null, location = n
     }
     if (character?.appearance) {
         lines.push(`Appearance: ${character.appearance}`);
+    }
+    if (character?.personality) {
+        const personality = shorten(character.personality, 180 - 'Personality: '.length);
+        if (personality) {
+            lines.push(`Personality: ${personality}`);
+        }
+    }
+    if (character?.speech) {
+        const speech = shorten(character.speech, 180 - 'Speech: '.length);
+        if (speech) {
+            lines.push(`Speech: ${speech}`);
+        }
     }
     const abilities = joinList(character?.abilities);
     if (abilities) {

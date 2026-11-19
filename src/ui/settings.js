@@ -44,6 +44,8 @@ export const AGENT_LABELS = Object.freeze({
     choices: 'Choices agent',
     badEnd: 'Bad-end detector',
     newspaper: 'Newspaper editor',
+    formArchitect: 'Form architect',
+    characterCreator: 'Character creator',
 });
 
 /** Default values restored by the per-prompt reset buttons. */

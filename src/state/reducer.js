@@ -26,6 +26,7 @@ import {
     ENDING_PATHS,
     isJoinVillainPathAvailable,
     isResistancePathAvailable,
+    validateCharacterState,
 } from './world-state.js';
 
 function isObject(value) {
@@ -84,6 +85,20 @@ function requireStringList(value, label) {
         fail(`${label} must be an array of strings`);
     }
     return value.slice();
+}
+
+const GENERATED_PORTRAIT_PATTERN = /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/;
+// ~128 KB decoded; higher blobs multiply through the WAL and every swipe snapshot.
+const MAX_GENERATED_PORTRAIT_CHARS = 175000;
+const MAX_GENERATED_WARNING_CHARS = 240;
+
+/** Keep only a plausible, size-capped image data URL. */
+function generatedPortrait(value) {
+    return typeof value === 'string'
+        && value.length <= MAX_GENERATED_PORTRAIT_CHARS
+        && GENERATED_PORTRAIT_PATTERN.test(value)
+        ? value
+        : null;
 }
 
 function ensureExploration(state) {
@@ -229,6 +244,76 @@ const HANDLERS = Object.freeze({
     MOVE_CHARACTER(state, event) {
         const character = requireCharacter(state, event.characterId);
         moveCharacter(state, character, event.locationId);
+        syncPresence(state);
+        syncPlayerMirror(state);
+    },
+
+    /**
+     * Insert a character built by the character creator. The event carries a
+     * pre-validated payload; the reducer never calls an LLM and never invents
+     * fields. The profile and card are stored beside the world so the Codex and
+     * export can read them after a reload.
+     */
+    ADD_GENERATED_CHARACTER(state, event) {
+        if (!isObject(event.character)) {
+            fail('ADD_GENERATED_CHARACTER requires a character object');
+        }
+        if (!isObject(event.profile)) {
+            fail('ADD_GENERATED_CHARACTER requires a profile object');
+        }
+        const character = event.character;
+        const charId = character.charId;
+        if (typeof charId !== 'string' || charId.trim().length === 0) {
+            fail('ADD_GENERATED_CHARACTER requires a character id');
+        }
+        if (charId !== charId.trim()) {
+            fail('ADD_GENERATED_CHARACTER requires a trimmed character id');
+        }
+        if (!charId.startsWith('gen.')) {
+            fail(`ADD_GENERATED_CHARACTER requires a generated id (got "${charId}")`);
+        }
+        if (Object.hasOwn(state.characters, charId)) {
+            fail(`Character "${charId}" already exists`);
+        }
+        if (typeof character.locationId !== 'string' || character.locationId.length === 0) {
+            fail('ADD_GENERATED_CHARACTER requires a location for the new character');
+        }
+        const validation = validateCharacterState(state, character);
+        if (!validation.ok) {
+            const first = validation.errors[0];
+            fail(`ADD_GENERATED_CHARACTER rejected: ${first?.path ?? 'character'} ${first?.message ?? 'is invalid'}`);
+        }
+
+        state.characters[charId] = cloneWorldState(character);
+        state.flags = isObject(state.flags) ? state.flags : {};
+
+        const manual = Array.isArray(state.flags.manualCharacters)
+            ? state.flags.manualCharacters.filter((id) => typeof id === 'string')
+            : [];
+        if (!manual.includes(charId)) {
+            manual.push(charId);
+        }
+        state.flags.manualCharacters = manual;
+
+        const generated = isObject(state.flags.generatedCards) ? state.flags.generatedCards : {};
+        generated[charId] = {
+            card: isObject(event.card) ? cloneWorldState(event.card) : null,
+            profile: cloneWorldState(event.profile),
+            portrait: generatedPortrait(event.portrait),
+            model: typeof event.model === 'string' ? event.model : '',
+            generatedAt: Number.isFinite(event.generatedAt) && event.generatedAt >= 0
+                ? Math.floor(event.generatedAt)
+                : 0,
+            approved: false,
+            warnings: Array.isArray(event.warnings)
+                ? event.warnings
+                    .filter((warning) => typeof warning === 'string')
+                    .map((warning) => warning.slice(0, MAX_GENERATED_WARNING_CHARS))
+                    .slice(0, 20)
+                : [],
+        };
+        state.flags.generatedCards = generated;
+
         syncPresence(state);
         syncPlayerMirror(state);
     },

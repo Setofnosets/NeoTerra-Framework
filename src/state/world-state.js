@@ -785,8 +785,43 @@ function validateCharacter(errors, id, character, state) {
             max: 100,
         });
     }
+    for (const field of ['personality', 'speech']) {
+        if (character[field] !== undefined) {
+            requireString(errors, `${path}.${field}`, character[field], { nonEmpty: false });
+            if (typeof character[field] === 'string' && character[field].length > 1200) {
+                add(errors, `${path}.${field}`, 'must be at most 1200 characters');
+            }
+        }
+    }
     requireInteger(errors, `${path}.lastUpdatedTurn`, character.lastUpdatedTurn, { min: 0 });
     requireString(errors, `${path}.notes`, character.notes, { nonEmpty: false });
+}
+
+/**
+ * Validate one candidate CharacterState against a live world.
+ *
+ * Used by the reducer's `ADD_GENERATED_CHARACTER` handler so the card creator
+ * cannot insert a shape the document contract would reject on reload.
+ *
+ * @param {object} state
+ * @param {object} character
+ * @returns {{ ok: boolean, errors: Array<{ path: string, message: string }> }}
+ */
+export function validateCharacterState(state, character) {
+    const errors = [];
+    if (!isObject(state)) {
+        add(errors, '$', 'state must be an object');
+        return { ok: false, errors };
+    }
+    const id = isObject(character) && typeof character.charId === 'string'
+        ? character.charId
+        : '';
+    if (!id) {
+        add(errors, 'character.charId', 'is required');
+        return { ok: false, errors };
+    }
+    validateCharacter(errors, id, character, state);
+    return { ok: errors.length === 0, errors };
 }
 
 function validateLocation(errors, id, location, state) {
