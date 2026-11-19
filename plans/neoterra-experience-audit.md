@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `neoterra-experience-audit`
-- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`; steps 3–6 (mount the Player, add Session Home, make the Map self-sufficient, style the Season/Identity screens) are complete in `aac320c`.
+- Status: draft — decisions incorporated; pending spike sign-offs. Step 1 (publish the audit and correct the docs) is complete in `28dea98`; step 2 (fix the Director card status and setup strip) is complete in `f76e7fe`; steps 3–6 (mount the Player, add Session Home, make the Map self-sufficient, style the Season/Identity screens) are complete in `aac320c`; Milestone 2 steps 7–13 (portraits, PNG ingestion, guests, character picker, form profiles, Form Architect, form-data completion) are complete in `8ce80db`. Spike A (character creator reliability) is not started; the Card Architect stays blocked behind it.
 - Date: 2026-11-18
 - Audit basis: full static read of `src/`, `data/`, `docs/`, and `tools/`; live inspection of SillyTavern at `http://127.0.0.1:8000/` against the installed extension (664 installed character cards, one existing S1 Director chat); DOM/computed-style inspection of the shell, Season tab, identity step, Map, and Codex.
 - Not verified in this session: `npm run check` and the full Node test suite were not executed. Treat test health as unverified until the first implementation step runs them.
@@ -339,7 +339,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 
 ### Milestone 2 — Character experience
 
-#### 7. Add an avatar manifest and resolver
+#### 7. Add an avatar manifest and resolver — ✅ done (`8ce80db`)
 - **Files:** `tools/build-avatars.mjs` (new), `data/characters/avatars.json` (generated), `data/characters/avatar-overrides.json` (authored, new), `assets/avatars/` (optional copied PNGs, new), `src/data/avatars.js` (new), `src/ui/avatar.js` (new), `src/ui/season-menu.js`, `src/ui/codex.js`, `src/ui/player-panel.js`, `src/ui/map-panel.js`, `src/ui/chat-output.js`, `src/ui/settings.html`, `src/ui/settings.js`, `style.css`, `package.json`, `tests/avatars.test.js`
 - **Depends on:** 6 (portrait slots), 3 (player sheet), 2 (no)
 - **Parallelizable:** yes
@@ -355,7 +355,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(avatars): add a generated portrait manifest and runtime resolver`
 
-#### 8. Ingest PNG character cards (optional, opt-in)
+#### 8. Ingest PNG character cards (optional, opt-in) — ✅ done (`8ce80db`)
 - **Files:** `tools/build-data.mjs`, `docs/adding-a-season.md`, `tests/build-data.test.js` (or the existing data tests)
 - **Depends on:** 7 (shares PNG chunk parsing)
 - **Parallelizable:** yes
@@ -369,7 +369,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(data): accept PNG character cards and extract embedded card JSON`
 
-#### 9. Allow warned cross-season guest characters
+#### 9. Allow warned cross-season guest characters — ✅ done (`8ce80db`)
 - **Files:** `src/flows/season-start.js`, `src/ui/season-menu.js`, `src/core/defaults.js`, `src/context/renderer.js`, `src/state/world-state.js`, `src/agents/storyline.js`, `docs/canon-beats.md`, `tests/guest-identity.test.js`
 - **Depends on:** 4 (Session Home shows the guest badge)
 - **Parallelizable:** no
@@ -383,7 +383,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(identity): allow warned cross-season guest characters`
 
-#### 10. Build the portrait-first Character Picker
+#### 10. Build the portrait-first Character Picker — ✅ done (`8ce80db`)
 - **Files:** `src/ui/character-picker.js` (new), `src/ui/season-menu.js`, `src/ui/codex.js`, `style.css`, `tests/character-picker.test.js`
 - **Depends on:** 7 (avatars), 9 (guest warning)
 - **Parallelizable:** no
@@ -396,7 +396,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(codex): add a portrait-first character picker`
 
-#### 11. Apply the target form's profile on transform
+#### 11. Apply the target form's profile on transform — ✅ done (`8ce80db`)
 - **Files:** `src/state/reducer.js`, `src/state/world-state.js`, `src/state/selectors.js`, `src/ui/codex.js`, `src/context/renderer.js`, `src/context/worldbook.js`, `tests/form-profile.test.js`
 - **Depends on:** 7 (form avatars), 9 (guest forms) for the full experience; the core can land independently
 - **Parallelizable:** no
@@ -410,7 +410,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `fix(forms): apply the target form profile on transform`
 
-#### 12. Add the Form Architect agent for missing forms
+#### 12. Add the Form Architect agent for missing forms — ✅ done (`8ce80db`)
 - **Files:** `src/core/constants.js` (AGENT_IDS), `src/core/defaults.js`, `src/agents/prompts.js`, `src/agents/form-architect.js` (new), `src/state/reducer.js`, `src/context/renderer.js`, `src/ui/codex.js`, `src/ui/settings.html`, `src/ui/settings.js`, `style.css`, `tests/form-architect.test.js`
 - **Depends on:** 11 (profile overlay)
 - **Parallelizable:** no
@@ -425,7 +425,7 @@ The shell is a fixed full-viewport overlay (`style.css:82-135`) with seven tabs 
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(forms): generate missing form profiles with a Form Architect agent`
 
-#### 13. Complete form data and cross-season packs
+#### 13. Complete form data and cross-season packs — ✅ done (`8ce80db`)
 - **Files:** `data/form-groups.json`, `data/form-rules.json`, `data/seasons/*.json` (`altFormsAllowed`), `tools/build-data.mjs`, `src/data/forms.js`, `tests/forms.test.js`
 - **Depends on:** 11, 12
 - **Parallelizable:** yes

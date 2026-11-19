@@ -20,8 +20,8 @@ returns no URL.
 The manifest is generated from a folder of PNG cards:
 
 ```bash
-npm run build:avatars -- --source "C:\path\to\KI\chars\neo"
-npm run build:avatars -- --source "C:\path\to\KI\chars\neo" --check
+npm run build:avatars -- --source "<path-to-KI>/chars/neo"
+npm run build:avatars -- --source "<path-to-KI>/chars/neo" --check
 ```
 
 - Each PNG is matched by its embedded `chara`/`ccv3` card name and aliases, then
