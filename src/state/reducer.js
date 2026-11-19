@@ -12,6 +12,7 @@ import { EXPLORATION_STATES } from './exploration.js';
 import { effectiveStoryTurn } from '../core/world-clock.js';
 import { FACTION_STATUSES } from '../data/factions.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
+import { applyFormProfileOverlay, FORM_PROFILE_FIELDS } from './form-profiles.js';
 import { LOCATION_STATUSES } from '../data/locations.js';
 import {
     BAD_END_STATUS,
@@ -243,6 +244,7 @@ const HANDLERS = Object.freeze({
         }
 
         const formIndex = resolveFormContext(context);
+        const dynamicForm = isObject(event.dynamicForm) ? event.dynamicForm : null;
         const currentGroup = formIndex.groupByMemberId?.[character.formId]
             ?? (character.formGroup ? formIndex.byGroup?.[character.formGroup] : null);
         const targetGroup = formIndex.groupByMemberId?.[formId] ?? null;
@@ -251,22 +253,72 @@ const HANDLERS = Object.freeze({
             ?? null;
 
         if (!targetEntry || !targetGroup) {
-            fail(`Unknown form "${formId}"`);
+            if (!dynamicForm) {
+                fail(`Unknown form "${formId}"`);
+            }
         }
-        if (!currentGroup || currentGroup.id !== targetGroup.id) {
+        if (targetGroup && currentGroup && currentGroup.id !== targetGroup.id) {
             fail(`TRANSFORM rejected: "${formId}" is not in the character's form group`);
         }
-        if (!isLegalTransform(context.formRules, character.formId, formId)) {
+        // A generated form still needs a declared rule unless the flow already
+        // validated the transition (the reducer accepts only a complete,
+        // pre-validated dynamicForm payload).
+        if (!dynamicForm && !isLegalTransform(context.formRules, character.formId, formId)) {
             fail(`TRANSFORM rejected: no declared rule from "${character.formId}" to "${formId}"`);
         }
 
         character.formId = formId;
-        character.formGroup = targetGroup.id;
+        character.formGroup = targetGroup?.id ?? currentGroup?.id ?? character.formGroup;
         character.lastUpdatedTurn = state.meta.turn;
-        if (context.registry) {
+        if (context.registry && targetEntry) {
             character.side = targetEntry.side ?? character.side;
             character.displayName = targetEntry.displayName ?? character.displayName;
             character.threatLevel = targetEntry.threatLevel ?? character.threatLevel;
+        }
+        if (dynamicForm) {
+            character.side = dynamicForm.side ?? character.side;
+            character.displayName = dynamicForm.displayName ?? character.displayName;
+            character.formKind = dynamicForm.formKind ?? character.formKind ?? null;
+        }
+
+        // Apply the target form's card profile. Live resources, status,
+        // relationships, and manually edited fields survive the transform.
+        const manualPaths = state.player?.identity === 'canon'
+            && state.player.characterId === character.charId
+            ? Object.keys(state.flags?.playerTracker?.manualEdits ?? {})
+            : [];
+        const manualFields = [
+            ...(Array.isArray(character.manualFields) ? character.manualFields : []),
+            ...manualPaths,
+        ];
+        const overlay = dynamicForm?.overlay ?? character.formProfiles?.[formId] ?? null;
+        if (overlay) {
+            applyFormProfileOverlay(character, overlay, manualFields);
+            character.profileFormId = formId;
+            character.profileSource = overlay.source ?? (dynamicForm ? 'generated' : 'card');
+            delete character.profileMissing;
+        } else {
+            character.profileFormId = formId;
+            character.profileSource = 'missing';
+            character.profileMissing = formId;
+        }
+        if (dynamicForm) {
+            const generated = isObject(state.flags?.generatedForms) ? state.flags.generatedForms : {};
+            const forCharacter = isObject(generated[character.charId]) ? generated[character.charId] : {};
+            state.flags = {
+                ...(isObject(state.flags) ? state.flags : {}),
+                generatedForms: {
+                    ...generated,
+                    [character.charId]: {
+                        ...forCharacter,
+                        [formId]: {
+                            ...dynamicForm,
+                            generated: true,
+                            formId,
+                        },
+                    },
+                },
+            };
         }
         syncPlayerMirror(state);
     },

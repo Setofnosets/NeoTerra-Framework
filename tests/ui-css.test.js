@@ -157,6 +157,32 @@ test('fog editor controls are themed', () => {
     assert.match(controls, /var\(--nt-/);
 });
 
+test('character portraits have a themed shell and initials fallback', () => {
+    for (const selector of ['.neoterra-avatar', '.neoterra-avatar-fallback', '.neoterra-avatar-strip']) {
+        const rule = ruleBody(selector);
+        assert.ok(rule, `expected a ${selector} rule`);
+    }
+    const avatar = ruleBody('.neoterra-avatar');
+    assert.match(avatar, /border-radius:\s*50%/);
+    const fallback = ruleBody('.neoterra-avatar-fallback');
+    assert.match(fallback, /display:\s*grid/);
+});
+
+test('the character picker, guest warning, and generated forms are themed', () => {
+    for (const selector of [
+        '.neoterra-character-picker',
+        '.neoterra-picker-card',
+        '.neoterra-picker-grid',
+        '.neoterra-guest-warning',
+        '.neoterra-identity-group',
+        '.neoterra-codex-generated',
+    ]) {
+        const rule = ruleBody(selector);
+        assert.ok(rule, `expected a ${selector} rule`);
+        assert.match(rule, /var\(--nt-|grid-template-columns|display:/);
+    }
+});
+
 test('the season grid and identity picker are fully styled', () => {
     for (const selector of [
         '.neoterra-season-menu',

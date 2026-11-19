@@ -42,6 +42,14 @@ export const DEFAULT_SETTINGS = freezeDeep({
     // Director/Narrator is the default cast strategy.
     castMode: 'director',
 
+    // Cross-season guests. When allowed, any registry character can be played
+    // in any playable season after an explicit warning acknowledgment. Canon
+    // beats then adapt instead of failing; Sandbox behavior is unchanged.
+    identity: {
+        allowGuests: true,
+        guestCanonBeats: 'adapt',
+    },
+
     // Soft canon-beat deadlines; `off` disables escalation.
     beatDeadlinePressure: 'standard',
 
@@ -223,6 +231,14 @@ export const DEFAULT_SETTINGS = freezeDeep({
             temperature: 0.7,
             maxTokens: 900,
             cadence: 'newspaper',
+        },
+        formArchitect: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.6,
+            maxTokens: 1600,
+            cadence: 'onTransform',
         },
     },
 

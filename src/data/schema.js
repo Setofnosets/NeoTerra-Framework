@@ -175,6 +175,10 @@ export function validateRegistry(registry, options = {}) {
         if (typeof entry.cardPath === 'string' && !entry.cardPath.startsWith('Chars/')) {
             add(errors, `${path}.cardPath`, 'must start with "Chars/"');
         }
+        if (Object.hasOwn(entry, 'avatarPath')
+            && !/^Chars\/.+\.png$/i.test(String(entry.avatarPath ?? ''))) {
+            add(errors, `${path}.avatarPath`, 'must be a PNG path under Chars/ when present');
+        }
 
         if (typeof entry.dataName !== 'string' || entry.dataName.trim().length === 0) {
             add(errors, `${path}.dataName`, 'must be a non-empty string');
@@ -271,9 +275,8 @@ export function validateRegistry(registry, options = {}) {
         if (base.formRole !== 'base') {
             add(errors, `entries[${index}].altOf`, `"${entry.altOf}" is not a base form`);
         }
-        if (base.seasonId !== entry.seasonId) {
-            add(errors, `entries[${index}].altOf`, 'alternate form crosses seasons');
-        }
+        // Cross-season packs are allowed: an alternate may join a group that is
+        // rooted in another season (e.g. Blazing Prism joins the S1 Vaiva pack).
     }
 
     checkCounts(errors, registry.counts, entries, seasonIds);
@@ -472,9 +475,8 @@ export function validateFormRules(rules, registry) {
             if (!to) {
                 add(errors, `${path}.to`, `unresolved registry id "${String(rule.to)}"`);
             }
-            if (from && to && from.seasonId !== to.seasonId) {
-                add(errors, path, 'rules may not cross seasons');
-            }
+            // Cross-season packs are allowed; the build check verifies the ids
+            // and reachability instead of banning the edge outright.
         }
     });
 

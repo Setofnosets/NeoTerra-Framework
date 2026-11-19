@@ -61,6 +61,22 @@
                         <option value="strict">Strict</option>
                     </select>
                 </label>
+
+                <label class="neoterra-field">
+                    <span>Cross-season guests</span>
+                    <select data-neoterra-path="identity.allowGuests" data-neoterra-type="boolean">
+                        <option value="true">Allow with a mandatory warning</option>
+                        <option value="false">Roster only</option>
+                    </select>
+                </label>
+
+                <label class="neoterra-field">
+                    <span>Guest canon beats</span>
+                    <select data-neoterra-path="identity.guestCanonBeats">
+                        <option value="adapt">Adapt dependent beats</option>
+                        <option value="off">Disable canon beats for the guest</option>
+                    </select>
+                </label>
             </div>
             <p class="neoterra-hint">
                 The content gate defaults to Full (off). Hard limits can only make the effective
@@ -523,6 +539,17 @@
                 <code>data/map/overrides.json</code>; per-chat edits (destroyed bridges, captured
                 districts, virtual nodes) stay inside this chat's world state.
             </p>
+
+            <h4 class="neoterra-section-title">Character portraits</h4>
+            <p class="neoterra-hint">
+                Portraits come from the generated manifest and from your installed character cards.
+                Syncing writes a per-user override map; it never writes the extension folder.
+            </p>
+            <div class="neoterra-settings-row">
+                <button type="button" class="menu_button" data-neoterra-sync-portraits>Sync portraits</button>
+                <button type="button" class="menu_button" data-neoterra-download-avatars>Download manifest</button>
+            </div>
+            <p class="neoterra-hint" data-neoterra-portrait-status>Checking portrait coverage.</p>
 
             <h4 class="neoterra-section-title">Data and this chat</h4>
             <p class="neoterra-hint">

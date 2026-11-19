@@ -22,6 +22,7 @@ import {
     resolveSeasonRoster,
 } from '../data/seasons.js';
 import { SIDES } from '../data/schema.js';
+import { buildFormProfileOverlay } from './form-profiles.js';
 import { seedExplorationFor } from './exploration.js';
 
 export const WORLD_STATE_SCHEMA_VERSION = 2;
@@ -170,7 +171,42 @@ function cardProfileFor(member, profiles) {
     return profiles[member.formId] ?? profiles[member.characterId] ?? null;
 }
 
-function seedCharacter(member, { isPlayer, season, profiles = null }) {
+/**
+ * Store every form's card profile on the character so a later transform can
+ * swap the profile without another fetch. Bundles are never form groups.
+ */
+function buildFormProfilesFor(member, formGroups, profiles) {
+    if (!profiles || typeof profiles !== 'object' || member.character?.bundle === true) {
+        return null;
+    }
+    // The registry form group is authoritative; resolve members by profile id
+    // through the entry's group rather than through profile card paths.
+    const groupId = member.character?.formGroup ?? null;
+    const group = groupId && formGroups
+        ? (formGroups.groups ?? []).find((candidate) => candidate.id === groupId) ?? null
+        : null;
+    if (!group) {
+        return null;
+    }
+    const byPath = new Map(
+        Object.entries(profiles).map(([id, profile]) => [profile?.source?.cardPath ?? id, id]),
+    );
+    const formProfiles = {};
+    for (const path of group.members ?? []) {
+        const normalized = String(path).split('\\').join('/').replace(/^Chars\//, '');
+        const id = byPath.get(`Chars/${normalized}`) ?? byPath.get(normalized) ?? null;
+        if (!id) {
+            continue;
+        }
+        const overlay = buildFormProfileOverlay(profiles[id], { formId: id, source: 'card' });
+        if (overlay) {
+            formProfiles[id] = overlay;
+        }
+    }
+    return Object.keys(formProfiles).length > 0 ? formProfiles : null;
+}
+
+function seedCharacter(member, { isPlayer, season, profiles = null, formGroups = null }) {
     const character = member.character;
     const form = member.form;
     const side = form?.side ?? character?.side ?? 'neutral';
@@ -178,6 +214,8 @@ function seedCharacter(member, { isPlayer, season, profiles = null }) {
     const traits = card
         ? listLikeTraits(card.personality || card.speech)
         : [];
+    const formProfiles = buildFormProfilesFor(member, formGroups, profiles);
+    const activeOverlay = formProfiles?.[member.formId] ?? formProfiles?.[member.characterId] ?? null;
 
     return {
         charId: member.characterId,
@@ -194,20 +232,21 @@ function seedCharacter(member, { isPlayer, season, profiles = null }) {
         stamina: emptyResource(),
         willpower: emptyResource(),
         agenda: deriveAgenda(side, season, isPlayer),
-        goals: Array.isArray(card?.goals) ? card.goals.slice() : [],
+        goals: activeOverlay?.goals ?? (Array.isArray(card?.goals) ? card.goals.slice() : []),
         mood: 'neutral',
         allegiance: side,
-        appearance: card?.appearance ?? '',
-        outfit: card?.attire ?? '',
-        abilities: card ? splitListText(card.abilities) : [],
+        appearance: activeOverlay?.appearance ?? card?.appearance ?? '',
+        outfit: activeOverlay?.outfit ?? card?.attire ?? '',
+        abilities: activeOverlay?.abilities ?? (card ? splitListText(card.abilities) : []),
         skills: [],
-        traits,
-        likes: Array.isArray(card?.likes) ? card.likes.slice() : [],
-        dislikes: Array.isArray(card?.dislikes) ? card.dislikes.slice() : [],
+        traits: activeOverlay?.traits ?? traits,
+        likes: activeOverlay?.likes ?? (Array.isArray(card?.likes) ? card.likes.slice() : []),
+        dislikes: activeOverlay?.dislikes ?? (Array.isArray(card?.dislikes) ? card.dislikes.slice() : []),
         relationships: [],
         corruption: emptyCorruption(),
         lastUpdatedTurn: 0,
-        notes: card?.background ?? '',
+        notes: activeOverlay?.notes ?? card?.background ?? '',
+        ...(formProfiles ? { formProfiles, profileFormId: member.formId, profileSource: 'card' } : {}),
     };
 }
 
@@ -293,12 +332,14 @@ export function createWorldState(options = {}) {
         registry,
         factions,
         locations,
+        formGroups = null,
         chatId,
         mode = 'director',
         now = Date.now(),
         profiles = null,
         player,
         timeOfDayStart = 'evening',
+        allowGuestPlayer = false,
     } = options;
 
     if (!isObject(season)) {
@@ -341,11 +382,13 @@ export function createWorldState(options = {}) {
         playerCharacterId = playerConfig.characterId ?? season.defaultPlayerCharacterId ?? null;
         if (playerCharacterId && !rosterById.has(playerCharacterId)) {
             // Sandbox / any-character seasons may cast a registry character that
-            // is not on a predefined roster. The chosen identity is still the
-            // single CharacterState key for that card.
+            // is not on a predefined roster, and a warned cross-season guest may
+            // join any playable season. The chosen identity is still the single
+            // CharacterState key for that card.
             const entry = registryIndex.byId[playerCharacterId];
+            const guestAllowed = options.allowGuestPlayer === true;
             if (
-                season.allowAnyCharacter !== true
+                (season.allowAnyCharacter !== true && !guestAllowed)
                 || !entry
                 || entry.bundle === true
             ) {
@@ -374,6 +417,7 @@ export function createWorldState(options = {}) {
             isPlayer: member.characterId === playerCharacterId,
             season,
             profiles,
+            formGroups,
         });
     }
 

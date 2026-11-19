@@ -15,6 +15,9 @@ import { buildFormIndex, isLegalTransform } from '../data/forms.js';
 import { findFormSection, splitListText } from '../data/card-profile.js';
 import { applyContentGate } from '../core/content-gate.js';
 import { createLogger } from '../core/logger.js';
+import { applyFormProfileOverlay } from '../state/form-profiles.js';
+import { avatarMarkup, initAvatars } from './avatar.js';
+import { downloadJson } from './download.js';
 
 const logger = createLogger('codex-ui');
 
@@ -714,7 +717,9 @@ function buildDetail({
     const willpowerMax = Number.isFinite(willpower.max) && willpower.max > 0 ? willpower.max : 100;
     const isPlayer = state?.player?.identity === 'canon'
         && state?.player?.characterId === selectedId;
-    const card = gateCardProfile(profiles?.[selectedId] ?? null, {
+    const card = gateCardProfile(profiles?.[character?.formId ?? selectedId]
+        ?? profiles?.[selectedId]
+        ?? null, {
         settings,
         characterId: selectedId,
         isPlayer,
@@ -763,6 +768,9 @@ function buildDetail({
             formKind: entry?.formKind ?? null,
             formRole: entry?.formRole ?? null,
             cardPath: entry?.cardPath ?? entry?.file ?? null,
+            profileFormId: character?.profileFormId ?? character?.formId ?? null,
+            profileSource: character?.profileSource ?? (character ? 'card' : null),
+            profileMissing: character?.profileMissing ?? null,
             mood: character?.mood ?? '',
             allegiance: character?.allegiance ?? '',
             agenda: character?.agenda ?? '',
@@ -929,6 +937,8 @@ export function buildCodexView({
             playAs,
         }),
         playAs,
+        // Per-chat generated form profiles, keyed by character id then form id.
+        generatedForms: state?.flags?.generatedForms ?? {},
     };
 }
 
@@ -955,6 +965,7 @@ export function performFormSwap({
     formId,
     formIndex = null,
     formRules = null,
+    dynamicForm = null,
 }) {
     const state = store?.get?.();
     const character = state?.characters?.[characterId] ?? null;
@@ -963,7 +974,7 @@ export function performFormSwap({
         formGroups: context?.formGroups,
     });
     const rules = formRules ?? context?.formRules ?? null;
-    const reason = reasonForIllegalSwap(index, rules, character, formId);
+    const reason = dynamicForm ? null : reasonForIllegalSwap(index, rules, character, formId);
     if (reason) {
         throw new Error(reason);
     }
@@ -971,6 +982,7 @@ export function performFormSwap({
         type: TRANSFORM_EVENT,
         characterId,
         formId,
+        ...(dynamicForm ? { dynamicForm } : {}),
     }, {
         ...(context ?? {}),
         // The reducer accepts either raw groups or a resolved form index.
@@ -1090,6 +1102,7 @@ function renderItem(item, view) {
     return `<button type="button" class="neoterra-codex-card${active ? ' is-active' : ''}"
         data-neoterra-codex-select="${escapeCodexHtml(item.characterId)}"
         aria-current="${active ? 'true' : 'false'}">
+        <span class="neoterra-codex-card-portrait">${avatarMarkup(item.formId ?? item.characterId, { size: 'sm', name: item.displayName })}</span>
         <span class="neoterra-codex-card-name">${escapeCodexHtml(item.displayName)}</span>
         <span class="neoterra-codex-card-meta">${escapeCodexHtml(item.side)} · ${escapeCodexHtml(item.formName)}</span>
         <span class="neoterra-codex-card-meta">${escapeCodexHtml(item.statusLabel)}${item.locationName ? ` · ${escapeCodexHtml(item.locationName)}` : ''}</span>
@@ -1271,6 +1284,7 @@ function renderDetail(detail, state) {
 
     return `<article class="neoterra-codex-detail" data-neoterra-codex-detail="${escapeCodexHtml(detail.characterId)}">
         <header class="neoterra-codex-detail-head">
+            <div class="neoterra-codex-detail-portrait">${avatarMarkup(detail.form?.id ?? detail.characterId, { size: 'lg', name: detail.displayName })}</div>
             <div>
                 <h4>${escapeCodexHtml(detail.displayName)}</h4>
                 <p class="neoterra-hint">${escapeCodexHtml(detail.form.label)}${identityLine ? ` · ${escapeCodexHtml(identityLine)}` : ''}${detail.locationName ? ` · ${escapeCodexHtml(detail.locationName)}` : ''}${detail.threatLevel ? ` · threat ${escapeCodexHtml(detail.threatLevel)}` : ''}</p>
@@ -1328,11 +1342,47 @@ function renderDetail(detail, state) {
             <p>${escapeCodexHtml(profile.liveAppearance || 'No appearance recorded.')}</p>
             <p class="neoterra-hint">Outfit: ${escapeCodexHtml(profile.liveOutfit || 'none recorded')}</p>
             <p class="neoterra-hint">Form kind: ${escapeCodexHtml(profile.formKind ?? 'unknown')} · Role: ${escapeCodexHtml(profile.formRole ?? 'unknown')}</p>
+            ${profile.profileMissing ? `<p class="neoterra-warning" role="status">No card profile exists for form "${escapeCodexHtml(profile.profileMissing)}"; the previous profile was kept and a transformation note recorded.</p>` : ''}
+            ${profile.profileSource === 'generated' ? '<p class="neoterra-badge neoterra-badge-warning">Generated form</p>' : ''}
             <p class="neoterra-hint">Card: ${escapeCodexHtml(profile.cardPath ?? 'not linked')}</p>
             ${profile.liveNotes ? `<p>${escapeCodexHtml(profile.liveNotes)}</p>` : ''}
         </section>
 
         ${renderCardProfile(profile.card, detail)}
+
+        ${(() => {
+            const generated = state?.generatedForms?.[detail.characterId] ?? state?.flags?.generatedForms?.[detail.characterId] ?? null;
+            const current = generated?.[detail.form?.id] ?? null;
+            if (!current) {
+                return '';
+            }
+            return `<section class="neoterra-codex-section neoterra-codex-generated" data-neoterra-generated-form="${escapeCodexHtml(detail.form?.id ?? '')}">
+                <div class="neoterra-codex-card-profile-head">
+                    <h5>Generated form ${current.approved ? '(approved)' : '(review)'}</h5>
+                    <span class="neoterra-badge neoterra-badge-warning">Generated form</span>
+                </div>
+                <p>${escapeCodexHtml(current.transformationSummary ?? '')}</p>
+                <div class="neoterra-season-actions">
+                    <button type="button" class="menu_button" data-neoterra-generate-approve="${escapeCodexHtml(detail.characterId)}">${current.approved ? 'Unapprove' : 'Approve'}</button>
+                    <button type="button" class="menu_button" data-neoterra-generate-regenerate="${escapeCodexHtml(detail.characterId)}">Regenerate</button>
+                    <button type="button" class="menu_button" data-neoterra-generate-export>Export generated forms</button>
+                </div>
+                <details class="neoterra-codex-generated-edit">
+                    <summary>Edit generated profile</summary>
+                    <textarea rows="6" data-neoterra-generate-edit="${escapeCodexHtml(detail.characterId)}">${escapeCodexHtml(JSON.stringify({
+                        displayName: current.displayName,
+                        appearance: current.overlay?.appearance ?? current.appearance ?? '',
+                        attire: current.overlay?.outfit ?? current.attire ?? '',
+                        abilities: current.overlay?.abilities ?? current.abilities ?? [],
+                        likes: current.overlay?.likes ?? current.likes ?? [],
+                        dislikes: current.overlay?.dislikes ?? current.dislikes ?? [],
+                        goals: current.overlay?.goals ?? current.goals ?? [],
+                        notes: current.overlay?.notes ?? current.notes ?? '',
+                    }, null, 2))}</textarea>
+                    <button type="button" class="menu_button" data-neoterra-generate-save="${escapeCodexHtml(detail.characterId)}">Save edits</button>
+                </details>
+            </section>`;
+        })()}
 
         <section class="neoterra-codex-section">
             <h5>Relationships</h5>
@@ -1460,6 +1510,8 @@ export function mountCodex({
     formGroups = null,
     formRules = null,
     profiles = null,
+    ctx = null,
+    formArchitect = null,
     getSettings = () => ({}),
     onIdentityChange = null,
     onWorldChange = null,
@@ -1502,6 +1554,10 @@ export function mountCodex({
         status: null,
     };
     mounted = state;
+
+    // Portraits are optional: the first paint shows initials while the manifest
+    // loads, then a second paint swaps in the resolved avatars.
+    void initAvatars({ registry, ctx }).then(() => paint()).catch(() => {});
 
     const buildView = () => buildCodexView({
         state: store.get(),
@@ -1625,6 +1681,105 @@ export function mountCodex({
         paint();
     };
 
+    const applyFormSwap = async (characterId, formId) => {
+        const before = store.get();
+        const character = before?.characters?.[characterId] ?? null;
+        if (!character || !formId) {
+            state.error = 'Choose a character and form to swap.';
+            paint();
+            return;
+        }
+        let dynamicForm = null;
+        const hasProfile = Boolean(character.formProfiles?.[formId]);
+        if (!hasProfile && formArchitect && typeof formArchitect.run === 'function') {
+            const entry = (registry?.entries ?? []).find((candidate) => candidate.id === formId) ?? null;
+            state.status = 'Form Architect is writing the missing profile…';
+            state.error = null;
+            paint();
+            try {
+                const result = await formArchitect.run({
+                    state: before,
+                    season,
+                    character,
+                    targetFormId: formId,
+                    formLabel: entry?.displayName ?? formId,
+                    trigger: null,
+                    recentScene: before?.recentEvents?.slice?.(-3) ?? null,
+                    otherCast: Object.values(before?.characters ?? {})
+                        .filter((candidate) => candidate.charId !== characterId)
+                        .slice(0, 8)
+                        .map((candidate) => ({
+                            displayName: candidate.displayName,
+                            side: candidate.side,
+                            formId: candidate.formId,
+                        })),
+                });
+                if (result.ok && result.overlay) {
+                    dynamicForm = { ...result.value, overlay: result.overlay };
+                    state.status = `Generated form "${result.value.displayName}" (review it in the Codex).`;
+                } else {
+                    state.status = 'The Form Architect could not write a profile; the base profile is kept.';
+                }
+            } catch (error) {
+                logger.warn('Form Architect failed', error);
+                state.status = 'The Form Architect failed; the base profile is kept.';
+            }
+        }
+        try {
+            const next = performFormSwap({
+                store,
+                context: { registry, formGroups, formRules },
+                characterId,
+                formId,
+                formIndex: state.formIndex,
+                formRules,
+                dynamicForm,
+            });
+            state.error = null;
+            state.status = state.status ?? `${next.characters?.[characterId]?.displayName ?? characterId} is now ${formId}.`;
+            onWorldChange?.({ state: next, characterId, formId });
+        } catch (error) {
+            state.error = error?.message ?? String(error);
+            logger.warn('Form swap rejected', error);
+        }
+        paint();
+    };
+
+    const updateGeneratedForm = (characterId, mutate) => {
+        const current = store.get();
+        const forCharacter = current?.flags?.generatedForms?.[characterId] ?? null;
+        const formId = current?.characters?.[characterId]?.formId ?? null;
+        if (!forCharacter || !formId || !forCharacter[formId]) {
+            return null;
+        }
+        const record = { ...forCharacter[formId] };
+        const result = mutate(record);
+        if (!result) {
+            return null;
+        }
+        const next = {
+            ...current,
+            flags: {
+                ...(current.flags ?? {}),
+                generatedForms: {
+                    ...(current.flags.generatedForms ?? {}),
+                    [characterId]: {
+                        ...forCharacter,
+                        [formId]: record,
+                    },
+                },
+            },
+        };
+        return store.replace(next);
+    };
+
+    const exportGeneratedForms = () => {
+        const current = store.get();
+        const all = current?.flags?.generatedForms ?? {};
+        const payload = { kind: 'neoterra-generated-forms', schemaVersion: 1, chatId: current?.chatId ?? null, generatedForms: all };
+        downloadJson(`neoterra-generated-forms-${String(current?.chatId ?? 'chat').slice(0, 40).replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`, payload);
+    };
+
     root.addEventListener('input', (event) => {
         const input = event.target.closest?.('[data-neoterra-codex-search]');
         if (!input) {
@@ -1679,20 +1834,115 @@ export function mountCodex({
             state.status = null;
             const target = root.querySelector('[data-neoterra-form-swap-target]')?.value;
             const characterId = buildView().selected?.characterId;
-            try {
-                const next = performFormSwap({
-                    store,
-                    context: { registry, formGroups, formRules },
-                    characterId,
-                    formId: target,
-                    formIndex: state.formIndex,
-                    formRules,
+            void applyFormSwap(characterId, target);
+            return;
+        }
+        const approve = event.target.closest?.('[data-neoterra-generate-approve]');
+        if (approve) {
+            const characterId = approve.dataset.neoterraGenerateApprove;
+            const next = updateGeneratedForm(characterId, (record) => {
+                record.approved = record.approved !== true;
+                return true;
+            });
+            if (next) {
+                state.status = next.flags.generatedForms[characterId]?.[next.characters?.[characterId]?.formId]?.approved
+                    ? 'Generated form approved.'
+                    : 'Generated form marked for review.';
+                onWorldChange?.({ state: next, characterId, reason: 'generated-form-approve' });
+            }
+            paint();
+            return;
+        }
+        const regenerate = event.target.closest?.('[data-neoterra-generate-regenerate]');
+        if (regenerate) {
+            const characterId = regenerate.dataset.neoterraGenerateRegenerate;
+            const current = store.get();
+            const character = current?.characters?.[characterId] ?? null;
+            const formId = character?.formId ?? null;
+            if (character && formId) {
+                const generated = updateGeneratedForm(characterId, (record) => {
+                    record.approved = false;
+                    return true;
                 });
-                state.status = `${next.characters?.[characterId]?.displayName ?? characterId} is now ${target}.`;
-                onWorldChange?.({ state: next, characterId, formId: target });
+                if (generated) {
+                    onWorldChange?.({ state: generated, characterId, reason: 'generated-form-regenerate-start' });
+                }
+                // Re-run the agent for the active generated form.
+                const saved = store.get();
+                const active = saved?.characters?.[characterId] ?? null;
+                if (formArchitect?.run && active) {
+                    state.status = 'Regenerating the form profile…';
+                    paint();
+                    void formArchitect.run({
+                        state: saved,
+                        season,
+                        character: active,
+                        targetFormId: formId,
+                        formLabel: active.displayName,
+                        recentScene: saved?.recentEvents?.slice?.(-3) ?? null,
+                    }).then((result) => {
+                        if (result.ok && result.overlay) {
+                            updateGeneratedForm(characterId, (record) => {
+                                record.overlay = result.overlay;
+                                record.transformationSummary = result.value.transformationSummary;
+                                record.displayName = result.value.displayName;
+                                record.generatedAt = Date.now();
+                                record.approved = false;
+                                return true;
+                            });
+                            state.status = 'Form profile regenerated.';
+                        } else {
+                            state.status = 'Regeneration failed; the previous profile was kept.';
+                        }
+                        paint();
+                    }).catch((error) => {
+                        logger.warn('Form regeneration failed', error);
+                        state.status = 'Regeneration failed; the previous profile was kept.';
+                        paint();
+                    });
+                }
+            }
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-generate-export]')) {
+            exportGeneratedForms();
+            state.status = 'Exported generated forms.';
+            paint();
+            return;
+        }
+        const saveGenerated = event.target.closest?.('[data-neoterra-generate-save]');
+        if (saveGenerated) {
+            const characterId = saveGenerated.dataset.neoterraGenerateSave;
+            const textarea = [...root.querySelectorAll('[data-neoterra-generate-edit]')]
+                .find((element) => element.dataset.neoterraGenerateEdit === characterId);
+            try {
+                const parsed = JSON.parse(textarea?.value ?? '{}');
+                const next = updateGeneratedForm(characterId, (record) => {
+                    record.displayName = String(parsed.displayName ?? record.displayName ?? '');
+                    record.overlay = {
+                        ...(record.overlay ?? {}),
+                        appearance: String(parsed.appearance ?? record.overlay?.appearance ?? ''),
+                        outfit: String(parsed.attire ?? record.overlay?.outfit ?? ''),
+                        abilities: asArray(parsed.abilities),
+                        likes: asArray(parsed.likes),
+                        dislikes: asArray(parsed.dislikes),
+                        goals: asArray(parsed.goals),
+                        notes: String(parsed.notes ?? record.overlay?.notes ?? ''),
+                    };
+                    record.approved = false;
+                    return true;
+                });
+                if (next) {
+                    const character = next.characters?.[characterId];
+                    if (character) {
+                        applyFormProfileOverlay(character, next.flags.generatedForms[characterId][character.formId].overlay);
+                    }
+                    store.replace(next);
+                    state.status = 'Generated form edited.';
+                    onWorldChange?.({ state: next, characterId, reason: 'generated-form-edit' });
+                }
             } catch (error) {
-                state.error = error?.message ?? String(error);
-                logger.warn('Form swap rejected', error);
+                state.error = `Generated form edit rejected: ${error?.message ?? error}`;
             }
             paint();
             return;

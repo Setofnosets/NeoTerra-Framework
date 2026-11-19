@@ -237,6 +237,17 @@ function renderPlayer(state, settings) {
     if (player.personaNotes) {
         lines.push(`Persona: ${player.personaNotes}`);
     }
+    const guest = state?.flags?.guestCharacter ?? null;
+    if (guest?.characterId) {
+        lines.push(
+            `Non-canon guest: ${guest.characterId} belongs to ${guest.homeSeasonId ?? 'another season'} `
+            + `and is visiting ${state?.seasonId ?? 'this season'}.`,
+        );
+        lines.push(
+            'Treat the era and home-season mismatch as real: no future knowledge, no canon foresight, '
+            + 'and beats that depend on this character adapt instead of failing.',
+        );
+    }
     if (lines.length === 0) {
         return null;
     }

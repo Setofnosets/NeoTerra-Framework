@@ -15,6 +15,7 @@
 import { EVENTS, bus } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
 import { createMachine } from '../core/machine.js';
+import { avatarMarkup, avatarStripMarkup, characterNameFor, initAvatars } from './avatar.js';
 import {
     MAP_LAYER_ORDER,
     addChatVirtualNode,
@@ -266,7 +267,10 @@ export function renderSubmenuMarkup(submenu) {
             ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
         </dl>
         ${present.length > 0
-            ? `<p class="neoterra-map-present"><strong>Present:</strong> ${present.map(escapeHtml).join(', ')}</p>`
+            ? `<div class="neoterra-map-present"><strong>Present:</strong>
+                ${avatarStripMarkup(present, { size: 'sm' })}
+                <span class="neoterra-map-present-names">${present.map((id) => escapeHtml(characterNameFor(id))).join(', ')}</span>
+            </div>`
             : ''}
         ${connects.length > 0
             ? `<p class="neoterra-map-connects"><strong>Connects:</strong> ${connects.map(escapeHtml).join(' &harr; ')}</p>`
@@ -388,6 +392,7 @@ export async function mountMapPanel(options = {}) {
         newspaperReader: null,
     };
     mounted = state;
+    void initAvatars({ registry: options.registry ?? null, ctx }).then(() => paintSide()).catch(() => {});
     // The layer toggle is the on/off switch. A stored toggle wins over the
     // saved setting so fog survives reload without writing global settings.
     state.fogOverride = state.toggles.fog === true;

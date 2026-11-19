@@ -18,11 +18,11 @@ The folder name is the display name; the season id is its lowercase form:
 Cards are read from `data.*`; the legacy duplicated top-level block is ignored.
 Card filenames decide `formKind` and the registry id, so keep them stable.
 
-> **PNG cards are not ingested yet.** `build-data` reads `.json` cards only.
-> If the art ships as a `chara_card_v3` PNG, export or author the JSON twin
-> beside it (same slug) and commit the JSON; the PNG is not registered, not
-> paired, and no `avatarPath` is emitted today. PNG ingestion is a planned,
-> opt-in build feature.
+> **PNG cards are opt-in.** A `.png` alongside a `.json` twin contributes its
+> art only (`avatarPath`); a `.png` with no twin is read as a full card from its
+> embedded `chara`/`ccv3` chunk. `npm run build-data -- --check` reports
+> malformed PNGs and missing card data. See `avatars.md` for the portrait
+> manifest and the runtime resolver.
 
 ## 2. Add `data/seasons/<id>.json`
 

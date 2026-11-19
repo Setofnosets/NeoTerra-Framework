@@ -30,6 +30,7 @@ import { disposeMapPanel, disposeNewspaperReader, mountMapPanel } from './map-pa
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData, resolveCodexRegistry } from './codex-data.js';
 import { mountRelationships } from './relationships.js';
+import { resolveSceneAvatar } from './avatar.js';
 import { mountSensorium } from './sensorium.js';
 import {
     mountPlayerPanel,
@@ -49,6 +50,7 @@ import { createPacingFlow } from '../flows/pacing.js';
 import { createNewsroomFlow } from '../flows/newsroom.js';
 import { createNewspaperAgent } from '../agents/newspaper.js';
 import { createStorylineTracker } from '../agents/storyline.js';
+import { createFormArchitect } from '../agents/form-architect.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
 import { createAgentClient } from '../agents/client.js';
@@ -509,7 +511,10 @@ async function handleSeasonEntered(result) {
         logger.warn('Chat changed during season start; skipping the opening frame');
         return null;
     }
-    const posted = await postSceneMessage(live, message, { dedupeKey: key });
+    const posted = await postSceneMessage(live, message, {
+        dedupeKey: key,
+        avatarUrl: resolveSceneAvatar(live),
+    });
     if (posted.posted || posted.deduped) {
         closeShell();
     }
@@ -876,7 +881,10 @@ export async function postTravelOutcome(context, runtime, result, {
     if (result?.messageExtra) {
         attachTravelToMessage(message, result.messageExtra);
     }
-    const posted = await postSceneMessage(live, message, { dedupeKey: key });
+    const posted = await postSceneMessage(live, message, {
+        dedupeKey: key,
+        avatarUrl: resolveSceneAvatar(live),
+    });
     if (!posted.posted && !posted.deduped) {
         return posted;
     }
@@ -1034,6 +1042,7 @@ async function mountMapPanelComponent(context) {
             root: host,
             ctx: context,
             season: context?.chatMetadata?.neoterra?.seasonDefinition ?? null,
+            registry: context?.chatMetadata?.neoterra?.registry ?? null,
             settings: mapSettingsNow(),
             getSettings: mapSettingsNow,
             store: runtime?.store ?? null,
@@ -1092,6 +1101,17 @@ async function mountCodexPanelComponent(context) {
         // Form rules are a global document; loading them without the chat slice
         // keeps every season's ids unresolved only where they belong.
         const { season, registry, formGroups, formRules, profiles } = await loadCodexData({ metadata });
+        let codexRunner = null;
+        try {
+            codexRunner = createAgentRunner({ client: createAgentClient({ ctx: context }) });
+        } catch (error) {
+            logger.debug('Form Architect runner unavailable; missing forms fall back', error);
+        }
+        const formArchitect = createFormArchitect({
+            runner: codexRunner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        });
         const store = createWorldStateStore({
             metadata,
             saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
@@ -1107,6 +1127,8 @@ async function mountCodexPanelComponent(context) {
             formGroups,
             formRules,
             profiles,
+            ctx: context,
+            formArchitect,
             getSettings: () => getSettings(context),
             onIdentityChange: ({ identity }) => {
                 const root = metadata.neoterra ?? (metadata.neoterra = {});
@@ -1340,6 +1362,7 @@ async function mountPlayerPanelComponent(context) {
             store,
             season,
             registry,
+            ctx: context,
             onChange: () => {
                 // The sheet writes through the shared store; refresh the other
                 // surfaces that read the same document.
@@ -1652,7 +1675,10 @@ async function handleEncounterAction(actionId) {
             state,
             encounter: model.encounter,
             chatId: runtime.chatId,
-            post: (message, key) => postSceneMessage(live, message, { dedupeKey: key }),
+            post: (message, key) => postSceneMessage(live, message, {
+                dedupeKey: key,
+                avatarUrl: resolveSceneAvatar(live),
+            }),
             requestChoices: (index) => requestChoicesFor(live, index, { mode: 'combat' }),
             onPosted: () => {
                 bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-start' });
@@ -1696,7 +1722,10 @@ async function handleEncounterAction(actionId) {
             text: buildCombatResolutionFrameText({ state: ended, result }),
             key,
         });
-        await postSceneMessage(live, message, { dedupeKey: key });
+        await postSceneMessage(live, message, {
+            dedupeKey: key,
+            avatarUrl: resolveSceneAvatar(live),
+        });
         bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-end' });
         await refreshInteractionUi(live);
     }

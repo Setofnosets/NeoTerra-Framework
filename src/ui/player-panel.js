@@ -12,6 +12,7 @@
  */
 
 import { createLogger } from '../core/logger.js';
+import { avatarMarkup, initAvatars } from './avatar.js';
 import {
     applyManualPlayerEdit,
     getManualEditPaths,
@@ -276,7 +277,7 @@ export function renderPlayerPanelMarkup(sheet, { editable = true } = {}) {
         data-player-role="${escapeHtml(sheet.roleLabel.toLowerCase())}">
         <header class="neoterra-player-head">
             <div class="neoterra-player-portrait" aria-hidden="true">
-                ${escapeHtml(sheet.initials || '?')}
+                ${sheet.characterId ? avatarMarkup(sheet.form?.id ?? sheet.characterId, { size: 'lg', name: sheet.displayName, label: sheet.displayName }) : escapeHtml(sheet.initials || '?')}
             </div>
             <div class="neoterra-player-title">
                 <h4>${escapeHtml(sheet.displayName)}</h4>
@@ -482,6 +483,7 @@ export function mountPlayerPanel({
     store,
     season = null,
     registry = null,
+    ctx = null,
     onChange = null,
 } = {}) {
     if (!hasDom()) {
@@ -558,6 +560,7 @@ export function mountPlayerPanel({
     }, { signal: controller.signal });
 
     paint();
+    void initAvatars({ registry, ctx }).then(() => paint()).catch(() => {});
     return {
         refresh: paint,
         getSheet: () => buildPlayerSheet({ state: store.get(), season, registry }),

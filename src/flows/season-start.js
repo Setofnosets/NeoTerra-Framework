@@ -285,7 +285,12 @@ export function buildIdentityChoices(season, options = {}) {
     if (!isObject(season)) {
         throw new SeasonStartError('INVALID_SEASON', 'buildIdentityChoices requires a season');
     }
-    const { registry = null, includeRegistry = false, limit = 200 } = options;
+    const {
+        registry = null,
+        includeRegistry = false,
+        allowGuests = false,
+        limit = 200,
+    } = options;
     const roster = Array.isArray(season.roster) ? season.roster : [];
     const rosterIds = new Set(roster.map((member) => member.characterId));
 
@@ -327,6 +332,38 @@ export function buildIdentityChoices(season, options = {}) {
                 isDefault: entry.id === season.defaultPlayerCharacterId,
                 label: `Play as ${entry.displayName}`,
                 nonCanon: !rosterIds.has(entry.id),
+            });
+        }
+    }
+
+    // Cross-season guests: any registry character in any playable season. The
+    // picker marks them `guest`, shows the warning, and requires the explicit
+    // acknowledgment before Begin is enabled.
+    if (allowGuests && registry) {
+        const present = new Set(canonOptions.map((option) => option.characterId));
+        const guests = (registry.entries ?? [])
+            .filter((entry) => (
+                entry.bundle !== true
+                && entry.seasonId !== season.id
+                && !present.has(entry.id)
+                && !rosterIds.has(entry.id)
+            ))
+            .sort((a, b) => a.id.localeCompare(b.id));
+        for (const entry of guests) {
+            canonOptions.push({
+                identity: 'canon',
+                characterId: entry.id,
+                formId: entry.id,
+                displayName: entry.displayName,
+                side: entry.side,
+                formKind: entry.formKind,
+                inRoster: false,
+                isDefault: false,
+                label: `Play as ${entry.displayName}`,
+                nonCanon: false,
+                guest: true,
+                homeSeasonId: entry.seasonId ?? null,
+                formGroup: entry.formGroup ?? null,
             });
         }
     }
@@ -405,15 +442,22 @@ export function mergePendingIdentity(pending, patch = {}) {
         characterId: next.characterId ?? base.characterId ?? null,
         displayName: next.displayName ?? base.displayName,
         personaNotes: next.personaNotes ?? base.personaNotes,
+        warningAccepted: next.warningAccepted ?? base.warningAccepted,
     };
 }
 
 /**
- * Validate and normalize an identity choice. Non-roster characters are only
- * legal when the season is an any-character sandbox.
+ * Validate and normalize an identity choice. Non-roster characters are legal
+ * when the season is an any-character sandbox, or when cross-season guests are
+ * enabled and the player acknowledged the mandatory warning.
  */
 export function resolveIdentitySelection(season, selection = {}, options = {}) {
-    const { registry = null } = options;
+    const {
+        registry = null,
+        allowGuests = false,
+        allowAnyCharacter = true,
+        requireGuestAcknowledgement = false,
+    } = options;
     if (!isObject(season)) {
         throw new SeasonStartError('INVALID_SEASON', 'resolveIdentitySelection requires a season');
     }
@@ -428,6 +472,8 @@ export function resolveIdentitySelection(season, selection = {}, options = {}) {
             displayName: requested.displayName ?? 'The Player',
             personaNotes: requested.personaNotes ?? '',
             nonCanon: false,
+            guest: false,
+            guestSeasonId: null,
         };
     }
 
@@ -462,19 +508,55 @@ export function resolveIdentitySelection(season, selection = {}, options = {}) {
     const inRoster = (season.roster ?? []).some(
         (member) => member.characterId === characterId,
     );
-    if (!inRoster && season.allowAnyCharacter !== true) {
-        throw new SeasonStartError(
-            'NON_ROSTER_CHARACTER',
-            `"${characterId}" is not on the ${season.id} roster; only Sandbox allows non-roster characters`,
-        );
+    const sandbox = season.allowAnyCharacter === true;
+
+    if (!inRoster && !sandbox) {
+        if (allowAnyCharacter === false || allowGuests !== true) {
+            throw new SeasonStartError(
+                'NON_ROSTER_CHARACTER',
+                `"${characterId}" is not on the ${season.id} roster; only Sandbox allows non-roster characters`,
+            );
+        }
+        if (requireGuestAcknowledgement && requested.warningAccepted !== true) {
+            throw new SeasonStartError(
+                'GUEST_WARNING_REQUIRED',
+                'A cross-season guest requires the visible warning acknowledgement before the season can begin.',
+            );
+        }
     }
 
+    const guest = !inRoster && !sandbox;
     return {
         identity: 'canon',
         characterId,
         displayName: requested.displayName ?? entry.displayName ?? characterId,
         personaNotes: requested.personaNotes ?? '',
-        nonCanon: !inRoster,
+        nonCanon: !inRoster && sandbox,
+        guest,
+        guestSeasonId: guest ? (entry.seasonId ?? null) : null,
+        warningAccepted: guest ? requested.warningAccepted === true : false,
+    };
+}
+
+/**
+ * Human-readable guest warning. The UI renders this verbatim and turns it into
+ * a mandatory acknowledgment; nothing starts without it.
+ */
+export function buildGuestWarning(entry, season) {
+    if (!entry || !season) {
+        return null;
+    }
+    const home = entry.seasonId ?? 'another season';
+    const sameSeason = home === season.id;
+    return {
+        characterId: entry.id,
+        displayName: entry.displayName ?? entry.dataName ?? entry.id,
+        homeSeasonId: home,
+        targetSeasonId: season.id,
+        eraMismatch: sameSeason ? null : `${entry.displayName ?? entry.id} belongs to ${home}; ${season.title} is set in ${season.era ?? 'another era'}.`,
+        canonBeatPolicy: 'Canon beats that depend on this character adapt rather than fail.',
+        acknowledgment:
+            'I understand this is a non-canon guest from another season and that future knowledge will not be granted.',
     };
 }
 
@@ -583,6 +665,8 @@ export function startSeason(options = {}) {
         metadata = null,
         worldBookName = null,
         timeOfDayStart = 'evening',
+        allowGuests = false,
+        guestCanonBeats = 'adapt',
     } = options;
 
     if (!store || typeof store.seed !== 'function') {
@@ -609,7 +693,12 @@ export function startSeason(options = {}) {
         );
     }
 
-    const selection = resolveIdentitySelection(season, identity, { registry });
+    const selection = resolveIdentitySelection(season, identity, {
+        registry,
+        allowGuests,
+        allowAnyCharacter: season.allowAnyCharacter === true || allowGuests === true,
+        requireGuestAcknowledgement: allowGuests,
+    });
     const effectiveMode = selection.identity === 'custom' && mode === 'solo' ? 'director' : mode;
 
     let state = store.seed({
@@ -624,6 +713,7 @@ export function startSeason(options = {}) {
         now,
         profiles,
         timeOfDayStart,
+        allowGuestPlayer: selection.guest === true,
         player: {
             identity: selection.identity,
             characterId: selection.characterId,
@@ -638,6 +728,22 @@ export function startSeason(options = {}) {
             flags: {
                 ...(state.flags ?? {}),
                 nonCanon: true,
+            },
+        };
+        state = store.replace(state);
+    }
+
+    if (selection.guest && state.flags?.guestCharacter?.characterId !== selection.characterId) {
+        state = {
+            ...state,
+            flags: {
+                ...(state.flags ?? {}),
+                guestCharacter: {
+                    characterId: selection.characterId,
+                    homeSeasonId: selection.guestSeasonId ?? null,
+                    warningAcceptedAt: now,
+                },
+                canonMode: guestCanonBeats === 'off' ? 'off' : 'adapted',
             },
         };
         state = store.replace(state);
@@ -659,6 +765,8 @@ export function startSeason(options = {}) {
                 identity: selection.identity,
                 characterId: selection.characterId,
                 nonCanon: selection.nonCanon,
+                guest: selection.guest,
+                guestSeasonId: selection.guestSeasonId ?? null,
             },
             worldBook,
             now,
@@ -839,6 +947,8 @@ export async function enterSeason(options = {}) {
         profiles,
         metadata,
         timeOfDayStart: ctx?.extensionSettings?.neoterra?.clock?.timeOfDayStart ?? 'evening',
+        allowGuests: ctx?.extensionSettings?.neoterra?.identity?.allowGuests === true,
+        guestCanonBeats: ctx?.extensionSettings?.neoterra?.identity?.guestCanonBeats ?? 'adapt',
     });
 
     if (metadata && worldBookAdapter && typeof worldBookAdapter.ensure === 'function') {

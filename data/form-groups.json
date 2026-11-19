@@ -43,11 +43,12 @@
     {
       "id": "s1.vaiva",
       "seasonId": "s1",
-      "label": "Vaiva / Colorgarde / Light Shade",
+      "label": "Vaiva / Colorgarde / Light Shade / Blazing Prism",
       "base": "S1/Vaiva-Colorgarde.json",
       "members": [
         "S1/Vaiva-Colorgarde.json",
-        "S1/Light Shade (Corrupted Colorgarde).json"
+        "S1/Light Shade (Corrupted Colorgarde).json",
+        "Others/Blazing Prism (Corrupted Light Shade).json"
       ]
     },
     {

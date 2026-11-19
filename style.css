@@ -3017,3 +3017,250 @@ body.neoterra-dialog-open {
 .neoterra-agent-log-status.is-error {
     color: var(--nt-danger);
 }
+
+/* ------------------------------------------------------------------ *
+ * Character portraits
+ * ------------------------------------------------------------------ */
+
+.neoterra-avatar {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--nt-accent-soft), var(--nt-bg-deep));
+    border: 1px solid var(--nt-border-strong);
+    border-radius: 50%;
+}
+
+.neoterra-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.neoterra-avatar-fallback {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    color: var(--nt-text);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.neoterra-avatar-xs { width: 1.5rem; height: 1.5rem; font-size: 0.58rem; }
+.neoterra-avatar-sm { width: 2rem; height: 2rem; font-size: 0.68rem; }
+.neoterra-avatar-md { width: 2.75rem; height: 2.75rem; font-size: 0.78rem; }
+.neoterra-avatar-lg { width: 4rem; height: 4rem; font-size: 1rem; }
+.neoterra-avatar-xl { width: 6rem; height: 6rem; font-size: 1.35rem; }
+
+.neoterra-avatar-strip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+    vertical-align: middle;
+}
+
+.neoterra-codex-card {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.neoterra-codex-card-portrait {
+    display: inline-flex;
+    margin-right: 0.15rem;
+}
+
+.neoterra-codex-detail-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+}
+
+.neoterra-codex-detail-portrait {
+    display: inline-flex;
+}
+
+.neoterra-player-portrait .neoterra-avatar {
+    width: 3.5rem;
+    height: 3.5rem;
+}
+
+.neoterra-identity-portrait .neoterra-avatar {
+    width: 2.25rem;
+    height: 2.25rem;
+}
+
+.neoterra-map-present {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.35rem 0;
+}
+
+.neoterra-map-present-names {
+    font-size: 0.8rem;
+    color: var(--nt-text-muted);
+}
+
+.neoterra-settings-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+@media (max-width: 520px) {
+    .neoterra-codex-detail-head {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Character picker, guests, and generated forms
+ * ------------------------------------------------------------------ */
+
+.neoterra-character-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.neoterra-picker-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(120px, 1fr));
+    gap: 0.5rem;
+}
+
+.neoterra-picker-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-height: 46vh;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+}
+
+.neoterra-picker-section h5 {
+    margin: 0.2rem 0 0.45rem;
+}
+
+.neoterra-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.5rem;
+}
+
+.neoterra-picker-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    align-items: center;
+    padding: 0.5rem;
+    color: var(--nt-text);
+    text-align: left;
+    background: var(--nt-bg-elevated);
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+    font: inherit;
+}
+
+.neoterra-picker-card:hover,
+.neoterra-picker-card:focus-visible {
+    border-color: var(--nt-focus-ring);
+    outline: none;
+}
+
+.neoterra-picker-card.is-selected {
+    border-color: var(--nt-accent);
+    background: var(--nt-accent-soft);
+}
+
+.neoterra-picker-card.is-guest {
+    border-style: dashed;
+}
+
+.neoterra-picker-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.neoterra-picker-name {
+    font-weight: 600;
+}
+
+.neoterra-picker-meta {
+    color: var(--nt-text-muted);
+    font-size: 0.72rem;
+}
+
+.neoterra-picker-forms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-top: 0.15rem;
+}
+
+.neoterra-picker-form {
+    padding: 0.05rem 0.3rem;
+    font-size: 0.68rem;
+    color: var(--nt-text-muted);
+    background: var(--nt-bg-deep);
+    border-radius: 999px;
+}
+
+.neoterra-picker-form.is-active {
+    color: var(--nt-accent-contrast);
+    background: var(--nt-accent);
+}
+
+.neoterra-identity-group {
+    margin: 0.6rem 0;
+    color: var(--nt-text);
+}
+
+.neoterra-guest-warning {
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.75rem;
+    background: var(--nt-danger-soft);
+    border: 1px solid var(--nt-danger);
+    border-radius: var(--nt-radius-sm);
+}
+
+.neoterra-guest-warning h5 {
+    margin: 0 0 0.3rem;
+}
+
+.neoterra-guest-ack {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+}
+
+.neoterra-codex-generated {
+    border: 1px dashed var(--nt-border-strong);
+    border-radius: var(--nt-radius-sm);
+    padding: 0.6rem;
+}
+
+.neoterra-codex-generated-edit textarea {
+    width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.76rem;
+}
+
+@media (max-width: 640px) {
+    .neoterra-picker-toolbar {
+        grid-template-columns: 1fr;
+    }
+    .neoterra-picker-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -47,6 +47,15 @@
       "permanent": true
     },
     {
+      "id": "rule.s1.vaiva.blazing-prism",
+      "from": "s1.light.shade.corrupted.colorgarde",
+      "to": "others.blazing.prism.corrupted.light.shade",
+      "trigger": "corrupted",
+      "sourceFaction": null,
+      "reversibleBy": null,
+      "permanent": true
+    },
+    {
       "id": "rule.s1dark.carol.cleansed",
       "from": "s1dark.carol.bleeding-heart",
       "to": "s1dark.carol.cleansed.bleeding.heart",

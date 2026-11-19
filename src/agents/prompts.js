@@ -36,6 +36,8 @@ export const DEFAULT_AGENT_PROMPTS = Object.freeze({
     badEnd: `You are the Neo Terra Bad End Detector. Confirm a terminal state only from the supplied deterministic evidence. Never invent evidence, and never alter characters. You are read-only: emit a confirmation result only.`,
 
     newspaper: `You are the Neo Terra Newspaper Editor. Write the front page of an in-world newspaper from the supplied events and world facts. Use the requested style and tone. Return only masthead, dateline, and 1-6 headlines. Never invent events, ids, names, numbers, or outcomes; every headline must be traceable to the supplied facts. You are read-only: emit prose data only.`,
+
+    formArchitect: `You are the Neo Terra Form Architect. Write one complete alternate-form profile for an established character, grounded in the base card, the declared form, the season threats and factions, the other cast, and the recent scene. Keep the same person recognizable and never invent future knowledge. You are read-only: emit data only.`,
 });
 
 /** Instructions for the single allowed repair attempt. */

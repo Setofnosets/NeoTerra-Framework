@@ -75,6 +75,7 @@ export function buildSceneChatMessage({
     text,
     key = null,
     extra = {},
+    avatarUrl = null,
     now = Date.now,
 } = {}) {
     const sceneKind = typeof kind === 'string' && kind.length > 0 ? kind : 'scene';
@@ -93,7 +94,7 @@ export function buildSceneChatMessage({
         is_system: false,
         send_date: (Number.isNaN(timestamp.getTime()) ? new Date() : timestamp).toISOString(),
         mes: stripContextBlocks(text),
-        force_avatar: SCENE_AVATAR_URL,
+        force_avatar: typeof avatarUrl === 'string' && avatarUrl.length > 0 ? avatarUrl : SCENE_AVATAR_URL,
         extra: { neoterra: { scene } },
     };
 }
@@ -304,17 +305,20 @@ function markSceneMessage(index, { retry = true } = {}) {
  *
  * @returns {{ posted: boolean, index: number|null, reason?: string, deduped?: boolean }}
  */
-export async function postSceneMessage(ctx, message, { dedupeKey = null } = {}) {
+export async function postSceneMessage(ctx, message, { dedupeKey = null, avatarUrl = null } = {}) {
     if (!isObject(message) || typeof message.mes !== 'string') {
         return { posted: false, index: null, reason: 'invalid-message' };
     }
+    const payload = typeof avatarUrl === 'string' && avatarUrl.length > 0
+        ? { ...message, force_avatar: avatarUrl }
+        : message;
     const messages = Array.isArray(ctx?.chat) ? ctx.chat : null;
     if (!messages) {
         return { posted: false, index: null, reason: 'no-chat' };
     }
     const key = typeof dedupeKey === 'string' && dedupeKey.length > 0
         ? dedupeKey
-        : sceneKeyOf(message);
+        : sceneKeyOf(payload);
     const previous = messages[lastIndex(messages)] ?? null;
     const previousKey = sceneKeyOf(previous);
     if (key && previousKey && key === previousKey) {
@@ -322,7 +326,7 @@ export async function postSceneMessage(ctx, message, { dedupeKey = null } = {}) 
     }
 
     try {
-        messages.push(message);
+        messages.push(payload);
     } catch (error) {
         logger.warn('Could not append the Neo Terra scene frame', error);
         return { posted: false, index: null, reason: 'append-failed' };
@@ -335,7 +339,7 @@ export async function postSceneMessage(ctx, message, { dedupeKey = null } = {}) 
         return { posted: true, index, reason: 'not-rendered' };
     }
     try {
-        ctx.addOneMessage(message);
+        ctx.addOneMessage(payload);
     } catch (error) {
         logger.warn('Could not render the Neo Terra scene frame', error);
         return { posted: true, index, reason: 'render-failed' };

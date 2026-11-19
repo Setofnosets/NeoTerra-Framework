@@ -11,6 +11,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { parseCardProfile } from '../src/data/card-profile.js';
+import { requirePngCard } from './png-card.mjs';
 import {
     FORM_KINDS,
     SEASON_IDS,
@@ -166,7 +167,7 @@ export function slugify(text) {
  * codenames, not transformations, so the card remains a base form.
  */
 export function classifyFilename(filename) {
-    const stem = basename(String(filename)).replace(/\.json$/i, '');
+    const stem = basename(String(filename)).replace(/\.(?:json|png)$/i, '');
     const match = stem.match(/\(([^()]*)\)\s*$/);
 
     let formLabel = null;
@@ -315,7 +316,7 @@ export function parseThreatLevel(description) {
 /**
  * Parse one card into a registry entry before overrides/group resolution.
  */
-export function parseCard(raw, { file, seasonId, seasonIds = SEASON_IDS }) {
+export function parseCard(raw, { file, seasonId, seasonIds = SEASON_IDS, avatarPath = null }) {
     assertKnownSeason(seasonId, seasonIds);
     const validation = validateCardSource(raw);
     if (!validation.ok) {
@@ -328,7 +329,7 @@ export function parseCard(raw, { file, seasonId, seasonIds = SEASON_IDS }) {
     const tags = Array.isArray(data.tags) ? data.tags.filter((tag) => typeof tag === 'string') : [];
     const filename = basename(file);
     const { formKind, baseLabel } = classifyFilename(filename);
-    const stem = filename.replace(/\.json$/i, '');
+    const stem = filename.replace(/\.(?:json|png)$/i, '');
     const dataName = data.name.trim();
     const displayName = baseLabel || dataName;
     const aliases = parseAliases(description);
@@ -356,6 +357,9 @@ export function parseCard(raw, { file, seasonId, seasonIds = SEASON_IDS }) {
     };
     if (threat.raw !== null) {
         entry.threatLevelRaw = threat.raw;
+    }
+    if (typeof avatarPath === 'string' && avatarPath.length > 0) {
+        entry.avatarPath = toPosix(avatarPath);
     }
     return entry;
 }
@@ -454,11 +458,8 @@ function resolveGroups(entries, formGroups) {
             if (!entry) {
                 throw new Error(`form group "${group.id}": member card "${member}" does not exist`);
             }
-            if (entry.seasonId !== group.seasonId) {
-                throw new Error(
-                    `form group "${group.id}": member "${member}" belongs to ${entry.seasonId}, not ${group.seasonId}`,
-                );
-            }
+            // Cross-season packs are allowed: a form group may collect an
+            // alternate from another season (e.g. Blazing Prism / Light Shade).
             if (entry.formGroup !== null && entry.formGroup !== group.id) {
                 throw new Error(
                     `form group "${group.id}": member "${member}" already belongs to "${entry.formGroup}"`,
@@ -521,7 +522,12 @@ export function buildRegistry({ cards, overrides, formGroups, seasonIds = SEASON
         }
         const file = toPosix(card.file);
         const seasonId = card.seasonId ?? seasonIdFromPath(file, seasonIds);
-        return parseCard(card.raw, { file, seasonId, seasonIds });
+        return parseCard(card.raw, {
+            file,
+            seasonId,
+            seasonIds,
+            avatarPath: card.avatarPath ?? null,
+        });
     });
 
     applyOverrides(entries, overrides);
@@ -648,16 +654,26 @@ function readJson(path) {
     return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function readCards(seasonDirs) {
+/**
+ * Read one season folder. JSON cards are the primary source; a `.png` with a
+ * matching JSON twin only contributes its art (`avatarPath`), while a PNG with
+ * no twin is read as a full card from its embedded `chara`/`ccv3` chunk.
+ *
+ * @param {{ absolute: string, seasonId: string, dir: string }} input
+ * @returns {{ cards: Array<object>, errors: Array<{ file: string, reason: string }> }}
+ */
+export function readCardsFromDirectory({ absolute, seasonId, dir }) {
     const cards = [];
     const errors = [];
+    const byStem = new Map();
+    const pngs = [];
 
-    for (const { seasonId, dir } of seasonDirs) {
-        const absolute = join(ROOT, 'Chars', dir);
-        for (const dirent of readdirSync(absolute, { withFileTypes: true })) {
-            if (!dirent.isFile() || !dirent.name.toLowerCase().endsWith('.json')) {
-                continue;
-            }
+    for (const dirent of readdirSync(absolute, { withFileTypes: true })) {
+        if (!dirent.isFile()) {
+            continue;
+        }
+        const lower = dirent.name.toLowerCase();
+        if (lower.endsWith('.json')) {
             const file = `Chars/${dir}/${dirent.name}`;
             try {
                 const raw = readJson(join(absolute, dirent.name));
@@ -669,11 +685,59 @@ function readCards(seasonDirs) {
                     });
                     continue;
                 }
-                cards.push({ file, seasonId, raw });
+                const card = { file, seasonId, raw };
+                cards.push(card);
+                byStem.set(basename(dirent.name, '.json').toLowerCase(), card);
             } catch (error) {
                 errors.push({ file, reason: error instanceof Error ? error.message : String(error) });
             }
+        } else if (lower.endsWith('.png')) {
+            pngs.push(dirent.name);
         }
+    }
+
+    for (const name of pngs.sort()) {
+        const pngFile = `Chars/${dir}/${name}`;
+        const stem = basename(name, '.png').toLowerCase();
+        const twin = byStem.get(stem) ?? null;
+        if (twin) {
+            twin.avatarPath = pngFile;
+            continue;
+        }
+        try {
+            const buffer = readFileSync(join(absolute, name));
+            const raw = requirePngCard(buffer, pngFile);
+            const validation = validateCardSource(raw);
+            if (!validation.ok) {
+                errors.push({
+                    file: pngFile,
+                    reason: validation.errors.map((error) => `${error.path}: ${error.message}`).join('; '),
+                });
+                continue;
+            }
+            const card = { file: pngFile, seasonId, raw, avatarPath: pngFile };
+            cards.push(card);
+            byStem.set(stem, card);
+        } catch (error) {
+            errors.push({ file: pngFile, reason: error instanceof Error ? error.message : String(error) });
+        }
+    }
+
+    return { cards, errors };
+}
+
+function readCards(seasonDirs) {
+    const cards = [];
+    const errors = [];
+
+    for (const { seasonId, dir } of seasonDirs) {
+        const result = readCardsFromDirectory({
+            absolute: join(ROOT, 'Chars', dir),
+            seasonId,
+            dir,
+        });
+        cards.push(...result.cards);
+        errors.push(...result.errors);
     }
 
     return { cards, errors };
@@ -754,8 +818,37 @@ function formatValidationErrors(label, validation) {
     return validation.errors.map((error) => `${label}: ${error.path}: ${error.message}`);
 }
 
-function validateSeasonDocuments(documents, registry) {
+/**
+ * Form-data coverage gate: every alternate card belongs to a group and every
+ * group member is reachable from at least one declared rule.
+ */
+export function validateFormCoverage(registry, formRules, documents = []) {
     const errors = [];
+    const rules = Array.isArray(formRules) ? formRules : (formRules?.rules ?? []);
+    const targets = new Set(rules.map((rule) => rule?.to).filter(Boolean));
+    const byId = new Map((registry?.entries ?? []).map((entry) => [entry.id, entry]));
+    for (const entry of registry?.entries ?? []) {
+        if (entry.formRole === 'alt' && !entry.formGroup) {
+            errors.push(`form coverage: alternate card "${entry.id}" belongs to no form group`);
+        }
+        if (entry.formRole === 'alt' && entry.formGroup && !targets.has(entry.id)) {
+            errors.push(`form coverage: alternate card "${entry.id}" has no incoming transformation rule`);
+        }
+    }
+    for (const document of documents) {
+        for (const id of document.altFormsAllowed ?? []) {
+            const entry = byId.get(id);
+            if (!entry) {
+                errors.push(`form coverage: ${document.id}.altFormsAllowed references unknown id "${id}"`);
+            } else if (!entry.formGroup) {
+                errors.push(`form coverage: ${document.id}.altFormsAllowed id "${id}" is not in a form group`);
+            }
+        }
+    }
+    return errors;
+}
+
+function validateSeasonDocuments(documents, registry) {    const errors = [];
     const factions = readJson(join(ROOT, 'data', 'factions.json'));
     const locations = readJson(join(ROOT, 'data', 'locations.json'));
     const districts = readJson(join(ROOT, 'data', 'districts.json'));
@@ -821,6 +914,7 @@ function buildAndValidate() {
 
     const { documents, errors: seasonErrors } = readSeasonDocuments();
     errors.push(...seasonErrors);
+    errors.push(...validateFormCoverage(registry, formRules, documents));
     if (seasonErrors.length === 0) {
         errors.push(...validateSeasonDocuments(documents, registry));
     }

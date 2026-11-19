@@ -11,9 +11,11 @@ import { createLogger } from '../core/logger.js';
 import { resolveActiveChatId } from '../core/live-context.js';
 import { loadRegistry } from '../data/registry.js';
 import { directorCardStatus, downloadDirectorCard } from './director-card.js';
+import { avatarMarkup, initAvatars } from './avatar.js';
 import {
     SeasonStartError,
     applyCharacterFocus,
+    buildGuestWarning,
     buildIdentityChoices,
     buildSeasonMenuEntries,
     enterSeason,
@@ -105,30 +107,71 @@ export function readIdentityRadio(radio) {
     };
 }
 
-export function renderIdentityStep({ entry, choices, error }) {
-    const options = choices.options.map((option) => {
-        const checked = option.isDefault ? 'checked' : '';
-        const detail = option.identity === 'canon'
-            ? `${option.side}${option.nonCanon ? ' — non-canon character' : ''}`
-            : 'Write your own persona';
-        const initials = option.identity === 'canon'
-            ? String(option.label ?? '')
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((part) => part[0]?.toUpperCase() ?? '')
-                .join('') || '?'
-            : 'YOU';
-        return `
-        <label class="neoterra-identity-option">
-            <input type="radio" name="neoterra-identity" value="${escapeHtml(option.identity)}"
-                data-neoterra-identity data-character-id="${escapeHtml(option.characterId ?? '')}"
-                ${checked}>
-            <span class="neoterra-identity-portrait" aria-hidden="true">${escapeHtml(initials)}</span>
-            <span class="neoterra-identity-label">${escapeHtml(option.label)}</span>
-            <span class="neoterra-identity-detail">${escapeHtml(detail)}</span>
-        </label>`;
-    }).join('');
+function identityOptionMarkup(option) {
+    const checked = option.isDefault ? 'checked' : '';
+    const detailParts = [];
+    if (option.identity === 'canon') {
+        detailParts.push(option.side ?? 'neutral');
+        if (option.formKind && option.formKind !== 'base') {
+            detailParts.push(option.formKind);
+        }
+        if (option.guest) {
+            detailParts.push(`guest from ${option.homeSeasonId ?? 'another season'}`);
+        } else if (option.nonCanon) {
+            detailParts.push('non-canon character');
+        }
+    } else {
+        detailParts.push('Write your own persona');
+    }
+    const portrait = option.identity === 'canon'
+        ? avatarMarkup(option.characterId, { size: 'md', name: option.displayName })
+        : `<span class="neoterra-avatar neoterra-avatar-md" data-neoterra-avatar data-avatar-source="initials">
+            <span class="neoterra-avatar-fallback" aria-hidden="true">YOU</span>
+        </span>`;
+    return `
+    <label class="neoterra-identity-option${option.guest ? ' is-guest' : ''}"
+        data-neoterra-identity-option="${escapeHtml(option.characterId ?? 'custom')}"
+        data-guest="${option.guest ? 'true' : 'false'}">
+        <input type="radio" name="neoterra-identity" value="${escapeHtml(option.identity)}"
+            data-neoterra-identity data-character-id="${escapeHtml(option.characterId ?? '')}"
+            ${option.guest ? `data-guest-character-id="${escapeHtml(option.characterId ?? '')}" data-home-season="${escapeHtml(option.homeSeasonId ?? '')}"` : ''}
+            ${checked}>
+        <span class="neoterra-identity-portrait" aria-hidden="true">${portrait}</span>
+        <span class="neoterra-identity-label">${escapeHtml(option.label)}</span>
+        <span class="neoterra-identity-detail">${escapeHtml(detailParts.filter(Boolean).join(' — '))}</span>
+        ${option.guest ? '<span class="neoterra-badge neoterra-badge-warning">Non-canon guest</span>' : ''}
+    </label>`;
+}
+
+export function renderIdentityStep({
+    entry,
+    choices,
+    error,
+    guestWarning = null,
+    acknowledged = false,
+    selectedCharacterId = null,
+}) {
+    const options = choices.options ?? [];
+    const custom = options.filter((option) => option.identity === 'custom');
+    const canon = options.filter((option) => option.identity === 'canon' && !option.guest);
+    const guests = options.filter((option) => option.guest === true);
+    const selected = selectedCharacterId
+        ? options.find((option) => (option.characterId ?? null) === (selectedCharacterId === 'custom' ? null : selectedCharacterId)) ?? null
+        : options.find((option) => option.isDefault) ?? null;
+    const markChecked = (option) => ({ ...option, isDefault: option === selected });
+    const checkedOption = selected;
+    const warning = guestWarning
+        ? `
+        <section class="neoterra-guest-warning" data-neoterra-guest-warning role="alert">
+            <h5>Non-canon guest: ${escapeHtml(guestWarning.displayName)}</h5>
+            <p>${escapeHtml(guestWarning.eraMismatch ?? 'This character belongs to another season.')}</p>
+            <p>${escapeHtml(guestWarning.canonBeatPolicy)}</p>
+            <label class="neoterra-field neoterra-guest-ack">
+                <input type="checkbox" data-neoterra-guest-ack ${acknowledged ? 'checked' : ''}>
+                <span>${escapeHtml(guestWarning.acknowledgment)}</span>
+            </label>
+        </section>`
+        : '';
 
     return `
     <section class="neoterra-season-identity" data-neoterra-identity-step
@@ -140,8 +183,25 @@ export function renderIdentityStep({ entry, choices, error }) {
         <form data-neoterra-identity-form>
             <fieldset class="neoterra-identity-options">
                 <legend class="neoterra-visually-hidden">Player identity</legend>
-                ${options}
+                ${custom.map((option) => identityOptionMarkup(markChecked(option))).join('')}
             </fieldset>
+            ${canon.length > 0 ? `
+            <section class="neoterra-identity-group" data-neoterra-identity-group="roster">
+                <h5>Canon roster</h5>
+                <fieldset class="neoterra-identity-options">
+                    <legend class="neoterra-visually-hidden">Canon roster</legend>
+                    ${canon.map((option) => identityOptionMarkup(markChecked(option))).join('')}
+                </fieldset>
+            </section>` : ''}
+            ${guests.length > 0 ? `
+            <section class="neoterra-identity-group" data-neoterra-identity-group="guests">
+                <h5>Other seasons <span class="neoterra-hint">(guests — warning required)</span></h5>
+                <fieldset class="neoterra-identity-options">
+                    <legend class="neoterra-visually-hidden">Other seasons</legend>
+                    ${guests.map((option) => identityOptionMarkup(markChecked(option))).join('')}
+                </fieldset>
+            </section>` : ''}
+            ${warning}
             <label class="neoterra-field">
                 <span>Display name (custom persona)</span>
                 <input type="text" data-neoterra-persona-name placeholder="The Player">
@@ -152,7 +212,8 @@ export function renderIdentityStep({ entry, choices, error }) {
             </label>
             <div class="neoterra-season-actions">
                 <button type="button" class="menu_button neoterra-cancel" data-neoterra-identity-cancel>Cancel</button>
-                <button type="submit" class="menu_button neoterra-primary" data-neoterra-identity-confirm>Begin season</button>
+                <button type="submit" class="menu_button neoterra-primary" data-neoterra-identity-confirm
+                    ${checkedOption?.guest && !acknowledged ? 'disabled' : ''}>Begin season</button>
             </div>
         </form>
     </section>`;
@@ -263,10 +324,20 @@ export function renderSeasonMenuMarkup(entries, options = {}) {
         characterFilter = '',
         loading = false,
         setup = null,
+        guestWarning = null,
+        guestAcknowledged = false,
+        selectedCharacterId = null,
     } = options;
 
     if (view === VIEW.IDENTITY && selectedEntry && identityChoices) {
-        return renderIdentityStep({ entry: selectedEntry, choices: identityChoices, error });
+        return renderIdentityStep({
+            entry: selectedEntry,
+            choices: identityChoices,
+            error,
+            guestWarning,
+            acknowledged: guestAcknowledged,
+            selectedCharacterId,
+        });
     }
     if (view === VIEW.CONFIRM && selectedEntry && identity) {
         return renderConfirmStep({ entry: selectedEntry, identity, error });
@@ -337,6 +408,9 @@ export async function mountSeasonMenu(options = {}) {
         characterFilter: '',
         error: null,
         busy: false,
+        guestWarning: null,
+        guestAcknowledged: false,
+        selectedCharacterId: null,
         setupNotice: typeof options.notice === 'string' && options.notice.length > 0
             ? options.notice
             : null,
@@ -372,6 +446,9 @@ export async function mountSeasonMenu(options = {}) {
             error: state.error,
             characterFilter: state.characterFilter,
             loading: state.busy,
+            guestWarning: state.guestWarning,
+            guestAcknowledged: state.guestAcknowledged,
+            selectedCharacterId: state.selectedCharacterId,
             setup: state.view === VIEW.LIST
                 ? (() => {
                     const status = directorCardStatus(liveCtx);
@@ -404,6 +481,7 @@ export async function mountSeasonMenu(options = {}) {
             state.entries = entries;
             state.registry = registry;
             state.seasons = seasons;
+            await initAvatars({ registry, ctx: state.getContext?.() ?? state.ctx ?? null });
         } catch (error) {
             state.error = error?.message ?? String(error);
             state.entries = [];
@@ -454,6 +532,7 @@ export async function mountSeasonMenu(options = {}) {
                 characterId: characterId || undefined,
                 displayName: nameInput?.value?.trim() || undefined,
                 personaNotes: notesInput?.value?.trim() || undefined,
+                warningAccepted: state.guestAcknowledged === true ? true : undefined,
             },
         );
 
@@ -464,6 +543,7 @@ export async function mountSeasonMenu(options = {}) {
         try {
             const liveCtx = state.getContext?.() ?? state.ctx ?? getContext();
             const start = state.onStart ?? enterSeason;
+            const allowGuests = liveCtx?.extensionSettings?.neoterra?.identity?.allowGuests === true;
             const result = await start({
                 id: entry.id,
                 identity,
@@ -471,12 +551,17 @@ export async function mountSeasonMenu(options = {}) {
                 ctx: liveCtx,
                 chatId: resolveActiveChatId(liveCtx),
                 confirmReplace,
+                allowGuests,
+                guestCanonBeats: liveCtx?.extensionSettings?.neoterra?.identity?.guestCanonBeats ?? 'adapt',
             });
             state.busy = false;
             state.view = VIEW.LIST;
             state.selectedEntry = null;
             state.identityChoices = null;
             state.identity = null;
+            state.guestWarning = null;
+            state.guestAcknowledged = false;
+            state.selectedCharacterId = null;
             paint();
             state.onEntered?.(result);
         } catch (error) {
@@ -515,13 +600,18 @@ export async function mountSeasonMenu(options = {}) {
                         roster: [],
                         allowAnyCharacter: entry.sandbox,
                     },
-                    { registry: state.registry },
+                    {
+                        registry: state.registry,
+                        allowGuests: (state.getContext?.() ?? state.ctx)?.extensionSettings?.neoterra?.identity?.allowGuests === true,
+                    },
                 ),
                 state.characterFilter,
             );
             if (state.identityChoices.focusedCharacterId) {
                 state.characterFilter = state.identityChoices.focusedCharacterId;
             }
+            state.guestWarning = null;
+            state.guestAcknowledged = false;
             state.view = VIEW.IDENTITY;
             state.error = null;
             paint();
@@ -568,6 +658,32 @@ export async function mountSeasonMenu(options = {}) {
             return;
         }
         state.characterFilter = filter.value.trim();
+        paint();
+    }, { signal: controller.signal });
+
+    root.addEventListener('change', (event) => {
+        if (event.target.matches?.('[data-neoterra-guest-ack]')) {
+            state.guestAcknowledged = event.target.checked === true;
+            paint();
+            return;
+        }
+        const radio = event.target.closest?.('[data-neoterra-identity]');
+        if (!radio) {
+            return;
+        }
+        const option = (state.identityChoices?.options ?? [])
+            .find((candidate) => candidate.characterId === (radio.dataset?.characterId || null));
+        const guest = option?.guest === true;
+        state.guestWarning = guest
+            ? buildGuestWarning(
+                (state.registry?.entries ?? []).find((entry) => entry.id === option.characterId) ?? null,
+                state.seasons?.[state.selectedEntry?.id] ?? state.selectedEntry,
+            )
+            : null;
+        state.selectedCharacterId = radio.dataset?.characterId || 'custom';
+        if (!guest) {
+            state.guestAcknowledged = false;
+        }
         paint();
     }, { signal: controller.signal });
 

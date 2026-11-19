@@ -282,7 +282,7 @@ test('generated profiles cover every registry entry and point at its card', () =
     assert.equal(profiles.counts.missingAppearance, missingAppearance);
 });
 
-test('form rules cover every alternate and never cross seasons', () => {
+test('form rules cover every alternate and stay within a form group', () => {
     assert.equal(validateFormRules(formRules, registry).ok, true);
     assert.ok(formRules.rules.length >= 33);
 
@@ -298,7 +298,8 @@ test('form rules cover every alternate and never cross seasons', () => {
         const to = byId.get(rule.to);
         assert.ok(from, `unresolved from ${rule.from}`);
         assert.ok(to, `unresolved to ${rule.to}`);
-        assert.equal(from.seasonId, to.seasonId, `${rule.id} crosses seasons`);
+        // Cross-season packs are allowed; a rule may not jump between groups.
+        assert.equal(from.formGroup, to.formGroup, `${rule.id} crosses form groups`);
     }
 
     for (const rule of formRules.rules) {

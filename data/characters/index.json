@@ -3293,10 +3293,10 @@
       ],
       "side": "villain",
       "threatLevel": null,
-      "formRole": "base",
-      "altOf": null,
+      "formRole": "alt",
+      "altOf": "s1.vaiva.colorgarde",
       "formKind": "corrupted",
-      "formGroup": null,
+      "formGroup": "s1.vaiva",
       "tags": [
         "👩‍🦰 Female",
         "🦹‍♂️ Villain",

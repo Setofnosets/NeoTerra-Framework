@@ -11,8 +11,9 @@
   "scripts": {
     "build:data": "node tools/build-data.mjs",
     "build:map": "node tools/build-map.mjs",
+    "build:avatars": "node tools/build-avatars.mjs",
     "test": "node --test tests/*.test.js",
     "smoke": "node tools/smoke-test.mjs",
-    "check": "node tools/build-data.mjs --check && node tools/build-map.mjs --check && node tools/map-coords.mjs --check && node --check index.js && node --check tools/build-data.mjs && node --check tools/build-map.mjs && node --check tools/map-coords.mjs && node --check tools/smoke-test.mjs && node --test tests/*.test.js && node tools/smoke-test.mjs"
+    "check": "node tools/build-data.mjs --check && node tools/build-map.mjs --check && node tools/map-coords.mjs --check && node tools/build-avatars.mjs --check && node --check index.js && node --check tools/build-data.mjs && node --check tools/build-map.mjs && node --check tools/build-avatars.mjs && node --check tools/map-coords.mjs && node --check tools/smoke-test.mjs && node --test tests/*.test.js && node tools/smoke-test.mjs"
   }
 }

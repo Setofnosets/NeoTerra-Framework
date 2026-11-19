@@ -82,13 +82,20 @@ export function buildOpeningScene({ state, season } = {}) {
     const povLabel = getPovLabel(playerRole);
     const playerName = getPlayerDisplayName(state);
     const nonCanon = state.flags?.nonCanon === true;
+    const guest = state.flags?.guestCharacter ?? null;
     const castNames = getSceneCastNames(state);
 
-    const heading = `${season.title} — ${season.era}`;
+    const heading = `${season.title} - ${season.era}`;
     const locationLine = location
         ? `Opening: ${location.name}${location.district ? `, ${location.district}` : ''}`
         : 'Opening: an unrecorded part of the city';
-    const povLine = `POV: ${playerName} (${povLabel})${nonCanon ? ' — non-canon character: canon beats disabled' : ''}`;
+    let povSuffix = '';
+    if (nonCanon) {
+        povSuffix = ' - non-canon character: canon beats disabled';
+    } else if (guest?.characterId) {
+        povSuffix = ` - guest character: home season ${guest.homeSeasonId ?? 'unknown'} - canon beats adapt`;
+    }
+    const povLine = `POV: ${playerName} (${povLabel})${povSuffix}`;
 
     const lines = [heading, locationLine, povLine, ''];
     if (typeof season.premise === 'string' && season.premise.trim().length > 0) {
@@ -121,6 +128,9 @@ export function buildOpeningScene({ state, season } = {}) {
         playerCharacterId: state.player?.characterId ?? null,
         castNames,
         nonCanon,
+        guest: guest?.characterId
+            ? { characterId: guest.characterId, homeSeasonId: guest.homeSeasonId ?? null }
+            : null,
     };
 }
 

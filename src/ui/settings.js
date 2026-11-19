@@ -23,6 +23,13 @@ import { migrateWorldState } from '../state/migrations.js';
 import { cloneWorldState, validateWorldState } from '../state/world-state.js';
 import { seasonWorldBookName } from '../flows/season-start.js';
 import { directorCardStatus, downloadDirectorCard } from './director-card.js';
+import {
+    buildSyncedManifest,
+    buildSyncOverrides,
+    loadAvatarManifest,
+    writeAvatarOverrides,
+} from '../data/avatars.js';
+import { initAvatars, refreshAvatarContext } from './avatar.js';
 
 const logger = createLogger('settings-ui');
 
@@ -376,12 +383,17 @@ function readValue(input) {
         const value = Number(input.value);
         return Number.isFinite(value) ? value : 0;
     }
+    if (input.dataset.neoterraType === 'boolean') {
+        return input.value === 'true';
+    }
     return input.value;
 }
 
 function writeValue(input, value) {
     if (input.type === 'checkbox') {
         input.checked = Boolean(value);
+    } else if (input.dataset.neoterraType === 'boolean') {
+        input.value = String(value === true);
     } else if (value !== undefined && value !== null) {
         input.value = String(value);
     }
@@ -610,6 +622,88 @@ async function handleDirectorDownload(root) {
 
 function exportSettings(ctx) {
     return downloadJson('neoterra-settings.json', getSettings(ctx));
+}
+
+function portraitStatusHost(root) {
+    return root?.querySelector?.('[data-neoterra-portrait-status]') ?? null;
+}
+
+async function syncPortraits(ctx, root) {
+    const statusHost = portraitStatusHost(root);
+    const button = root?.querySelector?.('[data-neoterra-sync-portraits]');
+    if (button) {
+        button.disabled = true;
+    }
+    try {
+        const live = resolveWorldContext(ctx);
+        const registry = await loadRegistry();
+        const characters = Array.isArray(live?.characters) ? live.characters : [];
+        const manifest = await loadAvatarManifest().catch(() => null);
+        const result = buildSyncOverrides(registry, characters, { manifest });
+        writeAvatarOverrides(result.overrides);
+        refreshAvatarContext({ registry, ctx: live, characters });
+        initAvatars({ registry, ctx: live, characters }).catch(() => {});
+        if (typeof document !== 'undefined') {
+            document.dispatchEvent(new CustomEvent('neoterra:avatars-updated'));
+        }
+        if (statusHost) {
+            const extra = result.ambiguous.length > 0
+                ? ` ${result.ambiguous.length} ambiguous name(s) need a manual override.`
+                : '';
+            statusHost.textContent = `Synced ${result.matched} portrait(s) from installed cards.${extra}`;
+        }
+        return result;
+    } catch (error) {
+        logger.warn('Could not sync portraits', error);
+        if (statusHost) {
+            statusHost.textContent = `Sync failed: ${error?.message ?? error}`;
+        }
+        return null;
+    } finally {
+        if (button) {
+            button.disabled = false;
+        }
+    }
+}
+
+async function downloadAvatarManifest(ctx, root) {
+    const statusHost = portraitStatusHost(root);
+    try {
+        const live = resolveWorldContext(ctx);
+        const registry = await loadRegistry();
+        const characters = Array.isArray(live?.characters) ? live.characters : [];
+        const manifest = await loadAvatarManifest().catch(() => null);
+        const merged = buildSyncedManifest(registry, characters, { manifest });
+        downloadJson('neoterra-avatars.json', merged);
+        if (statusHost) {
+            statusHost.textContent = `Downloaded a mergeable manifest with ${merged.counts.matched} portrait(s).`;
+        }
+        return merged;
+    } catch (error) {
+        logger.warn('Could not build the avatar manifest', error);
+        if (statusHost) {
+            statusHost.textContent = `Manifest download failed: ${error?.message ?? error}`;
+        }
+        return null;
+    }
+}
+
+async function paintPortraitStatus(root) {
+    const statusHost = portraitStatusHost(root);
+    if (!statusHost) {
+        return;
+    }
+    try {
+        const registry = await loadRegistry();
+        const manifest = await loadAvatarManifest().catch(() => null);
+        const live = resolveWorldContext(mountedCtx);
+        const characters = Array.isArray(live?.characters) ? live.characters : [];
+        const installed = buildSyncOverrides(registry, characters, { manifest });
+        const manifestCount = manifest ? Object.keys(manifest.avatars ?? {}).length : 0;
+        statusHost.textContent = `Manifest: ${manifestCount} portrait(s). Installed cards: ${installed.matched} match(es).`;
+    } catch (error) {
+        statusHost.textContent = 'Portrait status unavailable.';
+    }
 }
 
 function exportWorld(ctx) {
@@ -1091,6 +1185,7 @@ export async function mountSettingsPanel(ctx, {
         refreshNarratorStatus(existing, ctx);
         void ensureCharacterLimits(ctx, existing, externalSignal);
         void ensureCardSeasonOptions(existing, externalSignal);
+        void paintPortraitStatus(existing);
         return existing;
     }
 
@@ -1173,6 +1268,14 @@ export async function mountSettingsPanel(ctx, {
             void handleDirectorDownload(root);
             return;
         }
+        if (event.target.closest?.('[data-neoterra-sync-portraits]')) {
+            void syncPortraits(ctx, root);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-download-avatars]')) {
+            void downloadAvatarManifest(ctx, root);
+            return;
+        }
         if (event.target.closest?.('[data-neoterra-reset-world]')) {
             void resetChatWorld(ctx, onResetWorld);
             return;
@@ -1216,6 +1319,7 @@ export async function mountSettingsPanel(ctx, {
     refreshNarratorStatus(root, ctx);
     void ensureCharacterLimits(ctx, root, signal);
     void ensureCardSeasonOptions(root, signal);
+    void paintPortraitStatus(root);
     return root;
 }
 
@@ -1244,5 +1348,6 @@ export function refreshSettingsPanel() {
         refreshNarratorStatus(root, live);
         void ensureCharacterLimits(live, root, panelAbort?.signal);
         void ensureCardSeasonOptions(root, panelAbort?.signal);
+        void paintPortraitStatus(root);
     }
 }

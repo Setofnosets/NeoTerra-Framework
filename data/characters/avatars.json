@@ -1,0 +1,456 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "tools/build-avatars.mjs",
+  "source": "avatars",
+  "counts": {
+    "matched": 74,
+    "ambiguous": 0,
+    "unmatched": 4
+  },
+  "avatars": {
+    "s1.atropos.couple": {
+      "file": null,
+      "source": "s1/Claire Atropos & Noah Atropos.png",
+      "hash": "019d6e5b219547cc",
+      "fingerprint": "970fedbd"
+    },
+    "s1.aurelia.longshot": {
+      "file": null,
+      "source": "s1/Aurelia Selwind_Longshot _ Casino waitress Superhero.png",
+      "hash": "876597e2661e9192",
+      "fingerprint": "f3cc1bde"
+    },
+    "s1.blood.frenzy.corrupted.sharkbite": {
+      "file": null,
+      "source": "s1/Blood Frenzy (Corrupted Sharkbite).png",
+      "hash": "69780bbf96285172",
+      "fingerprint": "460060be"
+    },
+    "s1.claire.atropos": {
+      "file": null,
+      "source": "s1/Claire Atropos.png",
+      "hash": "fd4bd81a8023f2b8",
+      "fingerprint": "cc81763d"
+    },
+    "s1.claire.lachesis.cleansed.claire.atropos": {
+      "file": null,
+      "source": "s1/Claire Lachesis (Cleansed Claire Atropos).png",
+      "hash": "27daca12c82db5e7",
+      "fingerprint": "8a6bee60"
+    },
+    "s1.crystal.cat": {
+      "file": null,
+      "source": "s1/Mira Shard_Crystal Cat.png",
+      "hash": "028e4e03da3ec8f5",
+      "fingerprint": "5df37756"
+    },
+    "s1.light.shade.corrupted.colorgarde": {
+      "file": null,
+      "source": "s1/Light Shade (Corrupted Colorgarde).png",
+      "hash": "a15c33b2f97e367e",
+      "fingerprint": "673ffc05"
+    },
+    "s1.redraw.corrupted.longshot": {
+      "file": null,
+      "source": "s1/Redraw (Corrupted Longshot).png",
+      "hash": "a71ea30b00f97670",
+      "fingerprint": "20da6023"
+    },
+    "s1.tindur.sharkbite": {
+      "file": null,
+      "source": "s1/Tindur Menis_Sharkbite _ Lifeguard Superhero.png",
+      "hash": "ff9938ae766b9f42",
+      "fingerprint": "bdb7bab3"
+    },
+    "s1.twisting.fate.corrupted.carol.fate": {
+      "file": null,
+      "source": "s1/Carol Fate_Twisting Fate.png",
+      "hash": "d0cb75e974076907",
+      "fingerprint": "4572bbb0"
+    },
+    "s1.vaiva.colorgarde": {
+      "file": null,
+      "source": "s1/Vaiva Petrauskait_Colorgarde _ Spoiled heiress Superhero.png",
+      "hash": "d1bec3f0a20c87a2",
+      "fingerprint": "a47e9d58"
+    },
+    "s1dark.akui.koden.cyber.sakura": {
+      "file": null,
+      "source": "s1dark/Akui Koden_Cyber Sakura.png",
+      "hash": "5682529707d9a006",
+      "fingerprint": "be2bbf2e"
+    },
+    "s1dark.aurelia.season-dark-version": {
+      "file": null,
+      "source": "s1dark/Aurelia Selwind_Longshot (Neo Terra Dark ver).png",
+      "hash": "a0ef729faf06db4f",
+      "fingerprint": "8edb7962"
+    },
+    "s1dark.bittersweet.knighted.poisoness": {
+      "file": null,
+      "source": "s1dark/Bittersweet (Knighted Poisoness).png",
+      "hash": "cd554f350e7df545",
+      "fingerprint": "b9a61ccf"
+    },
+    "s1dark.carol.bleeding-heart": {
+      "file": null,
+      "source": "s1dark/Carol Fate_Bleeding Heart (Bot Version).png",
+      "hash": "88c5d7b6f89c6da0",
+      "fingerprint": "9a683769"
+    },
+    "s1dark.carol.cleansed.bleeding.heart": {
+      "file": null,
+      "source": "s1dark/Beating Heart (Cleansed Bleeding Heart).png",
+      "hash": "c8c3a90a3eda60fd",
+      "fingerprint": "632d79d2"
+    },
+    "s1dark.carol.infected.bleeding.heart": {
+      "file": null,
+      "source": "s1dark/Cyber Heart (Infected Bleeding Heart).png",
+      "hash": "a726782c785aa2cf",
+      "fingerprint": "f3c75377"
+    },
+    "s1dark.heart.attack.knighted.cyber.sakura": {
+      "file": null,
+      "source": "s1dark/Heart Attack (Knighted Cyber Sakura).png",
+      "hash": "7a0f938fcd29e476",
+      "fingerprint": "3b3f91b1"
+    },
+    "s1dark.jacqueline.webb.poisoness": {
+      "file": null,
+      "source": "s1dark/Jacqueline Webb_Poisoness .png",
+      "hash": "93fc86fc579249e8",
+      "fingerprint": "8fbbd413"
+    },
+    "s1dark.phantom.heart.poisoned.bleeding.heart": {
+      "file": null,
+      "source": "s1dark/Phantom Heart (Poisoned Bleeding Heart).png",
+      "hash": "d1dea2306a1b16c2",
+      "fingerprint": "f1ac381c"
+    },
+    "s1dark.white.rabbit.knighted.longshot": {
+      "file": null,
+      "source": "s1dark/White Rabbit (Knighted Longshot).png",
+      "hash": "8df14aa1f841b6e3",
+      "fingerprint": "253e70a2"
+    },
+    "s2.amy.matic.seasonal.siren": {
+      "file": null,
+      "source": "s2/Amy Matic_Seasonal Siren.png",
+      "hash": "26a14ef3967d4b13",
+      "fingerprint": "5e76e138"
+    },
+    "s2.annabelle.verd.iron.maiden": {
+      "file": null,
+      "source": "s2/Annabelle Verd_Iron Maiden.png",
+      "hash": "cd9df4fda88c811b",
+      "fingerprint": "bbb827fb"
+    },
+    "s2.blooming.crow.corrupted.monochromatic": {
+      "file": null,
+      "source": "s2/Blooming Crow (Corrupted Monochromatic).png",
+      "hash": "1d16ad1ec35900cf",
+      "fingerprint": "e2768f84"
+    },
+    "s2.gintvilas.petrauskas.darkgarde": {
+      "file": null,
+      "source": "s2/Gintvilas Petrauskas_Darkgarde.png",
+      "hash": "6fc3e9534ae82814",
+      "fingerprint": "8df1c2d6"
+    },
+    "s2.laura.brimael.demon.laura": {
+      "file": null,
+      "source": "s2/Laura Brimael_Demon Laura.png",
+      "hash": "f12a88c649f238d9",
+      "fingerprint": "1fe61421"
+    },
+    "s2.leila.renya": {
+      "file": null,
+      "source": "s2/Leila Renya_Femme Feral.png",
+      "hash": "fae0bb739a85147f",
+      "fingerprint": "3c305908"
+    },
+    "s2.leila.renya.femme.feral": {
+      "file": null,
+      "source": "s2/Leila Renya_Femme Feral (Cleansed).png",
+      "hash": "0ed32812db697e13",
+      "fingerprint": "db17b9ae"
+    },
+    "s2.monika.matic.monochromatic": {
+      "file": null,
+      "source": "s2/Monika Matic_Monochromatic.png",
+      "hash": "3c232d1f63e308f0",
+      "fingerprint": "123b0931"
+    },
+    "s2.savage.succubus.corrupted.demon.laura": {
+      "file": null,
+      "source": "s2/Savage Succubus (Corrupted Demon Laura).png",
+      "hash": "bcdd56a412b5bb2b",
+      "fingerprint": "7259f986"
+    },
+    "s2.stygian.stalker.corrupted.colorgarde": {
+      "file": null,
+      "source": "s2/Stygian Stalker (Corrupted Colorgarde).png",
+      "hash": "42a40ee7e84d08c5",
+      "fingerprint": "a3b74440"
+    },
+    "s2.tribal.temptress.corrupted.seasonal.siren": {
+      "file": null,
+      "source": "s2/Tribal Temptress (Corrupted Seasonal Siren).png",
+      "hash": "75411aca4451a401",
+      "fingerprint": "776be45f"
+    },
+    "s2.vaiva.petrauskait.colorgarde.season.2.ver": {
+      "file": null,
+      "source": "s2/Vaiva Petrauskait_Colorgarde (Season 2 Version).png",
+      "hash": "7af3c0c1ca8d79aa",
+      "fingerprint": "aa3d013c"
+    },
+    "s2.wild.maiden.corrupted.iron.maiden": {
+      "file": null,
+      "source": "s2/Wild Maiden (Corrupted Iron Maiden).png",
+      "hash": "ca4b5b3d2f5f9555",
+      "fingerprint": "740343e4"
+    },
+    "s3.adrian.tylow.shacklaw": {
+      "file": null,
+      "source": "s3/Adrian Tylow_Shacklaw.png",
+      "hash": "5a99f2c097e8c284",
+      "fingerprint": "1771b749"
+    },
+    "s3.blood.bound.corrupted.emeral.allure": {
+      "file": null,
+      "source": "s3/Blood Bound (Corrupted Emerald Allure).png",
+      "hash": "297befe330694ee0",
+      "fingerprint": "dd4dc313"
+    },
+    "s3.blood.bride.corrupted.umbra": {
+      "file": null,
+      "source": "s3/Blood Bride (Corrupted Umbra).png",
+      "hash": "6a3b49346258a25e",
+      "fingerprint": "79b3f73e"
+    },
+    "s3.crazy.cupid.treated.zara.embarr": {
+      "file": null,
+      "source": "s3/Crazy Cupid (Treat Zara Embarr).png",
+      "hash": "db2a8801681bbc37",
+      "fingerprint": "96608964"
+    },
+    "s3.darkit.treated.lucia.lulu.illusi": {
+      "file": null,
+      "source": "s3/Darkit (Treated Lucia _Lulu_ Illusi).png",
+      "hash": "8a0777f6a964a84b",
+      "fingerprint": "cbd79366"
+    },
+    "s3.elizabeth.ellie.addison": {
+      "file": null,
+      "source": "s3/Elizabeth _Ellie_ Addison.png",
+      "hash": "8401095b5752e514",
+      "fingerprint": "ad06979f"
+    },
+    "s3.executaur.treated.elizabeth.ellie.addison": {
+      "file": null,
+      "source": "s3/Executaur (Treated Elizabeth _Ellie_ Addison).png",
+      "hash": "0076dbff1be067d5",
+      "fingerprint": "049fb5bd"
+    },
+    "s3.keira.cooper": {
+      "file": null,
+      "source": "s3/Keira Cooper.png",
+      "hash": "d4243a106d1a9aab",
+      "fingerprint": "a6b0b34d"
+    },
+    "s3.little.princess.treated.keira.cooper": {
+      "file": null,
+      "source": "s3/Little Princess (Treated Keira Cooper).png",
+      "hash": "2a5ee8d2d2f6ff13",
+      "fingerprint": "dc065797"
+    },
+    "s3.lucia.lulu.illusi.chamisulli": {
+      "file": null,
+      "source": "s3/Lucia _Lulu_ Illusi_Chamisulli.png",
+      "hash": "5cb89fd8c9fd2da0",
+      "fingerprint": "fc44442c"
+    },
+    "s3.melissa.liz.ashton": {
+      "file": null,
+      "source": "s3/Melissa _Liz_ Ashton.png",
+      "hash": "fd962729654920d5",
+      "fingerprint": "9906636e"
+    },
+    "s3.midnight.gift.cleansed.midnight.treat": {
+      "file": null,
+      "source": "s3/Midnight Gift (Cleansed Midnight Treat).png",
+      "hash": "2b4c7c4b1dfdb08e",
+      "fingerprint": "05d07fe3"
+    },
+    "s3.miracle.mira.nillava.vanillamirror": {
+      "file": null,
+      "source": "s3/Miracle _Mira_ Nillava_VanillaMirror.png",
+      "hash": "18e2fa4712afae00",
+      "fingerprint": "ad0f6c75"
+    },
+    "s3.oversight.treated.melissa.liz.ashton": {
+      "file": null,
+      "source": "s3/Oversight (Treated Melissa _Liz_ Ashton).png",
+      "hash": "813e3bb2d5bfa7f9",
+      "fingerprint": "94d6d1a3"
+    },
+    "s3.pink.mirage.treated.miracle.mira.nillava": {
+      "file": null,
+      "source": "s3/Pink Mirage (Treated Miracle _Mira_ Nillava).png",
+      "hash": "478a888281f4038e",
+      "fingerprint": "874d56bc"
+    },
+    "s3.selina.cross.umbra": {
+      "file": null,
+      "source": "s3/Selina Cross_Umbra.png",
+      "hash": "0f6da675af9aee34",
+      "fingerprint": "e71e0996"
+    },
+    "s3.the.sensational.sirens": {
+      "file": null,
+      "source": "s3/Tessa Ervone_Emerald Allure & Amy Matic_Seasonal Siren.png",
+      "hash": "1eb203264b364796",
+      "fingerprint": "e6f95e67"
+    },
+    "s3.vireze.tylow.midnight.treat": {
+      "file": null,
+      "source": "s3/Vireze Tylow_Midnight Treat.png",
+      "hash": "542d76d9d3ae135e",
+      "fingerprint": "76784da2"
+    },
+    "s3.zara.embarr": {
+      "file": null,
+      "source": "s3/Zara Embarr.png",
+      "hash": "852aca4f8fe2b0d9",
+      "fingerprint": "22cf6280"
+    },
+    "s4.anastasia.carnaz.gravitasha": {
+      "file": null,
+      "source": "s4/main_anastasia-carnaz-gravitasha-9522800bd91c_spec_v2.png",
+      "hash": "568232cbd1e94f0b",
+      "fingerprint": "a03f525a"
+    },
+    "s4.bird.cage.corrupted.hula.hawk": {
+      "file": null,
+      "source": "s4/Bird Cage (Corrupted Hula Hawk).png",
+      "hash": "4fe90e0c1c7ab34f",
+      "fingerprint": "6078af86"
+    },
+    "s4.brie.anderson.hula.hawk": {
+      "file": null,
+      "source": "s4/main_brie-anderson-hula-hawk-5eaee19135f5_spec_v2.png",
+      "hash": "9d63cc627655f3e5",
+      "fingerprint": "726a114a"
+    },
+    "s4.christina.chris.goldclaw.crimson.crush": {
+      "file": null,
+      "source": "s4/main_christina-chris-goldclaw-crimson-crush-de636df46a83_spec_v2.png",
+      "hash": "90beaf00d03604de",
+      "fingerprint": "102fa0e7"
+    },
+    "s4.claire.atropos.recorrupted": {
+      "file": null,
+      "source": "s4/main_claire-atropos-recorrupted-8ab6fb3e42a5_spec_v2.png",
+      "hash": "349802b5c90ca375",
+      "fingerprint": "735d17da"
+    },
+    "s4.cyber.dragon.infected.crimson.crush": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-Cyber_Dragon_(Infected_Crimson_Crush).png",
+      "hash": "e678a3fead387af1",
+      "fingerprint": "efac6fe5"
+    },
+    "s4.damage.control": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-Damage_Control.png",
+      "hash": "78535fd9acd58637",
+      "fingerprint": "f93c5a0d"
+    },
+    "s4.dark.dragon.corrupted.crimson.crush": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-Dark_Dragon_(Corrupted_Crimson_Crush).png",
+      "hash": "bf9713e7f3c72a8f",
+      "fingerprint": "7ee0f64a"
+    },
+    "s4.event.horizon.corrupted.gravitasha": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-Event_Horizon_(Corrupted_Gravitasha).png",
+      "hash": "a407e09368e1818f",
+      "fingerprint": "e17cefef"
+    },
+    "s4.frost.flight.coldhearted.hula.hawk": {
+      "file": null,
+      "source": "s4/Frost Flight (Coldhearted Hula Hawk).png",
+      "hash": "f74be923f90e153f",
+      "fingerprint": "35931b64"
+    },
+    "s4.ginny.aylesworth.avalanche": {
+      "file": null,
+      "source": "s4/main_ginny-aylesworth-avalanche-a1e9774a02c6_spec_v2.png",
+      "hash": "36fe3b5c13fcaccf",
+      "fingerprint": "77abcb4c"
+    },
+    "s4.ice.queen.coldhearted.claire.atropos": {
+      "file": null,
+      "source": "s4/main_ice-queen-coldhearted-claire-atropos-c896cfc0ae33_spec_v2.png",
+      "hash": "e7818945d7799c84",
+      "fingerprint": "a8f30214"
+    },
+    "s4.jack.dune.gold.slasher": {
+      "file": null,
+      "source": "s4/main_jack-dune-gold-slasher-16367811bcc0_spec_v2.png",
+      "hash": "b97acf2dad89369e",
+      "fingerprint": "e064a89c"
+    },
+    "s4.lilliana.shroud.cyber.courtesan": {
+      "file": null,
+      "source": "s4/Liliana_ShroudCyber_Courtesan_(&_Akui_KodenCyber_Sakura).png",
+      "hash": "de42fd96fb3a8ed9",
+      "fingerprint": "d90dc220"
+    },
+    "s4.noah.atropos.phage.clotho": {
+      "file": null,
+      "source": "s4/Noah Atropos_Phage Clotho.png",
+      "hash": "bbfce49870e45d62",
+      "fingerprint": "5516f4f0"
+    },
+    "s4.o.v.e.n.snowfall.coldhearted.gravitasha": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-O.V.E.N.Snowfall_(Coldhearted_Gravitasha).png",
+      "hash": "b838ea61ccc39631",
+      "fingerprint": "da613ae9"
+    },
+    "s4.pink.icicle.coldhearted-pink-power": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-Pink_Icicle_(Coldhearted_Pink_Power).png",
+      "hash": "168783a36244579f",
+      "fingerprint": "4d3a5cb5"
+    },
+    "s4.roseline.rosy.bellington.pink.power": {
+      "file": null,
+      "source": "s4/main_roseline-rosy-bellington-pink-power-ae37160790f4_spec_v2.png",
+      "hash": "3b94b4816a00888d",
+      "fingerprint": "85d38c44"
+    },
+    "s4.selina.cross.umbra.vampire": {
+      "file": null,
+      "source": "s4/Selina Cross_Umbra (Vampire).png",
+      "hash": "7108ab14e019d720",
+      "fingerprint": "a7a17b83"
+    },
+    "s4.shattered.shard.corrupted.pink.power": {
+      "file": null,
+      "source": "s4/Shattered Shard (Corrupted Pink Power).png",
+      "hash": "7a0928f98ef9f84a",
+      "fingerprint": "cc0b6599"
+    },
+    "s4.vaiva.petrauskaite.colorgarde.season.4.ver": {
+      "file": null,
+      "source": "s4/[💎datacat][Voidsong]-Vaiva_PetrauskaiteColorgarde_(Season_4_version).png",
+      "hash": "a47b301b157cab39",
+      "fingerprint": "b4dd2105"
+    }
+  }
+}

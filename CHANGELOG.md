@@ -6,6 +6,31 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Portraits** - a generated `data/characters/avatars.json` manifest, a PNG
+  card scanner (`npm run build:avatars`), per-user **Sync portraits**, a
+  **Download manifest** merge path, and a resolver that prefers the manifest,
+  then a sync override, then installed cards, then initials. Ambiguous short
+  names never swap portraits.
+- **PNG card ingestion** - `build-data` reads a PNG's embedded `chara`/`ccv3`
+  chunk, pairs a JSON twin as `avatarPath`, and validates malformed PNGs.
+- **Guest characters** - any registry character can guest in any playable
+  season after a visible warning and mandatory acknowledgment. Guests record
+  `flags.guestCharacter` and `canonMode: 'adapted'`; dependent beats adapt and
+  the prompt gains a non-canon guest block. Sandbox is unchanged.
+- **Portrait-first character picker** - a searchable, filterable picker with
+  roster/guest sections, form lineage, and keyboard navigation.
+- **Form profiles** - seeding stores every form's card profile; transforms swap
+  appearance, attire, abilities, traits, likes, dislikes, goals, and notes while
+  preserving resources, status, relationships, and manual edits.
+- **Form Architect** - generates missing form profiles from the base card, form
+  rule, season threats/factions, other cast, and the recent scene. Generated
+  forms are stored in `flags.generatedForms`, badged in the Codex, editable,
+  regeneratable, approvable, and exportable.
+- **Cross-season form packs** - `Blazing Prism` can join the S1 Vaiva pack; the
+  build reports ungrouped alternates and unreachable rules.
+
 ## [1.1.0] - 2026-11-18
 
 **The Living City.** Six features over the existing `WorldState`; all state is
