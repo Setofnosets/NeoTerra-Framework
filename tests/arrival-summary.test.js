@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildArrivalSummary } from '../src/ui/arrival-summary.js';
+import { buildArrivalToast, renderToastMarkup, toastLifetime } from '../src/ui/toasts.js';
+import { shouldAnnounceArrival } from '../src/ui/shell.js';
 
 function makeState({
     flags = {},
@@ -196,4 +198,65 @@ test('a location without a district still yields a summary', () => {
     assert.equal(summary.destination, 'Tower');
     assert.equal(summary.district, null);
     assert.equal(summary.timeSlot, 'Dawn');
+});
+
+test('the arrival toast carries the destination, slot, district, and encounter', () => {
+    const summary = buildArrivalSummary({ state: makeState({ flags: TRAVEL_FLAGS }) });
+    const toast = buildArrivalToast(summary, { mapStayedOpen: true });
+    assert.equal(toast.id, `travel:loc.a:loc.b:${LAST_AT}`);
+    assert.equal(toast.type, 'travel-arrival');
+    assert.equal(toast.title, 'Arrived at Docks');
+    assert.match(toast.message, /Evening/);
+    assert.match(toast.message, /West/);
+    assert.match(toast.message, /No hostiles/);
+    assert.equal(toast.tone, 'info');
+    assert.equal(toast.ttlMs, 9000);
+    assert.deepEqual(toast.action, { id: 'return-to-chat', label: 'Return to chat' });
+
+    // Close-on-travel is informational: the map is already gone.
+    const informational = buildArrivalToast(summary, { mapStayedOpen: false });
+    assert.equal(informational.action, null);
+    assert.equal(buildArrivalToast(null), null);
+});
+
+test('the toast markup renders an optional action and existing toasts are unchanged', () => {
+    const summary = buildArrivalSummary({ state: makeState({ flags: TRAVEL_FLAGS }) });
+    const withAction = renderToastMarkup(buildArrivalToast(summary, { mapStayedOpen: true }));
+    assert.match(withAction, /data-neoterra-toast-action="return-to-chat"/);
+    assert.match(withAction, />Return to chat</);
+
+    const withoutAction = renderToastMarkup(buildArrivalToast(summary, { mapStayedOpen: false }));
+    assert.doesNotMatch(withoutAction, /data-neoterra-toast-action/);
+
+    const plain = renderToastMarkup({ id: 'x', title: 'Title', message: 'Body', tone: 'info' });
+    assert.doesNotMatch(plain, /neoterra-toast-action/);
+    assert.match(plain, /data-neoterra-toast="x"/);
+});
+
+test('shouldAnnounceArrival gates rejected, no-op, switched-chat, and disabled cases', () => {
+    const settings = { map: { arrivalFeedback: true } };
+    const ok = { ok: true, from: 'loc.a', to: 'loc.b' };
+    assert.equal(shouldAnnounceArrival({ result: ok, settings, liveChatId: 'c1', chatId: 'c1' }), true);
+    // No arrival for a rejected travel or `alreadyThere`.
+    assert.equal(shouldAnnounceArrival({ result: { ok: false }, settings, chatId: 'c1' }), false);
+    assert.equal(shouldAnnounceArrival({ result: { ok: true, alreadyThere: true }, settings }), false);
+    assert.equal(shouldAnnounceArrival({ result: null, settings }), false);
+    // The setting is the single switch.
+    assert.equal(shouldAnnounceArrival({
+        result: ok,
+        settings: { map: { arrivalFeedback: false } },
+        liveChatId: 'c1',
+        chatId: 'c1',
+    }), false);
+    // A chat switch during the awaited post never lands in the new chat.
+    assert.equal(shouldAnnounceArrival({ result: ok, settings, liveChatId: 'c2', chatId: 'c1' }), false);
+    assert.equal(shouldAnnounceArrival({ result: ok, settings, liveChatId: null, chatId: 'c1' }), false);
+});
+
+test('toastLifetime prefers the per-push ttl and falls back to the stack default', () => {
+    assert.equal(toastLifetime({ ttlMs: 9000 }, 6500), 9000);
+    assert.equal(toastLifetime({}, 6500), 6500);
+    assert.equal(toastLifetime(null, 6500), 6500);
+    assert.equal(toastLifetime({ ttlMs: 0 }, 6500), 6500);
+    assert.equal(toastLifetime({ ttlMs: 'soon' }, 6500), 6500);
 });

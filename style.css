@@ -4027,6 +4027,24 @@ body.neoterra-dialog-open {
     color: var(--nt-accent);
 }
 
+.neoterra-toast-action {
+    margin-top: 0.3rem;
+    padding: 0.15rem 0.45rem;
+    font-family: inherit;
+    font-size: 0.7rem;
+    color: var(--nt-accent);
+    background: transparent;
+    border: 1px solid var(--nt-border);
+    border-radius: var(--nt-radius-sm);
+    cursor: pointer;
+}
+
+.neoterra-toast-action:hover,
+.neoterra-toast-action:focus-visible {
+    border-color: var(--nt-accent);
+    outline: none;
+}
+
 @media (max-width: 720px) {
     .neoterra-toasts {
         left: 0.5rem;

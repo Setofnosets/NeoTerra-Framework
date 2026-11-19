@@ -194,6 +194,35 @@ export function buildErrorToasts(errors = [], { detailsHref = null } = {}) {
     }));
 }
 
+/**
+ * A travel arrival toast for the point of attention.
+ *
+ * `summary` comes from `buildArrivalSummary`; the id is the summary key so the
+ * map's double refresh and the toast stack id-dedupe cannot show it twice. The
+ * action is offered only when the map stayed open: in close-on-travel the toast
+ * is informational because the chat is already in front.
+ */
+export function buildArrivalToast(summary, { mapStayedOpen = false } = {}) {
+    if (!summary?.key) {
+        return null;
+    }
+    const slot = summary.timeSlot ?? 'Unknown time';
+    const district = summary.district ?? 'No district';
+    const hostiles = summary.hasEncounter
+        ? `Hostiles: ${asArray(summary.hostiles).join(', ')}`
+        : 'No hostiles';
+    return {
+        id: summary.key,
+        type: 'travel-arrival',
+        title: `Arrived at ${summary.destination}`,
+        message: `${slot} · ${district} · ${hostiles}`,
+        tone: 'info',
+        // Arrivals stay a little longer than the default delta toasts.
+        ttlMs: 9000,
+        action: mapStayedOpen ? { id: 'return-to-chat', label: 'Return to chat' } : null,
+    };
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -210,12 +239,22 @@ export function renderToastMarkup(toast) {
     const link = toast.href
         ? ` <a class="neoterra-toast-details" href="${escapeHtml(toast.href)}">details</a>`
         : '';
+    const action = toast.action?.label
+        ? `<button type="button" class="neoterra-toast-action"
+            data-neoterra-toast-action="${escapeHtml(toast.action.id ?? 'action')}">${escapeHtml(toast.action.label)}</button>`
+        : '';
     return `
     <div class="neoterra-toast" data-neoterra-toast="${escapeHtml(toast.id)}"
-        data-tone="${escapeHtml(toast.tone ?? 'info')}" role="status">
-        <span class="neoterra-toast-title">${escapeHtml(toast.title)}</span>
-        <span class="neoterra-toast-message">${escapeHtml(toast.message)}${link}</span>
+        data-tone="${escapeHtml(toast.tone ?? 'info')}" role="group">
+        <span class="neoterra-toast-title" role="status">${escapeHtml(toast.title)}</span>
+        <span class="neoterra-toast-message" role="status">${escapeHtml(toast.message)}${link}</span>
+        ${action}
     </div>`;
+}
+
+/** How long a toast stays: per-push override, else the stack default. */
+export function toastLifetime(toast, defaultTtlMs = 6500) {
+    return Number.isFinite(toast?.ttlMs) && toast.ttlMs > 0 ? toast.ttlMs : defaultTtlMs;
 }
 
 function hasDom() {
@@ -249,7 +288,7 @@ export function mountToasts({ host = null, max = 5, ttlMs = 6500 } = {}) {
             existing.add(toast.id);
             container.insertAdjacentHTML('beforeend', renderToastMarkup(toast));
             const element = container.lastElementChild;
-            setTimeout(() => element?.remove?.(), ttlMs);
+            setTimeout(() => element?.remove?.(), toastLifetime(toast, ttlMs));
             shown += 1;
             if (container.children.length > max) {
                 container.firstElementChild?.remove?.();

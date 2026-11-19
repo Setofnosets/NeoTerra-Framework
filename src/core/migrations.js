@@ -379,6 +379,7 @@ export function normalizeSettings(settings) {    const defaults = DEFAULT_SETTIN
             showOffscreen: asBoolean(settings.map?.showOffscreen, defaults.map.showOffscreen),
             showFactionTint: asBoolean(settings.map?.showFactionTint, defaults.map.showFactionTint),
             closeOnTravel: asBoolean(settings.map?.closeOnTravel, defaults.map.closeOnTravel),
+            arrivalFeedback: asBoolean(settings.map?.arrivalFeedback, defaults.map.arrivalFeedback),
             maxHeadlines: asNumber(settings.map?.maxHeadlines, defaults.map.maxHeadlines, {
                 min: 1,
                 max: 20,

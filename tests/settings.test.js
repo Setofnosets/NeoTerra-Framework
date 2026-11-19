@@ -73,6 +73,8 @@ test('defaults match the plan and are frozen', () => {
 
     // A successful travel closes the map shell and reveals the chat.
     assert.equal(DEFAULT_SETTINGS.map.closeOnTravel, true);
+    // Arrival cues ship on; disabling them is the rollback switch.
+    assert.equal(DEFAULT_SETTINGS.map.arrivalFeedback, true);
 
     assert.equal(DEFAULT_SETTINGS.clock.enabled, true);
     assert.equal(DEFAULT_SETTINGS.clock.slotsPerDay, 5);
@@ -128,6 +130,22 @@ test('map.closeOnTravel round-trips through save and read', () => {
 test('the Settings map section exposes map.closeOnTravel', () => {
     const html = readFileSync(new URL('../src/ui/settings.html', import.meta.url), 'utf8');
     assert.match(html, /data-neoterra-path="map\.closeOnTravel"/);
+});
+
+test('map.arrivalFeedback normalizes with the default and round-trips', () => {
+    const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.equal(defaults.map.arrivalFeedback, true);
+
+    const off = migrateSettings({ schemaVersion: SCHEMA_VERSION, map: { arrivalFeedback: false } });
+    assert.equal(off.map.arrivalFeedback, false);
+
+    // A persisted non-boolean must not reach the shell: it reads with
+    // `!== false`, so a string "false" would keep the cues on.
+    const malformed = migrateSettings({ schemaVersion: SCHEMA_VERSION, map: { arrivalFeedback: 'false' } });
+    assert.equal(malformed.map.arrivalFeedback, true);
+
+    const html = readFileSync(new URL('../src/ui/settings.html', import.meta.url), 'utf8');
+    assert.match(html, /data-neoterra-path="map\.arrivalFeedback"/);
 });
 
 test('fresh install writes defaults exactly once', () => {

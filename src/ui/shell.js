@@ -41,7 +41,8 @@ import { createWindowManager } from './window-manager.js';
 import { mountJournal } from './journal.js';
 import { mountCommandPalette } from './command-palette.js';
 import { mountTurnStatus } from './turn-status.js';
-import { buildErrorToasts, diffWorldState, mountToasts } from './toasts.js';
+import { buildArrivalToast, buildErrorToasts, diffWorldState, mountToasts } from './toasts.js';
+import { buildArrivalSummary } from './arrival-summary.js';
 import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
 import { loadRegistry } from '../data/registry.js';
 import { loadLocations } from '../data/locations.js';
@@ -1445,6 +1446,27 @@ export function shouldCloseAfterTravel(posted, settings) {
     return settings?.map?.closeOnTravel !== false;
 }
 
+/**
+ * Should an accepted travel announce itself to the player? Exported for tests.
+ *
+ * `alreadyThere` is a no-op, not an arrival. The setting is the single switch
+ * for every arrival cue. A chat switch during the awaited post must not land
+ * the cue in the new chat: when the runtime has a chat id, the live id must
+ * match it (a missing live id is treated as unknown, not as a match).
+ */
+export function shouldAnnounceArrival({ result, settings, liveChatId = null, chatId = null } = {}) {
+    if (!result || result.ok !== true || result.alreadyThere === true) {
+        return false;
+    }
+    if (settings?.map?.arrivalFeedback === false) {
+        return false;
+    }
+    if (chatId) {
+        return liveChatId === chatId;
+    }
+    return !liveChatId;
+}
+
 function buildMapTravelHandler(context, runtime, panelRef) {
     const travel = runtime?.travel ?? null;
     if (!travel) {
@@ -1484,11 +1506,37 @@ function buildMapTravelHandler(context, runtime, panelRef) {
         const announce = (posted = null) => {
             panelRef?.refresh?.();
             bus.emit(EVENTS.MAP_UPDATED, { travel: result, intro: result.intro ?? null });
+            let settingsNow = null;
+            try {
+                settingsNow = getSettings(refreshContext() ?? context);
+            } catch (error) {
+                logger.debug('Could not read map settings', error);
+            }
             let shouldClose = false;
             try {
-                shouldClose = shouldCloseAfterTravel(posted, getSettings(refreshContext() ?? context));
+                shouldClose = shouldCloseAfterTravel(posted, settingsNow);
             } catch (error) {
                 logger.debug('Could not read map.closeOnTravel', error);
+            }
+            // Arrival cues fire from the travel flow, never the turn diff. A
+            // chat switch during the awaited post must not toast into the new
+            // chat, and `alreadyThere`/rejected travel is not an arrival.
+            const liveChatId = currentChatId(refreshContext() ?? context);
+            const announceArrival = shouldAnnounceArrival({
+                result,
+                settings: settingsNow,
+                liveChatId,
+                chatId: runtime.chatId,
+            });
+            const summary = announceArrival
+                ? buildArrivalSummary({ result, state: runtime.store.get() })
+                : null;
+            if (summary && settingsNow?.map?.arrivalFeedback !== false) {
+                try {
+                    ensureToasts().push([buildArrivalToast(summary, { mapStayedOpen: !shouldClose })]);
+                } catch (error) {
+                    logger.debug('Could not show the arrival toast', error);
+                }
             }
             if (shouldClose) {
                 closeMapSurface();
@@ -1498,7 +1546,13 @@ function buildMapTravelHandler(context, runtime, panelRef) {
             announce();
             return true;
         }
-        const posted = await postTravelOutcome(context, runtime, result, { onPosted: announce });
+        const posted = await postTravelOutcome(context, runtime, result, { onPosted: announce })
+            .catch((error) => {
+                // The move is already committed. A save/post failure must not
+                // swallow the arrival cue: announce what happened.
+                logger.warn('Travel arrival frame failed; keeping the move', error);
+                return null;
+            });
         if (!posted) {
             // No chat/aborted post: still let the map reflect the committed move.
             announce();
@@ -2502,6 +2556,16 @@ function ensureToasts() {
     if (toastStack?.container && !toastStack.container.dataset.neoterraLogLink) {
         toastStack.container.dataset.neoterraLogLink = '1';
         toastStack.container.addEventListener('click', (event) => {
+            const action = event.target.closest?.('[data-neoterra-toast-action]');
+            if (action) {
+                event.preventDefault();
+                if (action.dataset.neoterraToastAction === 'return-to-chat') {
+                    closeMapSurface();
+                    document.getElementById('send_textarea')?.focus?.();
+                    action.closest?.('.neoterra-toast')?.remove?.();
+                }
+                return;
+            }
             const link = event.target.closest?.('.neoterra-toast-details');
             if (!link) {
                 return;

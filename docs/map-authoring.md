@@ -141,6 +141,12 @@ the shell posts a travel arrival frame into the chat (see
   (`data-neoterra-path="map.closeOnTravel"`).
 - if it is off, leaves the shell open on the map tab.
 
+Every accepted arrival also announces itself from the travel flow (never the
+turn diff): a destination toast with the time slot, district, and encounter
+line. While the map stays open the toast carries a **Return to chat** action.
+`map.arrivalFeedback` (default `true`) is the single switch for these cues;
+turning it off restores the earlier behavior without a revert.
+
 A rejected travel (blocked route, combat active, no route) keeps the map open
 and posts nothing. Merely refreshing the map, switching tabs, or re-rendering
 the panel never closes the shell.
