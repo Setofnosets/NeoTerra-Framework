@@ -9,6 +9,7 @@
 import { applyWorldEvents } from '../state/reducer.js';
 import { validateWorldState } from '../state/world-state.js';
 import { isClockHeld } from '../core/world-clock.js';
+import { getCurrentAct } from '../data/beats.js';
 
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -45,6 +46,137 @@ export function getAgentCadence(settings, agentId) {
             : 6,
         onLocationChange: agent?.onLocationChange !== false,
     };
+}
+
+/** Per-agent bookkeeping stored under `state.flags[agentId]`. */
+function agentFlags(state, agentId) {
+    const flags = isObject(state?.flags) ? state.flags : {};
+    return isObject(flags[agentId]) ? flags[agentId] : {};
+}
+
+/** True when the agent's block is present and not explicitly disabled. */
+function agentConfigured(settings, agentId) {
+    return isObject(settings?.agents?.[agentId]);
+}
+
+/**
+ * Cast Director cadence. Travel/arrival always passes `trigger:'location'`;
+ * ordinary turns follow `cadence: 'sceneChange'` (location change or every
+ * `everyNTurns`) or a pure `everyNTurns` schedule.
+ */
+export function shouldRunCastDirector({
+    state,
+    settings,
+    trigger = 'turn',
+    force = false,
+    turn = state?.meta?.turn ?? 0,
+} = {}) {
+    if (!agentConfigured(settings, 'castDirector')) {
+        return { run: false, reason: 'not-configured' };
+    }
+    const cadence = getAgentCadence(settings, 'castDirector');
+    if (!cadence.enabled) {
+        return { run: false, reason: 'disabled' };
+    }
+    if (force) {
+        return { run: true, reason: 'forced' };
+    }
+    if (trigger === 'location') {
+        return { run: true, reason: 'location-change' };
+    }
+    const flags = agentFlags(state, 'castDirector');
+    if (!Number.isInteger(flags.lastRunTurn)) {
+        return { run: true, reason: 'never-run' };
+    }
+    if (cadence.cadence === 'everyNTurns') {
+        const elapsed = Number(turn) - flags.lastRunTurn;
+        return elapsed >= cadence.everyNTurns
+            ? { run: true, reason: `every-${cadence.everyNTurns}-turns` }
+            : { run: false, reason: 'not-due' };
+    }
+    if (flags.lastLocationId && flags.lastLocationId !== state?.scene?.locationId) {
+        return { run: true, reason: 'scene-change' };
+    }
+    const elapsed = Number(turn) - flags.lastRunTurn;
+    return elapsed >= cadence.everyNTurns
+        ? { run: true, reason: `every-${cadence.everyNTurns}-turns` }
+        : { run: false, reason: 'not-due' };
+}
+
+/**
+ * Lore cadence: every `everyNTurns` turns, or whenever the act boundary moves.
+ */
+export function shouldRunLore({
+    state,
+    settings,
+    season = null,
+    trigger = 'turn',
+    force = false,
+    turn = state?.meta?.turn ?? 0,
+} = {}) {
+    if (!agentConfigured(settings, 'lore')) {
+        return { run: false, reason: 'not-configured' };
+    }
+    const cadence = getAgentCadence(settings, 'lore');
+    if (!cadence.enabled) {
+        return { run: false, reason: 'disabled' };
+    }
+    if (force) {
+        return { run: true, reason: 'forced' };
+    }
+    if (trigger === 'act') {
+        return { run: true, reason: 'act-change' };
+    }
+    const flags = agentFlags(state, 'lore');
+    const act = getCurrentAct(state, season);
+    if (flags.lastRunAct && act !== flags.lastRunAct) {
+        return { run: true, reason: 'act-change' };
+    }
+    if (!Number.isInteger(flags.lastRunTurn)) {
+        return { run: true, reason: 'never-run' };
+    }
+    const elapsed = Number(turn) - flags.lastRunTurn;
+    return elapsed >= cadence.everyNTurns
+        ? { run: true, reason: `every-${cadence.everyNTurns}-turns` }
+        : { run: false, reason: 'not-due' };
+}
+
+/**
+ * Auditor cadence: act boundaries by default, with an `everyNTurns` fallback.
+ */
+export function shouldRunAuditor({
+    state,
+    settings,
+    season = null,
+    trigger = 'turn',
+    force = false,
+    turn = state?.meta?.turn ?? 0,
+} = {}) {
+    if (!agentConfigured(settings, 'auditor')) {
+        return { run: false, reason: 'not-configured' };
+    }
+    const cadence = getAgentCadence(settings, 'auditor');
+    if (!cadence.enabled) {
+        return { run: false, reason: 'disabled' };
+    }
+    if (force) {
+        return { run: true, reason: 'forced' };
+    }
+    const flags = agentFlags(state, 'auditor');
+    const act = getCurrentAct(state, season);
+    if (trigger === 'act' || (flags.lastRunAct && act !== flags.lastRunAct)) {
+        return { run: true, reason: 'act-change' };
+    }
+    if (!Number.isInteger(flags.lastRunTurn)) {
+        return { run: true, reason: 'never-run' };
+    }
+    if (cadence.cadence === 'actChange') {
+        return { run: false, reason: 'not-act-boundary' };
+    }
+    const elapsed = Number(turn) - flags.lastRunTurn;
+    return elapsed >= cadence.everyNTurns
+        ? { run: true, reason: `every-${cadence.everyNTurns}-turns` }
+        : { run: false, reason: 'not-due' };
 }
 
 /**
@@ -145,6 +277,30 @@ export function applyEventBatch(store, events, {
 }
 
 /**
+ * Recap text for the Journal: the agent may supply `recap`; otherwise the
+ * most recent entries are rendered deterministically. Never empty when entries
+ * exist, so the Journal always has something to show.
+ */
+function buildLoreRecap(result, entries, state, season) {
+    const supplied = typeof result?.recap === 'string' ? result.recap.trim() : '';
+    if (supplied) {
+        return supplied.slice(0, 1200);
+    }
+    const list = Array.isArray(entries) ? entries.slice(-4) : [];
+    if (list.length === 0) {
+        const rationale = typeof result?.rationale === 'string' ? result.rationale.trim() : '';
+        return rationale ? rationale.slice(0, 1200) : '';
+    }
+    const title = season?.title ?? state?.seasonId ?? 'the story';
+    const lines = list.map((entry) => {
+        const text = typeof entry?.content === 'string' ? entry.content.trim() : '';
+        const label = typeof entry?.title === 'string' ? entry.title.trim() : '';
+        return [label, text].filter(Boolean).join(': ');
+    }).filter(Boolean);
+    return `Previously in ${title}: ${lines.join(' ')}`.slice(0, 1200);
+}
+
+/**
  * Create the initiative flow. Every agent dependency is optional so the flow
  * can be used with only the Storyline Tracker, or only the Architect.
  */
@@ -157,6 +313,7 @@ export function createInitiative({
     architect = null,
     storyline = null,
     auditor = null,
+    lore = null,
     ending = null,
     getSettings = null,
     log = null,
@@ -313,7 +470,7 @@ export function createInitiative({
         }
     }
 
-    async function runAudit({ recentProse = '', recentMessages = [], signal = null } = {}) {
+    async function runAudit({ recentProse = '', recentMessages = [], signal = null, force = false, trigger = 'turn' } = {}) {
         if (!auditor || typeof auditor.run !== 'function') {
             return { ran: false, reason: 'no-auditor', findings: [] };
         }
@@ -321,19 +478,57 @@ export function createInitiative({
         if (!isObject(current)) {
             return { ran: false, reason: 'no-state', findings: [] };
         }
+        const settingsNow = settings();
+        const decision = shouldRunAuditor({
+            state: current,
+            settings: settingsNow,
+            season,
+            trigger,
+            force,
+            turn: current.meta?.turn ?? 0,
+        });
+        if (!decision.run) {
+            return { ran: false, reason: decision.reason, findings: [] };
+        }
+        const act = getCurrentAct(current, season);
         try {
             const result = await auditor.run({
                 state: current,
                 season,
                 recentProse,
                 recentMessages,
+                settings: settingsNow,
                 signal,
             });
+            const findings = Array.isArray(result.findings) ? result.findings : [];
+            const summary = result.summary ?? { errors: 0, warnings: 0, info: 0 };
+            const applied = applyEventBatch(store, [], {
+                context: context(),
+                log,
+                patch: (next) => ({
+                    ...next,
+                    flags: {
+                        ...(next.flags ?? {}),
+                        auditor: {
+                            act,
+                            lastRunAct: act,
+                            lastRunTurn: next.meta?.turn ?? 0,
+                            findings,
+                            summary,
+                            source: result.source ?? 'deterministic',
+                            ranAt: clock(),
+                        },
+                    },
+                }),
+            });
             return {
-                ran: true,
-                findings: result.findings ?? [],
-                summary: result.summary ?? { errors: 0, warnings: 0, info: 0 },
+                ran: applied.ok,
+                reason: applied.ok ? null : 'apply-failed',
+                findings,
+                summary,
                 source: result.source,
+                error: applied.error ?? result.error ?? null,
+                state: applied.state,
             };
         } catch (error) {
             if (error?.name === 'AgentAbortedError' || error?.code === 'AGENT_ABORTED') {
@@ -341,6 +536,130 @@ export function createInitiative({
             }
             logWarning(log, 'Auditor pass failed; no findings reported', error);
             return { ran: false, reason: 'failed', findings: [], error: error?.message ?? String(error) };
+        }
+    }
+
+    /**
+     * Lore cadence pass. The recap written to `flags.lore.recap` is what the
+     * Journal and Session Home read; the agent's entries are kept alongside it
+     * so an export or a future world-book pass can reuse them.
+     */
+    async function runLore({
+        recentProse = '',
+        recentMessages = [],
+        existingEntries = [],
+        candidates = [],
+        signal = null,
+        force = false,
+        trigger = 'turn',
+    } = {}) {
+        if (!lore || typeof lore.run !== 'function') {
+            return { ran: false, reason: 'no-lore', entries: [] };
+        }
+        const current = state();
+        if (!isObject(current)) {
+            return { ran: false, reason: 'no-state', entries: [] };
+        }
+        const settingsNow = settings();
+        const decision = shouldRunLore({
+            state: current,
+            settings: settingsNow,
+            season,
+            trigger,
+            force,
+            turn: current.meta?.turn ?? 0,
+        });
+        if (!decision.run) {
+            return { ran: false, reason: decision.reason, entries: [] };
+        }
+        const act = getCurrentAct(current, season);
+        try {
+            const result = await lore.run({
+                state: current,
+                season,
+                recentProse,
+                recentMessages,
+                existingEntries: Array.isArray(current?.flags?.lore?.entries)
+                    ? current.flags.lore.entries
+                    : existingEntries,
+                candidates,
+                settings: settingsNow,
+                signal,
+            });
+            if (result?.enabled === false) {
+                return { ran: false, reason: 'disabled', entries: [] };
+            }
+            if (result?.ran === false && typeof result?.reason === 'string') {
+                return { ran: false, reason: result.reason, entries: [] };
+            }
+            const entries = Array.isArray(result?.entries) ? result.entries : [];
+            const recap = buildLoreRecap(result, entries, current, season);
+            const previousLore = isObject(current?.flags?.lore) ? current.flags.lore : {};
+            const appliedKeys = new Set(
+                Array.isArray(previousLore.appliedRelationshipKeys)
+                    ? previousLore.appliedRelationshipKeys
+                    : [],
+            );
+            const relationshipEvents = [];
+            for (const event of Array.isArray(result?.relationshipEvents)
+                ? result.relationshipEvents
+                : []) {
+                if (!isObject(event)) {
+                    continue;
+                }
+                const key = typeof event.idempotencyKey === 'string' ? event.idempotencyKey : null;
+                if (key && appliedKeys.has(key)) {
+                    continue;
+                }
+                if (key) {
+                    appliedKeys.add(key);
+                }
+                // `idempotencyKey` is a planner marker, not a reducer field.
+                const { idempotencyKey: _ignored, ...clean } = event;
+                relationshipEvents.push(clean);
+            }
+            const nextKeys = [...appliedKeys].slice(-200);
+            const applied = applyEventBatch(store, relationshipEvents, {
+                context: context(),
+                log,
+                patch: (next) => ({
+                    ...next,
+                    flags: {
+                        ...(next.flags ?? {}),
+                        lore: {
+                            ...(isObject(next.flags?.lore) ? next.flags.lore : {}),
+                            recap: recap || (isObject(next.flags?.lore) && typeof next.flags.lore.recap === 'string'
+                                ? next.flags.lore.recap
+                                : ''),
+                            entries: entries.length > 0
+                                ? entries
+                                : (isObject(next.flags?.lore) && Array.isArray(next.flags.lore.entries)
+                                    ? next.flags.lore.entries
+                                    : []),
+                            appliedRelationshipKeys: nextKeys,
+                            lastRunAct: act,
+                            lastRunTurn: next.meta?.turn ?? 0,
+                            source: result.source ?? 'agent',
+                            ranAt: clock(),
+                        },
+                    },
+                }),
+            });
+            return {
+                ran: applied.ok,
+                reason: applied.ok ? null : 'apply-failed',
+                entries,
+                recap,
+                source: result.source ?? 'agent',
+                error: applied.error ?? result.error ?? null,
+                state: applied.state,
+            };
+        } catch (error) {
+            if (error?.name === 'AgentAbortedError' || error?.code === 'AGENT_ABORTED') {
+                throw error;
+            }
+            logWarning(log, 'Lore pass failed; no journal recap written', error);
+            return { ran: false, reason: 'failed', entries: [], error: error?.message ?? String(error) };
         }
     }
 
@@ -377,6 +696,8 @@ export function createInitiative({
         runArchitect,
         runStoryline,
         runAudit,
+        runAuditor: runAudit,
+        runLore,
         afterTurn,
         afterLocationChange,
         getCadence: () => getAgentCadence(settings(), 'storyline'),

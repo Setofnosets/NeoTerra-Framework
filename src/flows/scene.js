@@ -418,6 +418,7 @@ export function createSceneFlow({
                         rejected: Array.isArray(result.rejected) ? result.rejected : [],
                         source: typeof result.source === 'string' ? result.source : 'agent',
                         deterministic: result.deterministic ?? fallback,
+                        directorRan: true,
                     };
                 }
             } catch (error) {
@@ -433,6 +434,7 @@ export function createSceneFlow({
             rejected: [],
             source: 'deterministic',
             deterministic: fallback,
+            directorRan: false,
         };
     }
 
@@ -462,6 +464,7 @@ export function createSceneFlow({
         rejected = [],
         applied = [],
         encounterSource = 'scene',
+        directorRan = false,
     }) {
         checkExclusivity(state);
         const flags = flagsFor(state);
@@ -552,6 +555,14 @@ export function createSceneFlow({
             manualRemovals,
             lastRunAt: clock(),
             source,
+            // Only a real director pass advances the cadence markers; a plain
+            // deterministic refresh must not make the next turn look "not due".
+            ...(directorRan === true
+                ? {
+                    lastRunTurn: working.meta?.turn ?? 0,
+                    lastLocationId: locationId,
+                }
+                : {}),
         });
         return {
             state: persisted,
@@ -645,6 +656,7 @@ export function createSceneFlow({
             source: result.source,
             rejected: result.rejected,
             applied: applied.applied,
+            directorRan: result.directorRan === true,
         });
     }
 
@@ -665,6 +677,7 @@ export function createSceneFlow({
             rejected: result.rejected,
             applied: applied.applied,
             encounterSource,
+            directorRan: result.directorRan === true,
         });
     }
 

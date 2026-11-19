@@ -18,6 +18,7 @@ import {
 import { applyWorldEvents } from '../state/reducer.js';
 import { validateWorldState } from '../state/world-state.js';
 import { analyzePacing, recordPacing } from '../flows/pacing.js';
+import { shouldRunCastDirector } from '../flows/initiative.js';
 
 export const PLAYER_TRACKER_PATHS = Object.freeze([
     'stamina.current',
@@ -954,13 +955,72 @@ export async function runTurnPipeline({
         emitStage('storyline', 'skipped', { reason: 'absent' });
     }
 
+    // Stage 3.5: the Lore pass on its cadence (every N turns / act change).
+    let loreReport = { ran: false, reason: 'absent' };
+    if (typeof initiative?.runLore === 'function') {
+        emitStage('lore', 'start');
+        try {
+            const report = await initiative.runLore({ recentProse: message, recentMessages });
+            loreReport = isObject(report) ? report : { ran: false, reason: 'invalid-report' };
+            if (loreReport.ran === true) {
+                emitStage('lore', 'done', { reason: loreReport.reason ?? null });
+            } else if (loreReport.reason === 'failed' || loreReport.reason === 'apply-failed') {
+                errors.push({ stage: 'lore', error: loreReport.error ?? 'lore failed' });
+                emitStage('lore', 'failed', { error: loreReport.error ?? 'lore failed' });
+            } else {
+                emitStage('lore', 'skipped', { reason: loreReport.reason ?? 'not-due' });
+            }
+        } catch (error) {
+            loreReport = { ran: false, reason: 'failed', error: error?.message ?? String(error) };
+            logWarning(log, 'Lore pass failed after a message', error);
+            errors.push({ stage: 'lore', error: error?.message ?? String(error) });
+            emitStage('lore', 'failed', { error: error?.message ?? String(error) });
+        }
+    } else {
+        emitStage('lore', 'skipped', { reason: 'absent' });
+    }
+
+    // Stage 3.75: the Auditor on act boundaries. Findings never block play.
+    let auditorReport = { ran: false, reason: 'absent', findings: [] };
+    if (typeof initiative?.runAudit === 'function') {
+        emitStage('auditor', 'start');
+        try {
+            const report = await initiative.runAudit({ recentProse: message, recentMessages });
+            auditorReport = isObject(report) ? report : { ran: false, reason: 'invalid-report', findings: [] };
+            if (auditorReport.ran === true) {
+                emitStage('auditor', 'done', {
+                    findings: Array.isArray(auditorReport.findings) ? auditorReport.findings.length : 0,
+                });
+            } else if (auditorReport.reason === 'failed' || auditorReport.reason === 'apply-failed') {
+                errors.push({ stage: 'auditor', error: auditorReport.error ?? 'audit failed' });
+                emitStage('auditor', 'failed', { error: auditorReport.error ?? 'audit failed' });
+            } else {
+                emitStage('auditor', 'skipped', { reason: auditorReport.reason ?? 'not-due' });
+            }
+        } catch (error) {
+            auditorReport = { ran: false, reason: 'failed', findings: [], error: error?.message ?? String(error) };
+            logWarning(log, 'Auditor pass failed after a message', error);
+            errors.push({ stage: 'auditor', error: error?.message ?? String(error) });
+            emitStage('auditor', 'failed', { error: error?.message ?? String(error) });
+        }
+    } else {
+        emitStage('auditor', 'skipped', { reason: 'absent' });
+    }
+
     // Stage 4: refresh the present cast; manual pins/removals win in scene.js.
+    // The Cast Director runs on its cadence; travel always requests a pass.
     let cast = null;
+    let castDirectorDecision = { run: false, reason: 'no-scene' };
     if (typeof scene?.refreshCast === 'function') {
         emitStage('cast', 'start');
         try {
-            cast = await scene.refreshCast({ runDirector: false });
-            emitStage('cast', 'done');
+            castDirectorDecision = shouldRunCastDirector({
+                state: store.get(),
+                settings,
+                trigger: 'turn',
+            });
+            cast = await scene.refreshCast({ runDirector: castDirectorDecision.run === true });
+            emitStage('cast', 'done', { director: castDirectorDecision.run === true });
         } catch (error) {
             cast = null;
             logWarning(log, 'Cast refresh failed after a message', error);
@@ -999,7 +1059,10 @@ export async function runTurnPipeline({
         pacing: pacingReport,
         tracker: trackerReport,
         storyline,
+        lore: loreReport,
+        auditor: auditorReport,
         cast,
+        castDirector: castDirectorDecision,
         errors,
     };
 }

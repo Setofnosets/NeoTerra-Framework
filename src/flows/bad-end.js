@@ -217,6 +217,16 @@ export function createBadEndFlow({
         if (settingsNow?.badEnds?.enabled !== true) {
             return { enabled: false, calls: 0, recorded: [], skipped: [], epilogues: [] };
         }
+        if (settingsNow?.agents?.badEnd?.enabled === false) {
+            return {
+                enabled: false,
+                reason: 'agent-disabled',
+                calls: 0,
+                recorded: [],
+                skipped: [],
+                epilogues: [],
+            };
+        }
         if (!detector || typeof detector.run !== 'function') {
             throw new TypeError('detectAndRecord requires a bad-end detector');
         }

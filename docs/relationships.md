@@ -61,3 +61,11 @@ edge.
 
 No settings are required: the tab is always available. The graph never mutates
 `WorldState`.
+
+## Lore agent
+
+When `agents.lore.enabled` is on, `initiative.runLore` runs every
+`agents.lore.everyNTurns` turns (default 10) or at an act change. Besides the
+Journal recap, it applies relationship deltas atomically through
+`PLAYER_RELATIONSHIP_DELTA` / `RELATIONSHIP_DELTA` events. Disabling the agent
+stops both the recap and every relationship write.

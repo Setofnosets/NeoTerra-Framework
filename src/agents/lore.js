@@ -43,6 +43,7 @@ const MAX_TITLE = 160;
 const MAX_CONTENT = 1600;
 const MAX_NOTES = 240;
 const MAX_ID = 120;
+const MAX_RECAP = 1200;
 
 /** Sentinels the agent may use for the custom persona. */
 const PLAYER_SENTINELS = Object.freeze(['player', 'custom-player']);
@@ -53,6 +54,7 @@ export const LORE_SCHEMA = Object.freeze({
     additionalProperties: false,
     required: ['entries', 'selections', 'relationships', 'rationale'],
     properties: {
+        recap: { type: 'string', maxLength: MAX_RECAP },
         entries: {
             type: 'array',
             maxItems: MAX_ENTRIES,
@@ -630,6 +632,9 @@ export function normalizeLoreResult({
         rejected,
         notes,
         rationale: typeof output.rationale === 'string' ? output.rationale.slice(0, 600) : '',
+        recap: typeof output.recap === 'string'
+            ? output.recap.trim().slice(0, MAX_RECAP)
+            : '',
     };
 }
 
@@ -641,6 +646,7 @@ function emptyResult(extra = {}) {
         rejected: [],
         notes: [],
         rationale: '',
+        recap: '',
         source: 'deterministic',
         ...extra,
     };

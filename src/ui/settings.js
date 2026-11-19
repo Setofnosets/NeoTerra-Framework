@@ -440,6 +440,12 @@ export function buildAgentConfigMarkup() {
                     <span>Run on location change</span>
                 </label>`
             : '';
+        const seasonStartExtra = Object.hasOwn(defaults, 'seasonStart')
+            ? `<label class="neoterra-check">
+                    <input type="checkbox" data-neoterra-path="agents.${id}.seasonStart">
+                    <span>Run once at season start</span>
+                </label>`
+            : '';
         return `<section class="neoterra-agent-row" data-neoterra-agent="${id}">
             <header class="neoterra-agent-head">
                 <label class="neoterra-check">
@@ -474,6 +480,7 @@ export function buildAgentConfigMarkup() {
                 </label>
                 ${cadenceExtra}
                 ${locationExtra}
+                ${seasonStartExtra}
             </div>
             <label class="neoterra-field neoterra-field-wide">
                 <span>System prompt (blank = built-in)</span>

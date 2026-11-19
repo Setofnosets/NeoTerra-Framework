@@ -56,6 +56,11 @@ import { createPacingFlow } from '../flows/pacing.js';
 import { createNewsroomFlow } from '../flows/newsroom.js';
 import { createNewspaperAgent } from '../agents/newspaper.js';
 import { createStorylineTracker } from '../agents/storyline.js';
+import { createCastDirector } from '../agents/cast-director.js';
+import { createLoreAgent } from '../agents/lore.js';
+import { createAuditor } from '../agents/auditor.js';
+import { createArchitect } from '../agents/architect.js';
+import { createBadEndDetector } from '../agents/bad-end.js';
 import { createFormArchitect } from '../agents/form-architect.js';
 import { createCharacterCreator } from '../agents/character-creator.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
@@ -69,7 +74,10 @@ import {
     runTurnPipeline,
 } from '../agents/state-tracker.js';
 import { createEndingFlow, isEndingScreenActive } from '../flows/ending.js';
+import { createBadEndFlow } from '../flows/bad-end.js';
 import { mountEndingPanel, disposeEndingPanel } from './ending.js';
+import { mountBadEndPanel, disposeBadEndPanel } from './bad-end.js';
+import { mountAgentLog } from './agent-log.js';
 import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
 import {
     avoidEncounter,
@@ -146,13 +154,14 @@ const LIVE_PANELS = new Set(['season', 'map', 'characters', 'relations', 'domain
  * They stay in `SHELL_TABS` for slash-command and last-tab compatibility, but
  * the shell nav renders only the remaining tabs.
  */
-const WINDOW_TABS = new Set(['map', 'characters', 'relations', 'journal']);
+const WINDOW_TABS = new Set(['map', 'characters', 'relations', 'journal', 'log']);
 
 const WINDOW_SPECS = Object.freeze({
     map: { title: 'City Map', initial: { x: 96, y: 64, width: 1100, height: 680 } },
     characters: { title: 'Character Codex', initial: { x: 140, y: 56, width: 980, height: 720 } },
     relations: { title: 'Relations', initial: { x: 180, y: 72, width: 860, height: 620 } },
     journal: { title: 'Journal', initial: { x: 200, y: 60, width: 820, height: 700 } },
+    log: { title: 'Agent log', initial: { x: 260, y: 120, width: 720, height: 480 } },
 });
 
 let ctx = null;
@@ -564,6 +573,29 @@ async function handleSeasonEntered(result) {
     bus.emit(EVENTS.MAP_UPDATED, { reason: 'season-start', seasonId });
 
     const settings = getSettings(live);
+    // Optional season-start Architect pass (`seasonStart`, default off). It
+    // never blocks the opening frame or the CYOA request.
+    if (settings?.agents?.architect?.enabled !== false
+        && settings?.agents?.architect?.seasonStart === true) {
+        const seedChatId = chatId;
+        void Promise.resolve().then(async () => {
+            const runtime = buildInteractionRuntime(refreshContext() ?? live);
+            if (!runtime?.initiative?.runArchitect) {
+                return;
+            }
+            const report = await runtime.initiative.runArchitect();
+            if (report?.ran === true && chatStillCurrent(seedChatId)) {
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'architect' });
+                ensureToasts().push([{
+                    id: 'architect:season-start',
+                    type: 'event',
+                    title: 'Architect',
+                    message: 'The opening layout has been refreshed.',
+                    tone: 'info',
+                }]);
+            }
+        }).catch((error) => logger.warn('Season-start Architect pass failed', error));
+    }
     const auto = settings?.kickoff?.auto === true;
     const prompt = typeof settings?.kickoff?.prompt === 'string' ? settings.kickoff.prompt.trim() : '';
     const index = Number.isInteger(posted.index) ? posted.index : null;
@@ -952,6 +984,15 @@ function windowMountFor(tabId) {
     if (tabId === 'journal') {
         return (host) => mountJournalPanelComponent(refreshContext() ?? ctx, host);
     }
+    if (tabId === 'log') {
+        return (host) => {
+            const controller = mountAgentLog(host);
+            return {
+                refresh: () => controller?.render?.(),
+                dispose: () => controller?.destroy?.(),
+            };
+        };
+    }
     return null;
 }
 
@@ -1139,31 +1180,32 @@ function buildStorylineInitiative(context, store, season) {
     } catch (error) {
         logger.debug('Agent runner unavailable; travel uses the deterministic tracker', error);
     }
-    const storyline = createStorylineTracker({
-        runner,
-        getSettings: () => getSettings(context),
-        log: (message, error) => logger.warn(message, error),
-    });
+    const settings = () => getSettings(context);
+    const log = (message, error) => logger.warn(message, error);
+    const storyline = createStorylineTracker({ runner, getSettings: settings, log });
     const ending = createEndingFlow({
         store,
-        agent: createEpilogueAgent({
-            runner,
-            getSettings: () => getSettings(context),
-            log: (message, error) => logger.warn(message, error),
-        }),
+        agent: createEpilogueAgent({ runner, getSettings: settings, log }),
         season,
-        getSettings: () => getSettings(context),
-        log: (message, error) => logger.warn(message, error),
+        getSettings: settings,
+        log,
     });
+    const castDirector = createCastDirector({ runner, getSettings: settings, log });
+    const lore = createLoreAgent({ runner, getSettings: settings, log });
+    const auditor = createAuditor({ runner, getSettings: settings, log });
+    const architect = createArchitect({ runner, getSettings: settings, log });
     const initiative = createInitiative({
         store,
         season,
         storyline,
         ending,
-        getSettings: () => getSettings(context),
-        log: (message, error) => logger.warn(message, error),
+        lore,
+        auditor,
+        architect,
+        getSettings: settings,
+        log,
     });
-    return { initiative, ending, runner };
+    return { initiative, ending, runner, castDirector };
 }
 
 function buildMapRuntime(context, panelRef) {
@@ -1206,19 +1248,21 @@ function buildMapRuntime(context, panelRef) {
         return { chatId, store, panelRef, travel: null };
     }
     const season = metadata.neoterra?.seasonDefinition ?? null;
-    const scene = sharedInteraction?.scene ?? createSceneFlow({
-        store,
-        season,
-        getSettings: () => getSettings(context),
-        log: (message, error) => logger.warn(message, error),
-    });
-    const { initiative, ending, runner } = sharedInteraction?.initiative
+    const { initiative, ending, runner, castDirector } = sharedInteraction?.initiative
         ? {
             initiative: sharedInteraction.initiative,
             ending: sharedInteraction.ending,
             runner: sharedInteraction.runner,
+            castDirector: sharedInteraction.castDirector,
         }
         : buildStorylineInitiative(context, store, season);
+    const scene = sharedInteraction?.scene ?? createSceneFlow({
+        store,
+        season,
+        director: castDirector ?? null,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
     const travel = createTravelFlow({
         store,
         season,
@@ -1248,6 +1292,7 @@ function buildMapRuntime(context, panelRef) {
         initiative,
         ending,
         runner,
+        castDirector: castDirector ?? null,
         tracker: sharedInteraction?.tracker ?? null,
         travel,
         pacing,
@@ -1371,11 +1416,19 @@ function buildMapTravelHandler(context, runtime, panelRef) {
             await mountMapPanelForActiveChat();
             return false;
         }
+        const beforeTravel = snapshotWorldState(runtime.store.get());
         const result = await travel.travel({ to: request.to });
         if (!result.ok) {
             logger.info('Travel rejected', { reason: result.reason, message: result.message });
             bus.emit(EVENTS.MAP_UPDATED, { travel: result });
             return false;
+        }
+        // Arrivals/departures from the Cast Director are surfaced once per
+        // travel; the toast stack dedupes ids across later repaints.
+        try {
+            ensureToasts().push(diffWorldState(beforeTravel, runtime.store.get()));
+        } catch (error) {
+            logger.debug('Could not build travel toasts', error);
         }
         // `onPosted` fires before the choices round-trip, so the handoff back to
         // the chat is immediate instead of waiting on an agent-backed request.
@@ -1980,6 +2033,18 @@ function ensureEndingHost() {
     return host;
 }
 
+function ensureBadEndHost() {
+    let host = document.getElementById('neoterra-bad-end-host');
+    if (host) {
+        return host;
+    }
+    host = document.createElement('div');
+    host.id = 'neoterra-bad-end-host';
+    host.className = 'neoterra-bad-end-host';
+    document.body.append(host);
+    return host;
+}
+
 function sendChoiceText(text) {
     const textarea = document.getElementById('send_textarea');
     if (!textarea) {
@@ -2033,15 +2098,21 @@ function buildInteractionRuntime(context) {
         return null;
     }
     const season = metadata.neoterra?.seasonDefinition ?? null;
+    const { initiative, ending, runner, castDirector } = shared?.initiative
+        ? {
+            initiative: shared.initiative,
+            ending: shared.ending,
+            runner: shared.runner,
+            castDirector: shared.castDirector,
+        }
+        : buildStorylineInitiative(context, store, season);
     const scene = shared?.scene ?? createSceneFlow({
         store,
         season,
+        director: castDirector ?? null,
         getSettings: () => getSettings(context),
         log: (message, error) => logger.warn(message, error),
     });
-    const { initiative, ending, runner } = shared?.initiative
-        ? { initiative: shared.initiative, ending: shared.ending, runner: shared.runner }
-        : buildStorylineInitiative(context, store, season);
     const tracker = shared?.tracker ?? createStateTracker({
         runner,
         getSettings: () => getSettings(context),
@@ -2076,6 +2147,19 @@ function buildInteractionRuntime(context) {
         getSeason: () => season,
         onSend: (text) => sendChoiceText(text),
     });
+    const badEnd = shared?.badEnd ?? createBadEndFlow({
+        store,
+        detector: createBadEndDetector({
+            runner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        }),
+        runner,
+        getSettings: () => getSettings(context),
+        season,
+        context: { registry: metadata.neoterra?.registry ?? null },
+        log: (message, error) => logger.warn(message, error),
+    });
     interactionRuntime = {
         chatId,
         store,
@@ -2085,6 +2169,8 @@ function buildInteractionRuntime(context) {
         initiative,
         ending,
         runner,
+        castDirector: castDirector ?? null,
+        badEnd,
         worldTick,
         newsroom,
         controller,
@@ -2242,6 +2328,7 @@ async function refreshInteractionUi(context = null) {
         disposeEncounterBar();
         encounterBar = null;
         disposeEndingPanel();
+        disposeBadEndPanel();
         return null;
     }
     if (!choicesBar) {
@@ -2259,6 +2346,26 @@ async function refreshInteractionUi(context = null) {
         });
     } else {
         disposeEndingPanel();
+    }
+    try {
+        const settingsNow = getSettings(live);
+        const playerId = state?.player?.identity === 'canon' ? state.player.characterId : null;
+        const continuationId = state?.flags?.badEndContinuation?.characterId ?? null;
+        const hasPlayerBadEnd = [playerId, continuationId]
+            .filter(Boolean)
+            .some((id) => Boolean(state?.badEnds?.[id]));
+        if (settingsNow?.badEnds?.enabled === true && hasPlayerBadEnd && runtime.badEnd) {
+            mountBadEndPanel({
+                root: ensureBadEndHost(),
+                store: runtime.store,
+                flow: runtime.badEnd,
+            });
+        } else {
+            disposeBadEndPanel();
+        }
+    } catch (error) {
+        logger.debug('Could not refresh the bad-end panel', error);
+        disposeBadEndPanel();
     }
     paintEncounterBar(runtime, live);
     return runtime;
@@ -2331,6 +2438,19 @@ function beginTurnStatus() {
 
 function ensureToasts() {
     toastStack ??= mountToasts();
+    if (toastStack?.container && !toastStack.container.dataset.neoterraLogLink) {
+        toastStack.container.dataset.neoterraLogLink = '1';
+        toastStack.container.addEventListener('click', (event) => {
+            const link = event.target.closest?.('.neoterra-toast-details');
+            if (!link) {
+                return;
+            }
+            if (String(link.getAttribute('href') ?? '').includes('agent-log')) {
+                event.preventDefault();
+                openWindowTab('log');
+            }
+        });
+    }
     return toastStack;
 }
 
@@ -2410,11 +2530,50 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
             abortStaleTurnRuntime(chatId);
             return;
         }
+        // Bad-end detection is opt-in. When disabled the flow makes zero
+        // calls; a failure is reported as a non-blocking turn error.
+        try {
+            const settingsNow = getSettings(live);
+            if (settingsNow?.badEnds?.enabled === true
+                && settingsNow?.agents?.badEnd?.enabled !== false
+                && runtime.badEnd?.detectAndRecord) {
+                status?.event({ stage: 'bad-end', status: 'start' });
+                const report = await runtime.badEnd.detectAndRecord({
+                    message: typeof message?.mes === 'string' ? message.mes : '',
+                    recentProse: typeof message?.mes === 'string' ? message.mes : '',
+                    continuityKey: messageTurnIdentity(message),
+                });
+                if (Array.isArray(report?.recorded) && report.recorded.length > 0) {
+                    bus.emit(EVENTS.MAP_UPDATED, { reason: 'bad-end' });
+                }
+                status?.event({ stage: 'bad-end', status: 'done' });
+            }
+        } catch (error) {
+            logger.warn('Bad-end detection failed; the turn stands', error);
+            turnResult?.errors?.push({ stage: 'bad-end', error: error?.message ?? String(error) });
+            status?.event({ stage: 'bad-end', status: 'failed', error: error?.message ?? String(error) });
+        }
         // Batch the visible deltas once per turn; the toast stack dedupes ids so
         // a repeated MAP_UPDATED cannot repeat a line.
         try {
+            const continuity = turnResult?.auditor;
+            const findingCount = Array.isArray(continuity?.findings) ? continuity.findings.length : 0;
+            const summary = continuity?.summary ?? null;
+            const extra = continuity?.ran === true && findingCount > 0
+                ? [{
+                    id: `continuity:${turnResult?.turn ?? ''}:${findingCount}:${summary?.warnings ?? 0}:${summary?.errors ?? 0}`,
+                    type: 'continuity',
+                    title: 'Continuity',
+                    message: `${findingCount} finding${findingCount === 1 ? '' : 's'}` +
+                        (summary?.warnings ? ` · ${summary.warnings} warning${summary.warnings === 1 ? '' : 's'}` : '') +
+                        (summary?.errors ? ` · ${summary.errors} error${summary.errors === 1 ? '' : 's'}` : ''),
+                    tone: summary?.errors ? 'warning' : 'info',
+                    href: '#neoterra-agent-log',
+                }]
+                : [];
             ensureToasts().push([
                 ...diffWorldState(beforeState, runtime.store.get()),
+                ...extra,
                 ...buildErrorToasts(turnResult?.errors ?? [], { detailsHref: '#neoterra-agent-log' }),
             ]);
         } catch (error) {
@@ -2758,12 +2917,12 @@ function registerSlashCommand(context) {
             openShell(SHELL_TABS.some(tab => tab.id === requested) ? requested : 'season');
             return '';
         },
-        helpString: 'Open the Neo Terra framework shell.',
+        helpString: 'Open the Neo Terra framework shell, a gameplay window, or the agent log.',
         returns: 'empty string',
         unnamedArgumentList: SlashCommandArgument?.fromProps
             ? [
                 SlashCommandArgument.fromProps({
-                    description: 'Optional tab: season, map, characters, player, settings',
+                    description: 'Optional surface: season, map, characters, relations, journal, log, player, settings',
                     isRequired: false,
                     typeList: ARGUMENT_TYPE?.STRING ? [ARGUMENT_TYPE.STRING] : undefined,
                 }),
@@ -2874,6 +3033,7 @@ async function resetChatWorld(context = null) {
     disposePlayerPanelComponent();
     disposeChoicesBar();
     disposeEndingPanel();
+    disposeBadEndPanel();
     if (isShellOpen() && getActiveTab() === 'map') {
         void mountMapPanelForActiveChat();
     }
@@ -3051,6 +3211,7 @@ function subscribeChatChanges(context) {
         disposeEncounterBar();
         encounterBar = null;
         disposeEndingPanel();
+        disposeBadEndPanel();
         if (isShellOpen() && getActiveTab() === 'map') {
             void mountMapPanelForActiveChat();
         }
@@ -3148,10 +3309,12 @@ export function dispose() {
     disposeEncounterBar();
     encounterBar = null;
     disposeEndingPanel();
+    disposeBadEndPanel();
     document.getElementById('neoterra-choices-host')?.remove();
     document.getElementById('neoterra-encounter-host')?.remove();
     document.getElementById('neoterra-turn-status-host')?.remove();
     document.getElementById('neoterra-ending-host')?.remove();
+    document.getElementById('neoterra-bad-end-host')?.remove();
 
     if (hasDom()) {
         document.getElementById(UI_IDS.ROOT)?.remove();

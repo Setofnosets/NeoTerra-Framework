@@ -2186,7 +2186,8 @@
     font-size: 0.8rem;
 }
 
-.neoterra-ending-host {
+.neoterra-ending-host,
+.neoterra-bad-end-host {
     position: fixed;
     inset: 0;
     z-index: 4100;
@@ -2196,11 +2197,13 @@
     pointer-events: none;
 }
 
-.neoterra-ending-host:empty {
+.neoterra-ending-host:empty,
+.neoterra-bad-end-host:empty {
     display: none;
 }
 
-.neoterra-ending-host .neoterra-ending {
+.neoterra-ending-host .neoterra-ending,
+.neoterra-bad-end-host .neoterra-bad-end {
     width: min(680px, 94vw);
     max-height: 86vh;
     overflow-y: auto;

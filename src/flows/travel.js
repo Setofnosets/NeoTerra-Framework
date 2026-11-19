@@ -523,8 +523,13 @@ export function createTravelFlow({
         let cast = null;
         if (scene && typeof scene.refreshCast === 'function') {
             try {
+                // Arrival is a scene change: the Cast Director always gets a
+                // chance to run when it is enabled and configured.
+                const settingsNow = (typeof getSettings === 'function' ? getSettings() : null) ?? {};
+                const directorEnabled = isObject(settingsNow?.agents?.castDirector)
+                    && settingsNow.agents.castDirector.enabled !== false;
                 cast = await scene.refreshCast({
-                    runDirector: false,
+                    runDirector: directorEnabled,
                     signal,
                     // The persisted encounter records that the player arrived.
                     encounterSource: 'travel',

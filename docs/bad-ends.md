@@ -19,7 +19,7 @@ stored, or shown, and no bad-end agent call is made.
 
 ## Detection
 
-When enabled, the Bad End Detector runs after the State and Storyline trackers:
+When enabled, the Bad End Detector runs after the turn pipeline's trackers:
 
 1. **Deterministic predicates first**: stamina/willpower at 0 with lethal or
    capture intent, maximum corruption, completed brainwashing/possession, a
@@ -27,6 +27,10 @@ When enabled, the Bad End Detector runs after the State and Storyline trackers:
 2. Only ambiguous cases go to the LLM for confirmation (`badEnds.minConfidence`,
    default 0.6).
 3. A bad end is never inferred from prose alone.
+
+The panel is mounted by the shell only while `badEnds.enabled` is on and the
+current player character has a stored bad-end record. Turning the feature off
+disposes the panel and stops all detector calls.
 
 ## Record
 

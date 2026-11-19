@@ -152,21 +152,33 @@ swipe or a re-render does not tick twice. For a new turn,
    events are applied atomically, and a failure keeps the previous state;
 5. the **Storyline Tracker** via `initiative.afterTurn`, on its existing
    `everyNTurns` (default 6) / location-change cadence — not every turn;
-6. a present-cast refresh (`scene.refreshCast({ runDirector: false })`), which
-   updates `scene.present`, `scene.encounter`, and `[NEOTERRA_SCENE]`; manual
-   pins/removals still win. The **Cast Director is not run** on this path: the
-   turn pipeline passes `runDirector: false`, so the `agents.castDirector`
-   settings are currently inert;
-7. `MAP_UPDATED` with `reason: 'turn'` and a mounted map refresh;
-8. the interaction UI refresh, then CYOA **after** the trackers so the options
-   reflect the new state.
+6. the **Lore** pass (`initiative.runLore`) every `agents.lore.everyNTurns`
+   turns (default 10) or when the act boundary changes. It writes
+   `flags.lore.recap` (the Journal's "Previously on" paragraph) and keeps the
+   agent's entries alongside it;
+7. the **Auditor** (`initiative.runAudit`) at act boundaries (with an optional
+   turn cadence). Findings are stored under `flags.auditor` and surfaced as
+   non-blocking toasts; they never block the turn;
+8. a present-cast refresh (`scene.refreshCast({ runDirector })`), which updates
+   `scene.present`, `scene.encounter`, and `[NEOTERRA_SCENE]`; manual
+   pins/removals still win. The **Cast Director** runs when
+   `agents.castDirector.enabled` is on and the `sceneChange` / `everyNTurns`
+   cadence is due. Travel always requests an arrival pass;
+9. `MAP_UPDATED` with `reason: 'turn'` and a mounted map refresh;
+10. the interaction UI refresh, then CYOA **after** the trackers so the options
+    reflect the new state.
 
 Each stage is isolated: a tracker failure is logged and does not block choices.
-`runTurnPipeline` returns per-stage reports and an `errors[]` array, but the
-shell does not surface them yet, so a failed stage is only visible in the
-console. The `MAP_UPDATED` refresh and the interaction runtime share one
-per-chat `WorldState` store, so a write is visible to the map without a
-remount.
+`runTurnPipeline` returns per-stage reports and an `errors[]` array; the shell
+turns those into non-blocking error toasts with a **details** link that opens
+the agent log window (`/neoterra log`). The `MAP_UPDATED` refresh and the
+interaction runtime share one per-chat `WorldState` store, so a write is visible
+to the map without a remount.
+
+The optional **Architect** pass runs once when a season starts and only when
+`agents.architect.seasonStart` is explicitly turned on (default off); the agent
+itself remains enabled for explicit runs. It never delays the opening frame or
+the choices request.
 
 ## Prompt-only world state
 

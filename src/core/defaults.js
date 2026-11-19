@@ -149,7 +149,11 @@ export const DEFAULT_SETTINGS = freezeDeep({
 
     agents: {
         architect: {
+            // The agent stays available for explicit runs; the automatic
+            // season-start pass is opt-in (`seasonStart`, default off). The
+            // deterministic season seed always works without it.
             enabled: true,
+            seasonStart: false,
             connectionProfileId: '',
             model: '',
             temperature: 0.4,
@@ -180,7 +184,9 @@ export const DEFAULT_SETTINGS = freezeDeep({
             model: '',
             temperature: 0.3,
             maxTokens: 1000,
+            // Re-runs on travel/arrival and every N turns without a scene change.
             cadence: 'sceneChange',
+            everyNTurns: 4,
         },
         lore: {
             enabled: true,
@@ -197,7 +203,8 @@ export const DEFAULT_SETTINGS = freezeDeep({
             model: '',
             temperature: 0.1,
             maxTokens: 700,
-            cadence: 'everyNTurns',
+            // Continuity is checked when the act changes, with a turn fallback.
+            cadence: 'actChange',
             everyNTurns: 8,
         },
         epilogue: {

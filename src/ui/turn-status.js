@@ -13,7 +13,10 @@ export const TURN_STAGE_ORDER = Object.freeze([
     'pacing',
     'tracker',
     'storyline',
+    'lore',
+    'auditor',
     'cast',
+    'bad-end',
     'choices',
 ]);
 
@@ -23,7 +26,10 @@ export const TURN_STAGE_LABELS = Object.freeze({
     pacing: 'Reading the pace',
     tracker: 'Tracking the world',
     storyline: 'Advancing the story',
+    lore: 'Writing the recap',
+    auditor: 'Checking continuity',
     cast: 'Refreshing the cast',
+    'bad-end': 'Checking bad ends',
     choices: 'Writing choices',
 });
 
