@@ -209,6 +209,39 @@ function moveCharacter(state, character, locationId) {
     character.lastUpdatedTurn = state.meta.turn;
 }
 
+/**
+ * Make `character` the player: move the scene to them (unless a fight is
+ * already pinned to the current scene), mirror the player state so
+ * `player.locationId === scene.locationId`, and rebuild presence so the new
+ * player leaves every NPC list and the previous player re-enters the pool.
+ * The caller owns the `controlledBy` flips.
+ */
+function enterPlayerCharacter(state, character, personaNotes) {
+    if (!isObject(state.scene?.combat)) {
+        const targetLocationId = character.locationId ?? state.scene?.locationId ?? null;
+        if (targetLocationId
+            && isObject(state.locations?.[targetLocationId])
+            && isObject(state.scene)
+            && state.scene.locationId !== targetLocationId) {
+            state.scene.locationId = targetLocationId;
+            state.locations[targetLocationId].visited = true;
+        }
+    }
+    state.player = {
+        ...cloneWorldState(character),
+        identity: 'canon',
+        characterId: character.charId,
+        personaNotes,
+    };
+    // player.locationId === scene.locationId after any identity change.
+    if (!isObject(state.scene)) {
+        state.player.locationId = null;
+    } else if (state.player.locationId !== state.scene.locationId) {
+        state.player.locationId = state.scene.locationId ?? null;
+    }
+    syncPresence(state);
+}
+
 function pushEvent(state, event) {
     const entry = {
         turn: Number.isInteger(event.turn) ? event.turn : state.meta.turn,
@@ -612,6 +645,8 @@ const HANDLERS = Object.freeze({
         beat.deferredUntilTurn = Number.isInteger(event.untilTurn) ? event.untilTurn : null;
     },
 
+    // Invariant: after any identity change the player mirror and the scene
+    // agree on the location, so the POV, the map, and presence never diverge.
     SET_PLAYER_IDENTITY(state, event) {
         const identity = event.identity;
         if (identity !== 'custom' && identity !== 'canon') {
@@ -643,6 +678,10 @@ const HANDLERS = Object.freeze({
                 personaNotes,
                 locationId: state.scene?.locationId ?? null,
             });
+            // The previously played character is an NPC again: re-enter them
+            // into presence at their own location. A return to a custom persona
+            // never moves the scene.
+            syncPresence(state);
             applyNonCanon();
             return;
         }
@@ -675,12 +714,7 @@ const HANDLERS = Object.freeze({
             previousCharacter.controlledBy = 'npc';
         }
         character.controlledBy = 'player';
-        state.player = {
-            ...cloneWorldState(character),
-            identity: 'canon',
-            characterId: character.charId,
-            personaNotes,
-        };
+        enterPlayerCharacter(state, character, personaNotes);
         applyNonCanon();
     },
 
@@ -718,12 +752,7 @@ const HANDLERS = Object.freeze({
                 previousCharacter.controlledBy = 'npc';
             }
             character.controlledBy = 'player';
-            state.player = {
-                ...cloneWorldState(character),
-                identity: 'canon',
-                characterId: character.charId,
-                personaNotes,
-            };
+            enterPlayerCharacter(state, character, personaNotes);
             state.flags = {
                 ...(isObject(state.flags) ? state.flags : {}),
                 badEndContinuation: {
@@ -758,6 +787,9 @@ const HANDLERS = Object.freeze({
                     turn,
                 },
             };
+            // The previous player is an NPC again: re-pool them. A custom
+            // persona never moves the scene.
+            syncPresence(state);
             return;
         }
 
@@ -774,12 +806,7 @@ const HANDLERS = Object.freeze({
             previousCharacter.controlledBy = 'npc';
         }
         character.controlledBy = 'player';
-        state.player = {
-            ...cloneWorldState(character),
-            identity: 'canon',
-            characterId: character.charId,
-            personaNotes,
-        };
+        enterPlayerCharacter(state, character, personaNotes);
         state.flags = {
             ...(isObject(state.flags) ? state.flags : {}),
             badEndContinuation: {

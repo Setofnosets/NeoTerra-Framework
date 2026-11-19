@@ -521,6 +521,7 @@ export function buildPlayAsOptions({
             characterId: id,
             displayName,
             side: character?.side ?? entry?.side ?? 'neutral',
+            locationId: character?.locationId ?? null,
             inRoster,
             nonCanon: !inRoster,
             isCurrent,
@@ -544,11 +545,19 @@ export function buildPlayAsConfirmation({ option, state } = {}) {
         ? state?.characters?.[state.player.characterId]?.displayName
             ?? state.player.characterId
         : 'your custom persona';
+    // Where the POV lands: the option's target location when known, else the
+    // current scene, so the confirmation never claims a move it cannot name.
+    const targetLocationId = option.locationId ?? state?.scene?.locationId ?? null;
+    const locationName = state?.locations?.[targetLocationId]?.name
+        ?? state?.locations?.[state?.scene?.locationId]?.name
+        ?? 'the current scene';
+    const moves = Boolean(targetLocationId) && targetLocationId !== state?.scene?.locationId;
     const parts = [
         `Switch the player identity from ${currentName} to ${option.displayName}?`,
         'The narration and POV change: the narrator will treat this character as the player and stop deciding their actions, dialogue, and defeats.',
         'The previous player character returns to the NPC pool; this character is removed from NPC casting and group-chat speaker selection.',
         'This also changes the opening frame and the "Playing as" badge for this chat timeline.',
+        moves ? `The scene moves to ${locationName}.` : `The POV stays at ${locationName}.`,
     ];
     if (option.nonCanon) {
         parts.push('This character is not on the current season roster: the world is marked non-canon and canon beats stay disabled.');
@@ -1191,7 +1200,8 @@ export function performPlayAs({
     const character = !state.characters?.[characterId] && entry
         ? buildCharacterStateFromEntry(entry, state, season)
         : undefined;
-    return dispatchWithContext(store, {
+    const hadCharacter = Boolean(state?.characters?.[characterId]);
+    const result = dispatchWithContext(store, {
         type: IDENTITY_EVENT,
         identity: 'canon',
         characterId,
@@ -1199,9 +1209,26 @@ export function performPlayAs({
         allowDeadContinuation: settings?.badEnds?.allowDeadContinuation === true,
         ...(character ? { character } : {}),
     }, context);
+    // Report how the roster changed so the UI can distinguish a Sandbox seed
+    // from a plain identity swap, and where the POV landed.
+    const changed = !hadCharacter && Boolean(result?.characters?.[characterId])
+        ? 'seeded'
+        : 'identity';
+    return {
+        ok: true,
+        changed,
+        locationId: result?.scene?.locationId ?? null,
+        state: result,
+    };
 }
 
-/** Return to a custom persona (reversible identity change). */
+/**
+ * Return to a custom persona (reversible identity change).
+ *
+ * Unlike {@link performPlayAs}, which reports `{ ok, changed, locationId,
+ * state }`, this returns the raw state document: callers use it to repaint, not
+ * to distinguish a seed from a swap, so the extra shape would be noise.
+ */
 export function performPlayAsCustom({
     store,
     context = null,
@@ -1897,6 +1924,7 @@ export function mountCodex({
     getSettings = () => ({}),
     onIdentityChange = null,
     onWorldChange = null,
+    ownsStore = true,
 } = {}) {
     if (!hasDom()) {
         return null;
@@ -1921,6 +1949,7 @@ export function mountCodex({
         getSettings,
         onIdentityChange,
         onWorldChange,
+        ownsStore,
         controller,
         returnFocus: null,
         filters: {
@@ -2206,7 +2235,7 @@ export function mountCodex({
             formRules,
         };
         const before = store.get();
-        const next = performPlayAs({
+        const result = performPlayAs({
             store,
             context,
             season,
@@ -2214,17 +2243,25 @@ export function mountCodex({
             settings: getSettings(),
             characterId,
         });
+        // Accept both the structured result and a raw state document so older
+        // callers keep working.
+        const next = result?.state ?? result;
+        const locationId = result?.locationId ?? next?.scene?.locationId ?? null;
         const identity = {
             identity: 'canon',
             characterId,
             nonCanon: next.flags?.nonCanon === true,
         };
-        state.status = `Now playing as ${next.characters?.[characterId]?.displayName ?? characterId}.`;
+        const displayName = next.characters?.[characterId]?.displayName ?? characterId;
+        const locationName = next.locations?.[locationId]?.name
+            ?? next.locations?.[next.scene?.locationId]?.name
+            ?? 'the current scene';
+        state.status = `Now playing as ${displayName} at ${locationName}.`;
         state.dialog = null;
         state.returnFocus = null;
         state.error = null;
         state.selectedId = characterId;
-        onIdentityChange?.({ state: next, previous: before, identity });
+        onIdentityChange?.({ state: next, previous: before, identity, locationId });
         paint();
         [...root.querySelectorAll('[data-neoterra-codex-select]')]
             .find((element) => element.dataset.neoterraCodexSelect === characterId)
@@ -2768,8 +2805,12 @@ export function disposeCodex() {
     mounted.controller?.abort();
     // Cancel the codex store's pending debounce so a reset that clears the chat
     // metadata cannot be overwritten by a stale timer. The WAL still holds the
-    // in-flight document for a normal chat switch.
-    mounted.store?.dispose?.();
+    // in-flight document for a normal chat switch. A shell-owned shared store is
+    // skipped: its lifecycle belongs to disposeChatRuntimes, and cancelling its
+    // pending save here would drop a world the map still reads.
+    if (mounted.ownsStore !== false) {
+        mounted.store?.dispose?.();
+    }
     if (hasDom()) {
         document.body?.classList?.remove('neoterra-dialog-open');
     }

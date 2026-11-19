@@ -347,6 +347,146 @@ test('SET_PLAYER_IDENTITY flips controlledBy atomically and preserves character 
     );
 });
 
+test('SET_PLAYER_IDENTITY moves the scene to the new POV and re-syncs presence', () => {
+    const state = seed('s1dark');
+    const oldId = 's1dark.carol.bleeding-heart';
+    const newId = 's1dark.aurelia.season-dark-version';
+    assert.equal(state.scene.locationId, 'clarity-hq');
+    assert.equal(state.characters[newId].locationId, 'old-subway');
+
+    const switched = applyWorldEvent(
+        state,
+        { type: 'SET_PLAYER_IDENTITY', identity: 'canon', characterId: newId },
+        CONTEXT,
+    );
+    // The scene follows the new player, and the mirror stays in lockstep.
+    assert.equal(switched.scene.locationId, 'old-subway');
+    assert.equal(switched.player.locationId, switched.scene.locationId);
+    assert.equal(switched.locations['old-subway'].visited, true);
+    // The player is a person, never a stage prop.
+    assert.ok(!switched.scene.present.includes(newId));
+    for (const location of Object.values(switched.locations)) {
+        assert.ok(!location.present.includes(newId));
+    }
+    // The previous player returns to the NPC pool where they are standing.
+    assert.equal(switched.characters[oldId].controlledBy, 'npc');
+    assert.ok(switched.locations['clarity-hq'].present.includes(oldId));
+});
+
+test('CONTINUE_BAD_END self-continuation moves the scene to that character', () => {
+    const state = seed('s1dark');
+    const oldId = 's1dark.carol.bleeding-heart';
+    const newId = 's1dark.aurelia.season-dark-version';
+    // A dead character can only be continued when a bad-end record exists.
+    const dead = applyWorldEvent(
+        state,
+        {
+            type: 'RECORD_BAD_END',
+            characterId: newId,
+            badEndType: 'death',
+            severity: 'terminal',
+            cause: 'Held the line.',
+            epilogueText: 'She did not come back.',
+            playableAs: false,
+            continuityKey: 's1dark:aurelia:1',
+            reversibility: 'none',
+        },
+        CONTEXT,
+    );
+    const continued = applyWorldEvent(
+        dead,
+        {
+            type: 'CONTINUE_BAD_END',
+            action: 'self',
+            characterId: newId,
+            allowDeadContinuation: true,
+        },
+        CONTEXT,
+    );
+    assert.equal(continued.player.characterId, newId);
+    assert.equal(continued.scene.locationId, 'old-subway');
+    assert.equal(continued.player.locationId, continued.scene.locationId);
+    assert.ok(!continued.scene.present.includes(newId));
+    for (const location of Object.values(continued.locations)) {
+        assert.ok(!location.present.includes(newId));
+    }
+    assert.equal(continued.characters[oldId].controlledBy, 'npc');
+    assert.ok(continued.locations['clarity-hq'].present.includes(oldId));
+});
+
+test('CONTINUE_BAD_END keeps the dead-continuation guards', () => {
+    const state = seed('s1dark');
+    const newId = 's1dark.aurelia.season-dark-version';
+    // No record: self-continuation is refused outright.
+    assert.throws(
+        () => applyWorldEvent(
+            state,
+            { type: 'CONTINUE_BAD_END', action: 'self', characterId: newId, allowDeadContinuation: true },
+            CONTEXT,
+        ),
+        /no bad end record/,
+    );
+    const dead = applyWorldEvent(
+        state,
+        {
+            type: 'RECORD_BAD_END',
+            characterId: newId,
+            badEndType: 'death',
+            severity: 'terminal',
+            cause: 'Held the line.',
+            epilogueText: 'She did not come back.',
+            playableAs: false,
+            continuityKey: 's1dark:aurelia:2',
+            reversibility: 'none',
+        },
+        CONTEXT,
+    );
+    // A record exists, but the setting is off: still refused.
+    assert.throws(
+        () => applyWorldEvent(
+            dead,
+            { type: 'CONTINUE_BAD_END', action: 'self', characterId: newId },
+            CONTEXT,
+        ),
+        /dead continuation is not enabled/,
+    );
+});
+
+test('CONTINUE_BAD_END other-continuation relocates and re-pools like Play-as', () => {
+    const state = seed('s1dark');
+    const oldId = 's1dark.carol.bleeding-heart';
+    const newId = 's1dark.aurelia.season-dark-version';
+    const continued = applyWorldEvent(
+        state,
+        { type: 'CONTINUE_BAD_END', action: 'other', identity: 'canon', characterId: newId },
+        CONTEXT,
+    );
+    assert.equal(continued.player.characterId, newId);
+    assert.equal(continued.scene.locationId, 'old-subway');
+    assert.equal(continued.player.locationId, continued.scene.locationId);
+    assert.ok(!continued.scene.present.includes(newId));
+    assert.ok(continued.locations['clarity-hq'].present.includes(oldId));
+});
+
+test('Play-as never relocates the scene out from under an active fight', () => {
+    const state = seed('s1dark');
+    const started = applyWorldEvent(
+        state,
+        { type: 'COMBAT_START', participants: ['s1dark.carol.bleeding-heart', 's1dark.akui.koden.cyber.sakura'] },
+        CONTEXT,
+    );
+    assert.equal(started.scene.combat.locationId, 'clarity-hq');
+    const switched = applyWorldEvent(
+        started,
+        { type: 'SET_PLAYER_IDENTITY', identity: 'canon', characterId: 's1dark.aurelia.season-dark-version' },
+        CONTEXT,
+    );
+    // The fight stays where it was pinned; the POV follows the scene.
+    assert.equal(switched.scene.locationId, 'clarity-hq');
+    assert.equal(switched.scene.combat.locationId, 'clarity-hq');
+    assert.equal(switched.player.locationId, switched.scene.locationId);
+});
+
 test('a custom player persona does not inherit canon fields', () => {
     const state = seed('s1dark');
     const carolId = 's1dark.carol.bleeding-heart';
@@ -368,6 +508,11 @@ test('a custom player persona does not inherit canon fields', () => {
     // The canon character keeps their own state after losing control.
     assert.equal(custom.characters[carolId].stamina.current, 12);
     assert.equal(custom.characters[carolId].displayName, 'Bleeding Heart');
+    // A return to a custom persona never moves the scene, and the ex-player is
+    // re-pooled as an NPC at the location they were standing in.
+    assert.equal(custom.scene.locationId, state.scene.locationId);
+    assert.equal(custom.characters[carolId].controlledBy, 'npc');
+    assert.ok(custom.locations[state.scene.locationId].present.includes(carolId));
 });
 
 test('TRIGGER_ENDING is idempotent and CHOOSE_ENDING_PATH is state-aware', () => {

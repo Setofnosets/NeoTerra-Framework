@@ -210,6 +210,10 @@ test('Play-as lists roster characters, explains the POV/NPC swap, and is reversi
     const confirmation = buildPlayAsConfirmation({ option: carol, state: store.get() });
     assert.match(confirmation, /narration/i);
     assert.match(confirmation, /NPC pool/i);
+    // A same-location swap says the POV stays; a cross-location swap says the
+    // scene moves (covered in the dedicated test below).
+    assert.match(confirmation, /scene moves to|POV stays at/i);
+    assert.match(confirmation, /clarity-hq|Clarity/i);
 
     const next = performPlayAs({
         store,
@@ -218,10 +222,14 @@ test('Play-as lists roster characters, explains the POV/NPC swap, and is reversi
         registry,
         characterId: CAROL,
     });
-    assert.equal(next.player.identity, 'canon');
-    assert.equal(next.player.characterId, CAROL);
-    assert.equal(next.characters[CAROL].controlledBy, 'player');
-    assert.equal(next.flags.nonCanon, false);
+    assert.equal(next.ok, true);
+    assert.equal(next.changed, 'identity');
+    assert.equal(next.locationId, next.state.scene.locationId);
+    const nextState = next.state;
+    assert.equal(nextState.player.identity, 'canon');
+    assert.equal(nextState.player.characterId, CAROL);
+    assert.equal(nextState.characters[CAROL].controlledBy, 'player');
+    assert.equal(nextState.flags.nonCanon, false);
 
     const custom = performPlayAsCustom({ store, context: CONTEXT });
     assert.equal(custom.player.identity, 'custom');
@@ -249,13 +257,18 @@ test('Sandbox Play-as seeds any registry character and marks them non-canon', ()
     assert.equal(option.eligible, true);
     assert.equal(option.needsSeed, true);
 
-    const next = performPlayAs({
+    const result = performPlayAs({
         store,
         context: CONTEXT,
         season: seasons.sandbox,
         registry,
         characterId: entry.id,
     });
+    assert.equal(result.ok, true);
+    // The registry entry was absent from the roster, so this call seeded it.
+    assert.equal(result.changed, 'seeded');
+    assert.equal(result.locationId, result.state.scene.locationId);
+    const next = result.state;
     assert.equal(next.player.characterId, entry.id);
     assert.equal(next.characters[entry.id].controlledBy, 'player');
     assert.equal(next.flags.nonCanon, true);
@@ -265,6 +278,58 @@ test('Sandbox Play-as seeds any registry character and marks them non-canon', ()
     const markup = renderCodexMarkup(sandboxView);
     assert.match(markup, /Non-canon character/);
     assert.match(markup, /role="alert"/);
+});
+
+test('Play-as confirmation names the location the POV moves to', () => {
+    const store = makeStore('s1dark', { identity: 'custom' });
+    const options = buildPlayAsOptions({
+        state: store.get(),
+        season: seasons.s1dark,
+        registry,
+    });
+    const aurelia = options.options.find(
+        (option) => option.characterId === 's1dark.aurelia.season-dark-version',
+    );
+    assert.equal(aurelia.locationId, 'old-subway');
+    const confirmation = buildPlayAsConfirmation({ option: aurelia, state: store.get() });
+    assert.match(confirmation, /The scene moves to The Old Subway\./);
+    // The existing promises are still stated verbatim.
+    assert.match(confirmation, /narration/i);
+    assert.match(confirmation, /NPC pool/i);
+});
+
+test('performPlayAs mutates only the store it is given', () => {
+    const store = makeStore('s1dark', { identity: 'custom' });
+    const calls = { replace: 0, dispatch: 0 };
+    // A thin spy proves the helper writes through the caller's store instead of
+    // creating a second one that could cache a stale document for the map.
+    const spy = {
+        get: () => store.get(),
+        replace: (state) => {
+            calls.replace += 1;
+            return store.replace(state);
+        },
+        dispatch: (event) => {
+            calls.dispatch += 1;
+            return store.dispatch(event);
+        },
+    };
+    const result = performPlayAs({
+        store: spy,
+        context: CONTEXT,
+        season: seasons.s1dark,
+        registry,
+        characterId: CAROL,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(calls.replace + calls.dispatch, 1);
+    // The returned document matches what the passed-in store now holds.
+    assert.equal(result.state.player.characterId, CAROL);
+    assert.equal(store.get().player.characterId, CAROL);
+    // The POV landed exactly where the document says (old-subway from the seed).
+    assert.equal(result.locationId, result.state.scene.locationId);
+    // `applyIdentity`'s status line is a DOM-side side effect of mountCodex;
+    // the pure helper above is what a DOM-less test can assert.
 });
 
 test('Play-as confirmation dialog and codex markup are rendered safely', () => {

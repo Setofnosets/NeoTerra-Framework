@@ -48,7 +48,7 @@ import { loadRegistry } from '../data/registry.js';
 import { loadLocations } from '../data/locations.js';
 import { loadDistricts } from '../data/map.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
-import { createWorldStateStore, getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
+import { getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
 import { selectPresenceIds } from '../state/selectors.js';
 import { createTravelFlow, attachTravelToMessage } from '../flows/travel.js';
 import { createSceneFlow } from '../flows/scene.js';
@@ -1056,8 +1056,19 @@ function windowDisposeFor(tabId) {
         return;
     }
     if (tabId === 'characters') {
+        const chatId = mountedCodexChatId;
         disposeCodex();
         mountedCodexChatId = null;
+        // The codex now shares the chat's store. If it was the only runtime
+        // using it, release it here: closing the window would otherwise leave
+        // a stale document in the shared registry for the next chat run.
+        const stillOwned = chatId
+            && (mapRuntime?.chatId === chatId
+                || interactionRuntime?.chatId === chatId
+                || mountedPlayerChatId === chatId);
+        if (chatId && !stillOwned) {
+            releaseSharedWorldStateStore(chatId);
+        }
         return;
     }
     if (tabId === 'relations') {
@@ -1741,9 +1752,12 @@ async function mountCodexPanelComponent(context, host = document.querySelector('
             getSettings: () => getSettings(context),
             log: (message, error) => logger.warn(message, error),
         });
-        const store = createWorldStateStore({
+        const store = getSharedWorldStateStore({
             metadata,
-            saveMetadataDebounced: () => context?.saveMetadataDebounced?.(),
+            // Read the live context at save time: the codex may be the first
+            // runtime to open the store, and a captured `context` from that
+            // mount would pin an old chat's metadata closure.
+            saveMetadataDebounced: () => (refreshContext() ?? context)?.saveMetadataDebounced?.(),
             storage: readLocalStorage(),
             chatId,
             context: { registry, formGroups, formRules },
@@ -1751,6 +1765,9 @@ async function mountCodexPanelComponent(context, host = document.querySelector('
         return mountCodex({
             root: host,
             store,
+            // The shell's runtime lifecycle owns the shared store; the codex
+            // must not cancel its pending saves when the panel is disposed.
+            ownsStore: false,
             season,
             registry,
             formGroups,
@@ -2064,9 +2081,9 @@ async function mountPlayerPanelComponent(context) {
  * activation rebuilds them from metadata; the gate resets so the first turn in
  * the rebuilt runtime is accepted again.
  */
-function disposeChatRuntimes() {
+function disposeChatRuntimes({ keepChatId = null } = {}) {
     const chatIds = [...new Set(
-        [mapRuntime?.chatId, interactionRuntime?.chatId, mountedPlayerChatId].filter(Boolean),
+        [mapRuntime?.chatId, interactionRuntime?.chatId, mountedPlayerChatId, mountedCodexChatId].filter(Boolean),
     )];
     mapRuntime = null;
     mountedMapChatId = null;
@@ -2080,6 +2097,12 @@ function disposeChatRuntimes() {
     mountedPlayerChatId = null;
     // The registry is the single disposal point; the two runtimes share a store.
     for (const chatId of chatIds) {
+        // A mounted codex still reads and writes its chat's shared store, so
+        // releasing it here would leave the panel and the remounted map on two
+        // different documents. `keepChatId` pins it for that one caller.
+        if (chatId === keepChatId) {
+            continue;
+        }
         releaseSharedWorldStateStore(chatId);
     }
     turnGate.reset();
@@ -2090,7 +2113,12 @@ function disposeChatRuntimes() {
  * mutates the shared document. The next activation rebuilds them from metadata.
  */
 function invalidateChatRuntimes(context, { keepCodex = false } = {}) {
-    disposeChatRuntimes();
+    // The codex and the map now share one store per chat. Keeping the codex
+    // mounted means keeping that store alive so the remounted map (and the
+    // choices pipeline) read the document the codex just wrote, not the
+    // still-unsaved metadata copy.
+    const keepStoreChatId = keepCodex ? mountedCodexChatId : null;
+    disposeChatRuntimes({ keepChatId: keepStoreChatId });
     disposeMapPanel();
     disposeChoicesBar();
     disposeEncounterBar();
