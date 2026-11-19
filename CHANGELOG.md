@@ -4,6 +4,30 @@ All notable changes to the Neo Terra Framework are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — 1.3.0 (travel feedback follow-up)
+
+### Added
+
+- **Travel arrival cues** — every accepted travel now announces itself from the
+  travel flow (never the turn diff): a destination toast with the time slot,
+  district, and encounter line (`travel:<from>:<to>:<lastAt>`), a **Return to
+  chat** action while the map stays open, a one-shot pulse on the Return button
+  (a static **New arrival** badge under `prefers-reduced-motion`), and a
+  structured arrival card in the map sidebar with the arrival prose behind a
+  **Full arrival text** disclosure. All three cues survive close → reopen
+  (derived from `WorldState` plus `chatMetadata.neoterra.ui.map`) and the card's
+  dismissal is per arrival. `map.arrivalFeedback` (default `true`) switches them
+  off together.
+
+### Changed
+
+- **Spike B closed: `map.closeOnTravel` stays `true`** — the 1.3 follow-up re-run
+  found that keep-open now orients the player without reopening the map, but the
+  default does not move: the scene card behind the map is still one click away
+  and keep-open remains a user setting. Evidence in
+  `docs/travel-feedback-research.md` and
+  `plans/spikes/travel-feedback/notes.md`.
+
 ## [1.2.0] - 2026-11-19
 
 **The Living World.** The experience audit's plan is implemented: a session

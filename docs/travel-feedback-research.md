@@ -74,6 +74,12 @@ need to move: the scene card behind the map is still one click away, and users
 who prefer keep-open already have the setting. The cues ship for those users;
 the default stays `true` (approved 2026-11-19).
 
+**Revisit after a season.** The decision is a default, not a verdict on the
+cues: if keep-open users report that the map window still hides the scene card
+they want to read, re-run the three scripted modes at the next content
+milestone and compare against the 1.3 table. Reverting the default is a
+one-line settings change, not a revert of the cues.
+
 
 ## Reproduction sketch
 
