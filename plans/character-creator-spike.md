@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `character-creator-spike`
-- Status: **approved (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; in progress (step 1 done: `f38dac8`)
+- Status: **approved (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; in progress (steps 1–2 done: `f38dac8`, `c1927ed`)
 - Date: 2026-11-18
 - Evidence: `plans/character-creator-spike-report.md` (6 live generations, scores, failure taxonomy)
 - Upstream: `plans/neoterra-experience-audit.md` (proposal B.11, spike A, decision 6)
@@ -75,6 +75,7 @@
 - **Risk:** high (state contract + validation)
 - **Model / Effort:** frontier implementer #high
 - **Commit:** `feat(creator): add the character creator agent and a generated-character event`
+- **Status:** done — `c1927ed` (2026-11-18)
 
 ### 3. Codex preview with Keep / Regenerate / Cancel, and export
 - **Files:** `src/ui/codex.js`, `style.css`, `src/ui/download.js` (reuse), `docs/data-schema.md`, `tests/creator-ui.test.js`
