@@ -49,6 +49,9 @@ or whether it has become impossible.
 - `deadlineTurns` / `deadlineDate` are **soft**. At least one should be set on
   every beat; `deadlineConsequence` is mandatory and must describe a concrete
   escalation (threat progress, lost ally, lost location, targeted loss).
+- **Optional side beats** (`flexibility: "optional"`, id segment `.side.`) may
+  set both deadlines to `null`. They never escalate the threat clock and never
+  gate act progression. Use them for civilian-life and downtime content.
 - `rewriteHints` tells the tracker how to preserve the function if the cast or
   map has diverged.
 
@@ -83,8 +86,32 @@ resolve:
 | `harsh` | Consequences compound sooner |
 
 Missing a deadline never blocks the story. It makes the world worse and
-re-plans the next act. The map overlay previews the next 1–2 beat titles as
+re-plans the next act. The map overlay previews the next 1-2 beat titles as
 rumors/headlines and shows a divergence indicator.
+
+## Side beats and downtime
+
+S1 and S1Dark each carry two optional side beats (`s1.side.*`,
+`s1dark.side.*`). They are civilian-life prompts: a favor at the docks, a
+shelter shift, a knight's proving, a city census. They have no deadline, no
+threat escalation, and no act-gating effect.
+
+The deterministic downtime flow exposes **Rest, Train, Patrol, Investigate,
+Socialize, and Work**. Each action advances one clock slot, applies a small
+bounded change to stamina/willpower, and writes one `downtime` Journal event.
+No agent call is made, so downtime works with every agent disabled. The
+civilian-life event table lives in `data/agendas.json` under `downtime`.
+
+## Ending pilot
+
+S1 and S1Dark ship season-specific deterministic epilogues in
+`season.epilogue.paragraphs`. They are rendered with `{{victor}}`,
+`{{faction}}`, `{{location}}`, `{{fates}}`, and `{{player}}` placeholders and
+respect `ending.paragraphs`.
+
+Dynamic Epilogue-agent prose is behind `ending.dynamic` (default **false**,
+review required). When enabled, the generated epilogue is stored once and is
+never regenerated on reload.
 
 ## Final deadline and villain victory
 

@@ -271,7 +271,12 @@ test('every non-sandbox season has a beat per act and every beat has a deadline 
         }
         for (const beat of season.canonBeats) {
             assert.ok(typeof beat.deadlineConsequence === 'string' && beat.deadlineConsequence.length > 0, beat.id);
-            assert.ok(beat.deadlineTurns !== null || beat.deadlineDate !== null, beat.id);
+            if (beat.flexibility === 'optional' && beat.id.includes('.side.')) {
+                assert.equal(beat.deadlineTurns, null, beat.id);
+                assert.equal(beat.deadlineDate, null, beat.id);
+            } else {
+                assert.ok(beat.deadlineTurns !== null || beat.deadlineDate !== null, beat.id);
+            }
         }
     }
 
@@ -561,14 +566,17 @@ test('beat ledger helpers enforce monotonic status transitions and eligibility',
 
     const s1 = seasons.s1;
     const byAct = listBeatsByAct(s1.canonBeats);
-    assert.equal(byAct.opening.length, 2);
+    assert.ok(byAct.opening.length >= 2);
     assert.equal(byAct.climax.length, 1);
 
     const open = getOpenBeats(s1.canonBeats, {
         's1.opening.arms-deal': { status: 'resolved' },
         's1.opening.beast-rumors': { status: 'deferred' },
     }, 'opening');
-    assert.deepEqual(open.map((beat) => beat.id), ['s1.opening.beast-rumors']);
+    assert.deepEqual(
+        open.map((beat) => beat.id).filter((id) => !id.includes('.side.')),
+        ['s1.opening.beast-rumors'],
+    );
 
     const beat = s1.canonBeats[0];
     assert.equal(isBeatEligible(beat, { turn: 5, statuses: {} }), true);
@@ -604,3 +612,64 @@ test('map coordinate spike --check passes without touching locations.json', () =
     assert.match(result.stdout, /OK: \d+ locations/);
     assert.equal(readFileSync(join(ROOT, 'data', 'locations.json'), 'utf8'), before);
 });
+
+test('S1 and S1Dark have eight beats: six canon plus two optional side beats with no deadline', () => {
+    for (const id of ['s1', 's1dark']) {
+        const seasonDoc = readJson(`data/seasons/${id}.json`);
+        assert.equal(seasonDoc.canonBeats.length, 8, id);
+        const side = seasonDoc.canonBeats.filter((beat) => beat.id.includes('.side.'));
+        assert.equal(side.length, 2, id);
+        for (const beat of side) {
+            assert.equal(beat.flexibility, 'optional', beat.id);
+            assert.equal(beat.deadlineTurns, null, beat.id);
+            assert.equal(beat.deadlineDate, null, beat.id);
+            assert.ok(beat.description.length > 20, beat.id);
+            assert.ok(beat.rewriteHints.length > 0, beat.id);
+        }
+        const ids = seasonDoc.canonBeats.map((beat) => beat.id);
+        assert.equal(new Set(ids).size, ids.length, `${id} beat ids are unique`);
+        for (const act of ['opening', 'escalation', 'climax', 'resolution']) {
+            assert.ok(
+                seasonDoc.canonBeats.some((beat) => beat.act === act),
+                `${id} covers ${act}`,
+            );
+        }
+    }
+});
+
+test('S1 and S1Dark post-victory arcs and epilogues are distinct', () => {
+    const s1 = readJson('data/seasons/s1.json');
+    const s1dark = readJson('data/seasons/s1dark.json');
+    assert.notEqual(s1.postVictory.resistance.threat.name, s1dark.postVictory.resistance.threat.name);
+    assert.notEqual(
+        s1.postVictory['join-villain'].beats[0].title,
+        s1dark.postVictory['join-villain'].beats[0].title,
+    );
+    assert.ok(Array.isArray(s1.epilogue?.paragraphs) && s1.epilogue.paragraphs.length >= 2);
+    assert.ok(Array.isArray(s1dark.epilogue?.paragraphs) && s1dark.epilogue.paragraphs.length >= 2);
+    assert.notEqual(s1.epilogue.paragraphs[0], s1dark.epilogue.paragraphs[0]);
+});
+
+test('an optional beat may omit its deadline while a canon beat may not', () => {
+    const seasonDoc = readJson('data/seasons/s1.json');
+    const optional = seasonDoc.canonBeats.find((beat) => beat.id === 's1.side.docks-favor');
+    const validation = validateBeat(optional, 's1');
+    assert.deepEqual(validation.errors, []);
+
+    const bad = { ...optional, id: 's1.side.bad', flexibility: 'adaptable' };
+    const badValidation = validateBeat(bad, 's1');
+    assert.equal(badValidation.ok, false);
+    assert.match(badValidation.errors[0].message, /soft deadline/);
+});
+
+test('a beat deadline after the season deadline is rejected', () => {
+    const seasonDoc = readJson('data/seasons/s1.json');
+    const beat = seasonDoc.canonBeats.find((entry) => Number.isInteger(entry.deadlineTurns));
+    const validation = validateBeats([beat], {
+        seasonId: 's1',
+        finalDeadlineTurns: beat.deadlineTurns - 1,
+    });
+    assert.equal(validation.ok, false);
+    assert.match(validation.errors[0].message, /after the season deadline/);
+});
+

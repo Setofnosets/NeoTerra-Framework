@@ -304,8 +304,61 @@
       "deadlineDate": "2040-06-01",
       "deadlineConsequence": "The final deadline passes: the resistance wins, and the season ends in a recorded villain-victory for the heroes.",
       "rewriteHints": "The victory can be military, political, or psychological. If the player chooses an early ending, close the remaining beats as 'closed'."
+    },
+    {
+      "id": "s1dark.side.knight-proving",
+      "order": 25,
+      "title": "A Knight's Proving",
+      "description": "One of the player's knights asks for a private test of loyalty: a small hunt, a favor, or a confession. The court is watching how the victor treats her own.",
+      "act": "opening",
+      "conditions": {
+        "turnRange": [0, 40],
+        "locationIds": ["clarity-hq", "old-subway"]
+      },
+      "completion": {
+        "type": "event",
+        "predicates": [
+          { "kind": "event-tag", "tag": "knight-proving" }
+        ]
+      },
+      "flexibility": "optional",
+      "deadlineTurns": null,
+      "deadlineDate": null,
+      "deadlineConsequence": "Optional: the knight keeps her own counsel, and the court notices.",
+      "rewriteHints": "Any named knight or servant may anchor the scene. Refusing the test is a valid outcome."
+    },
+    {
+      "id": "s1dark.side.city-census",
+      "order": 45,
+      "title": "The City Census",
+      "description": "Walk the districts under the new order and decide what the regime records: who is loyal, who is useful, and who disappears from the paperwork.",
+      "act": "escalation",
+      "conditions": {
+        "turnRange": [10, 70],
+        "locationIds": ["central-plaza", "clarity-hq", "neon-docks"]
+      },
+      "completion": {
+        "type": "event",
+        "predicates": [
+          { "kind": "event-tag", "tag": "city-census" }
+        ]
+      },
+      "flexibility": "optional",
+      "deadlineTurns": null,
+      "deadlineDate": null,
+      "deadlineConsequence": "Optional: the clerks fill the census without the victor's guidance.",
+      "rewriteHints": "This is a civilian-life beat about administration and fear, not a battle."
     }
   ],
+  "epilogue": {
+    "title": "The Coronation Hold",
+    "paragraphs": [
+      "{{victor}} rules from {{location}}, and the coronation is finally quiet. The resistance that was supposed to break the regime is a rumor with a mailing address.",
+      "{{faction}} keeps the machinery of the city running. The districts have learned the new etiquette: which checkpoints to smile at, which names not to say, which doors stay closed after curfew.",
+      "{{fates}}",
+      "{{player}} sits at the center of it, more powerful and more watched than before. The season ends in a held breath, not a curtain; the next choice decides whether the coronation becomes a reign."
+    ]
+  },
   "finalDeadline": {
     "turns": 80,
     "date": "2040-06-01"
@@ -322,11 +375,11 @@
   ],
   "postVictory": {
     "resistance": {
-      "title": "The Resistance",
+      "title": "The Underground Court",
       "victorFactionId": "petrabyte",
       "threat": {
         "id": "s1dark.post.victor",
-        "name": "The Underground Resistance Regime",
+        "name": "The Petrabyte Shadow Cabinet",
         "rank": "main",
         "sourceFactionId": "petrabyte",
         "agenda": "Hunt the resistance and make the victory permanent.",
@@ -342,8 +395,8 @@
         {
           "id": "s1dark.post.resistance.recruit",
           "order": 110,
-          "title": "Recruit the First Cell",
-          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "title": "Open the Shadow Court",
+          "description": "Bring the first defector into the new order's confidence and give the underground a face it can bargain with.",
           "act": "escalation",
           "conditions": {},
           "completion": {
@@ -364,8 +417,8 @@
         {
           "id": "s1dark.post.resistance.strike",
           "order": 120,
-          "title": "Strike the Victor's Seat",
-          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "title": "Seize the Old Subway",
+          "description": "Take the underground's old nerve center and turn its tunnels into the court's private road.",
           "act": "resolution",
           "conditions": {
             "requiresBeats": [
@@ -390,14 +443,14 @@
       ]
     },
     "join-villain": {
-      "title": "Serve the Victor",
+      "title": "Keep the Throne",
       "victorFactionId": "petrabyte",
       "threat": {
         "id": "s1dark.post.resistance",
-        "name": "The Resistance",
+        "name": "The Colorgarde Underground",
         "rank": "main",
         "sourceFactionId": null,
-        "agenda": "Overthrow the victor and restore the old order.",
+        "agenda": "Break the coronation and restore the heroes the city was promised.",
         "stages": [
           "Cells form",
           "Sabotage spreads",
@@ -410,8 +463,8 @@
         {
           "id": "s1dark.post.join.break-resistance",
           "order": 110,
-          "title": "Break a Resistance Cell",
-          "description": "Locate and destroy a resistance cell before it can grow.",
+          "title": "Silence a Hero Cell",
+          "description": "Find the cell that still flies the old colors and make an example of it before the story spreads.",
           "act": "escalation",
           "conditions": {},
           "completion": {
@@ -432,8 +485,8 @@
         {
           "id": "s1dark.post.join.conquer",
           "order": 120,
-          "title": "Conquer the Next District",
-          "description": "Take a neighbouring district and install an occupation government.",
+          "title": "Claim the Old Subway",
+          "description": "Take the last independent district and make the coronation's map match the map in the palace.",
           "act": "resolution",
           "conditions": {
             "requiresBeats": [

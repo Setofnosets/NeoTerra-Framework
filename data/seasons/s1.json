@@ -315,8 +315,61 @@
       "deadlineDate": "2040-06-01",
       "deadlineConsequence": "The final deadline passes: Claire wins completely, and the season ends in a recorded villain victory.",
       "rewriteHints": "Claire may be brainwashed into Claire Lachesis, imprisoned, killed, or forced into exile. Any terminal or converted state resolves the beat; record the divergence."
+    },
+    {
+      "id": "s1.side.docks-favor",
+      "order": 25,
+      "title": "A Favor at the Docks",
+      "description": "A dockworker asks Colorgarde for a small, human favor: escort a witness past a Clarity checkpoint, or find a missing brother before the conversion vans do.",
+      "act": "opening",
+      "conditions": {
+        "turnRange": [0, 45],
+        "locationIds": ["neon-docks", "rust-yard"]
+      },
+      "completion": {
+        "type": "event",
+        "predicates": [
+          { "kind": "event-tag", "tag": "docks-favor" }
+        ]
+      },
+      "flexibility": "optional",
+      "deadlineTurns": null,
+      "deadlineDate": null,
+      "deadlineConsequence": "Optional: the docks remember that Colorgarde never came.",
+      "rewriteHints": "Any small civilian request near the docks counts. The favor may be refused without consequence."
+    },
+    {
+      "id": "s1.side.shelter-shift",
+      "order": 45,
+      "title": "A Night at the Shelter",
+      "description": "The Petrabyte safehouse is short-handed. Spend a night helping the people Clarity has already hurt, and hear what they know.",
+      "act": "escalation",
+      "conditions": {
+        "turnRange": [10, 75],
+        "locationIds": ["petrabyte-tower", "old-subway"]
+      },
+      "completion": {
+        "type": "event",
+        "predicates": [
+          { "kind": "event-tag", "tag": "shelter-shift" }
+        ]
+      },
+      "flexibility": "optional",
+      "deadlineTurns": null,
+      "deadlineDate": null,
+      "deadlineConsequence": "Optional: the safehouse manages without you, and the city keeps its distance.",
+      "rewriteHints": "Any safehouse, clinic, or civilian shelter works. This is a civilian-life beat, not a canon obligation."
     }
   ],
+  "epilogue": {
+    "title": "After the Colorgarde",
+    "paragraphs": [
+      "{{victor}} owns Neo Terra now. {{location}} is the seat of the new order, and the Beast Conversion Program no longer needs to hide behind procurement contracts.",
+      "The city remembers the weeks when Colorgarde was still possible. {{faction}} holds the streets it can, and the rest of the districts have learned which checkpoints to avoid after dark.",
+      "{{fates}}",
+      "{{player}} is left standing at the edge of a city that has made its choice. The season is over; what remains is the question of whether the next one begins with surrender, resistance, or something quieter."
+    ]
+  },
   "finalDeadline": {
     "turns": 90,
     "date": "2040-06-01"
@@ -333,14 +386,14 @@
   ],
   "postVictory": {
     "resistance": {
-      "title": "The Resistance",
+      "title": "The Broken Colorgarde",
       "victorFactionId": "clarity",
       "threat": {
         "id": "s1.post.victor",
-        "name": "Clarity Incorporated Regime",
+        "name": "The Clarity Mandate",
         "rank": "main",
         "sourceFactionId": "clarity",
-        "agenda": "Hunt the resistance and make the victory permanent.",
+        "agenda": "Convert or erase every remaining metahuman, and make the Colorgarde name a warning.",
         "stages": [
           "Martial control",
           "Purges and informants",
@@ -353,8 +406,8 @@
         {
           "id": "s1.post.resistance.recruit",
           "order": 110,
-          "title": "Recruit the First Cell",
-          "description": "Gather survivors, defectors, and heroes into a functioning resistance cell.",
+          "title": "Find the First Ally",
+          "description": "Reach the people Clarity has not converted yet: a dockworker, a defector, a hero in hiding. One ally is enough to begin.",
           "act": "escalation",
           "conditions": {},
           "completion": {
@@ -375,8 +428,8 @@
         {
           "id": "s1.post.resistance.strike",
           "order": 120,
-          "title": "Strike the Victor's Seat",
-          "description": "Hit the victor's headquarters and prove the regime is not invincible.",
+          "title": "Break the Conversion Ledger",
+          "description": "Hit the Clarity facility that records every conversion, and prove the program can lose its paperwork.",
           "act": "resolution",
           "conditions": {
             "requiresBeats": [
@@ -401,14 +454,14 @@
       ]
     },
     "join-villain": {
-      "title": "Serve the Victor",
+      "title": "Serve the Mandate",
       "victorFactionId": "clarity",
       "threat": {
         "id": "s1.post.resistance",
-        "name": "The Resistance",
+        "name": "The Colorgarde Remnant",
         "rank": "main",
         "sourceFactionId": null,
-        "agenda": "Overthrow the victor and restore the old order.",
+        "agenda": "Keep the old hero network alive and make the Mandate bleed for every district.",
         "stages": [
           "Cells form",
           "Sabotage spreads",
@@ -421,8 +474,8 @@
         {
           "id": "s1.post.join.break-resistance",
           "order": 110,
-          "title": "Break a Resistance Cell",
-          "description": "Locate and destroy a resistance cell before it can grow.",
+          "title": "Audit a Loyalty File",
+          "description": "Review a converted servant's file for a flaw the Mandate missed, and decide whether to expose or exploit it.",
           "act": "escalation",
           "conditions": {},
           "completion": {
@@ -443,8 +496,8 @@
         {
           "id": "s1.post.join.conquer",
           "order": 120,
-          "title": "Conquer the Next District",
-          "description": "Take a neighbouring district and install an occupation government.",
+          "title": "Secure the Waterfront",
+          "description": "Take the docks for the Mandate and cut the remnant off from its last open supply route.",
           "act": "resolution",
           "conditions": {
             "requiresBeats": [

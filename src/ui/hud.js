@@ -29,6 +29,16 @@ export const HUD_ACTIONS = Object.freeze([
     { id: 'newspaper', label: 'News', icon: 'fa-newspaper' },
 ]);
 
+/** Deterministic downtime actions; each advances one clock slot. */
+export const HUD_DOWNTIME_ACTIONS = Object.freeze([
+    { id: 'rest', label: 'Rest', icon: 'fa-bed' },
+    { id: 'train', label: 'Train', icon: 'fa-dumbbell' },
+    { id: 'patrol', label: 'Patrol', icon: 'fa-shield-halved' },
+    { id: 'investigate', label: 'Investigate', icon: 'fa-magnifying-glass' },
+    { id: 'socialize', label: 'Socialize', icon: 'fa-mug-hot' },
+    { id: 'work', label: 'Work', icon: 'fa-briefcase' },
+]);
+
 export const HUD_MIN_HEIGHT = 220;
 export const HUD_MARGIN = 12;
 
@@ -145,6 +155,7 @@ export function buildHudView({
         presentIds: present.map((entry) => entry.id).filter(Boolean),
         inCombat: home.inCombat,
         actions: HUD_ACTIONS.map((action) => ({ ...action })),
+        downtimeActions: HUD_DOWNTIME_ACTIONS.map((action) => ({ ...action })),
     };
 }
 
@@ -229,9 +240,12 @@ function renderBeat(beat) {
     </div>`;
 }
 
-function renderActions(actions) {
+function renderActions(actions, kind = 'gameplay') {
+    const attr = kind === 'downtime'
+        ? 'data-neoterra-hud-downtime-action'
+        : 'data-neoterra-hud-action';
     return actions.map((action) => `
-        <button type="button" class="neoterra-hud-action" data-neoterra-hud-action="${escapeHtml(action.id)}"
+        <button type="button" class="neoterra-hud-action" ${attr}="${escapeHtml(action.id)}"
             title="${escapeHtml(action.label)}">
             <i class="fa-solid ${escapeHtml(action.icon ?? 'fa-circle')}" aria-hidden="true"></i>
             <span>${escapeHtml(action.label)}</span>
@@ -300,6 +314,13 @@ export function renderHudMarkup(view, { mode = 'rail' } = {}) {
             <nav class="neoterra-hud-actions" aria-label="Gameplay actions">
                 ${renderActions(view.actions)}
             </nav>
+
+            <section class="neoterra-hud-section" aria-label="Downtime">
+                <h4>Downtime</h4>
+                <nav class="neoterra-hud-actions neoterra-hud-downtime" aria-label="Downtime actions">
+                    ${renderActions(view.downtimeActions ?? [], 'downtime')}
+                </nav>
+            </section>
         </div>
     </div>`;
 }
@@ -408,6 +429,16 @@ export function mountHud({
                     onToggleCollapsed?.(!collapsed);
                 } catch (error) {
                     logger.debug('Could not persist the HUD collapse state', error);
+                }
+                return;
+            }
+            const downtime = event.target.closest?.('[data-neoterra-hud-downtime-action]')
+                ?.dataset.neoterraHudDowntimeAction;
+            if (downtime) {
+                try {
+                    onAction?.(`downtime:${downtime}`);
+                } catch (error) {
+                    logger.warn('HUD downtime action failed', error);
                 }
                 return;
             }

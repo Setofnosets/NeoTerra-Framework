@@ -16,6 +16,31 @@
       "{faction} activity reported around {location}."
     ]
   },
+  "downtime": {
+    "events": [
+      "A quiet shift passes in {location}; the city keeps its small routines.",
+      "Someone in {location} shares a rumor and asks for nothing in return.",
+      "The district settles into its evening rhythm around {location}.",
+      "A shopkeeper in {location} closes early and walks home the long way.",
+      "Kids play a game in {location} that ends the moment a patrol appears."
+    ],
+    "seasons": {
+      "s1": {
+        "events": [
+          "Clarity paperwork is pinned to a wall in {location}; someone has crossed out a name.",
+          "A vendor in {location} quietly asks whether Colorgarde is real.",
+          "A family in {location} counts the days since the last conversion van passed."
+        ]
+      },
+      "s1dark": {
+        "events": [
+          "The new census forms are already curling at the edges in {location}.",
+          "A clerk in {location} asks the player to sign a loyalty ledger and pretends not to be afraid.",
+          "The district is quieter than it used to be; {location} has learned to perform obedience."
+        ]
+      }
+    }
+  },
   "seasons": {
     "s1dark": {
       "factionAgendas": {

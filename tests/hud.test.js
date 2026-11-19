@@ -104,6 +104,10 @@ test('the HUD exposes gameplay actions only', () => {
         assert.equal(ids.includes(forbidden), false, `${forbidden} must not be a HUD action`);
     }
     assert.equal(HUD_ACTIONS.length, 5);
+    assert.deepEqual(
+        view.downtimeActions.map((action) => action.id),
+        ['rest', 'train', 'patrol', 'investigate', 'socialize', 'work'],
+    );
 });
 
 test('collapsed state comes from settings', () => {

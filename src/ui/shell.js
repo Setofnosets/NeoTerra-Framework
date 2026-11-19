@@ -54,6 +54,8 @@ import { createInitiative } from '../flows/initiative.js';
 import { createWorldTick } from '../flows/world-tick.js';
 import { createPacingFlow } from '../flows/pacing.js';
 import { createNewsroomFlow } from '../flows/newsroom.js';
+import { createDowntimeFlow, DOWNTIME_ACTION_IDS, resolveDowntimeEvents } from '../flows/downtime.js';
+import { loadAgendas } from '../data/agendas.js';
 import { createNewspaperAgent } from '../agents/newspaper.js';
 import { createStorylineTracker } from '../agents/storyline.js';
 import { createCastDirector } from '../agents/cast-director.js';
@@ -844,6 +846,10 @@ function handleHudAction(action) {
     if (!action) {
         return;
     }
+    if (typeof action === 'string' && action.startsWith('downtime:')) {
+        void performDowntime(action.slice('downtime:'.length));
+        return;
+    }
     if (action === 'map' || action === 'characters') {
         openWindowTab(action);
         return;
@@ -898,6 +904,10 @@ function handlePaletteAction(action) {
     if (!action?.id) {
         return;
     }
+    if (DOWNTIME_ACTION_IDS.includes(action.id)) {
+        void performDowntime(action.id);
+        return;
+    }
     if (action.id === 'travel') {
         openWindowTab('map');
         return;
@@ -923,11 +933,50 @@ function handlePaletteAction(action) {
         return;
     }
     if (action.command) {
-        // Rest/Patrol post a normal player message until the deterministic
-        // downtime flow lands.
         closeShell();
         sendChoiceText(action.command);
     }
+}
+
+/** Apply one deterministic downtime action and refresh the visible surfaces. */
+async function performDowntime(actionId) {
+    const live = refreshContext();
+    const runtime = buildInteractionRuntime(live);
+    if (!runtime?.downtime) {
+        return null;
+    }
+    const before = snapshotWorldState(runtime.store.get());
+    const result = await runtime.downtime.perform(actionId);
+    if (!result?.ok) {
+        ensureToasts().push([{
+            id: `downtime-error:${actionId}`,
+            type: 'error',
+            title: 'Downtime',
+            message: result?.reason === 'unknown-action'
+                ? 'That downtime action is not available.'
+                : (result?.error ?? 'The downtime action could not be applied.'),
+            tone: 'warning',
+        }]);
+        return result;
+    }
+    try {
+        ensureToasts().push([
+            {
+                id: `downtime:${actionId}:${result.turn ?? ''}`,
+                type: 'downtime',
+                title: result.action?.label ?? 'Downtime',
+                message: result.summary ?? 'The city moves on.',
+                tone: 'info',
+            },
+            ...diffWorldState(before, runtime.store.get()),
+        ]);
+    } catch (error) {
+        logger.debug('Could not build downtime toasts', error);
+    }
+    bus.emit(EVENTS.MAP_UPDATED, { reason: 'downtime', action: actionId });
+    mapRuntime?.panelRef?.refresh?.();
+    await refreshInteractionUi(live);
+    return result;
 }
 
 function disposeCommandPalette() {
@@ -2160,6 +2209,17 @@ function buildInteractionRuntime(context) {
         context: { registry: metadata.neoterra?.registry ?? null },
         log: (message, error) => logger.warn(message, error),
     });
+    const downtime = shared?.downtime ?? createDowntimeFlow({
+        store,
+        season,
+        getSettings: () => getSettings(context),
+        loadEvents: async () => {
+            const document = await loadAgendas();
+            return resolveDowntimeEvents(document, season?.id ?? metadata.neoterra?.seasonId ?? null);
+        },
+        now: Date.now,
+        log: (message, error) => logger.warn(message, error),
+    });
     interactionRuntime = {
         chatId,
         store,
@@ -2171,6 +2231,7 @@ function buildInteractionRuntime(context) {
         runner,
         castDirector: castDirector ?? null,
         badEnd,
+        downtime,
         worldTick,
         newsroom,
         controller,

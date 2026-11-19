@@ -672,22 +672,30 @@ export function createEndingFlow({
             3,
             8,
         );
-        let epilogue;
-        try {
-            epilogue = await agent?.run?.({
-                state,
-                season,
-                recentProse,
-                paragraphs,
-                settings: settings(),
-                signal,
-            });
-        } catch (error) {
-            if (isAbortError(error)) {
-                throw error;
+        const settingsNow = settings();
+        // Dynamic ending prose is review-gated. Only an explicit
+        // `ending.dynamic: true` (and an enabled Epilogue agent) calls the
+        // model; the deterministic season template is the default.
+        const dynamic = settingsNow?.ending?.dynamic === true
+            && settingsNow?.agents?.epilogue?.enabled !== false;
+        let epilogue = null;
+        if (dynamic) {
+            try {
+                epilogue = await agent?.run?.({
+                    state,
+                    season,
+                    recentProse,
+                    paragraphs,
+                    settings: settingsNow,
+                    signal,
+                });
+            } catch (error) {
+                if (isAbortError(error)) {
+                    throw error;
+                }
+                logWarning(log, 'Epilogue agent failed; using deterministic epilogue', error);
+                epilogue = null;
             }
-            logWarning(log, 'Epilogue agent failed; using deterministic epilogue', error);
-            epilogue = null;
         }
         if (!isObject(epilogue) || typeof epilogue.epilogueText !== 'string'
             || epilogue.epilogueText.trim().length === 0) {
@@ -730,6 +738,8 @@ export function createEndingFlow({
                         ? epilogue.paragraphs
                         : paragraphs,
                     source: epilogue.source ?? 'agent',
+                    dynamic: dynamic === true,
+                    reviewRequired: dynamic === true,
                     firedAt: clock(),
                 },
             }),

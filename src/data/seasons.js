@@ -350,6 +350,12 @@ export function validateSeasonDefinition(season, context = {}) {
         locationIds,
         factionIds,
         threatIds,
+        finalDeadlineTurns: Number.isInteger(season.finalDeadline?.turns)
+            ? season.finalDeadline.turns
+            : null,
+        finalDeadlineDate: typeof season.finalDeadline?.date === 'string'
+            ? season.finalDeadline.date
+            : null,
     });
     for (const error of beatValidation.errors) {
         add(errors, error.path, error.message);
@@ -457,6 +463,28 @@ export function validateSeasonDefinition(season, context = {}) {
                             }
                         });
                     }
+                }
+            }
+        }
+    }
+
+    // --- optional deterministic epilogue --------------------------------
+    if (season.epilogue !== undefined) {
+        if (!isObject(season.epilogue)) {
+            add(errors, 'epilogue', 'must be an object when present');
+        } else {
+            const epilogue = season.epilogue;
+            if (epilogue.title !== undefined
+                && (typeof epilogue.title !== 'string' || epilogue.title.trim().length === 0)) {
+                add(errors, 'epilogue.title', 'must be a non-empty string when present');
+            }
+            if (epilogue.paragraphs !== undefined) {
+                if (!Array.isArray(epilogue.paragraphs)
+                    || epilogue.paragraphs.length < 2
+                    || !epilogue.paragraphs.every(
+                        (paragraph) => typeof paragraph === 'string' && paragraph.trim().length > 0,
+                    )) {
+                    add(errors, 'epilogue.paragraphs', 'must be at least two non-empty strings');
                 }
             }
         }

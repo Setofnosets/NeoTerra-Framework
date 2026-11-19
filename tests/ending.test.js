@@ -176,7 +176,7 @@ test('Resistance produces a valid post-victory state with new beats and no orpha
     assert.equal(state.threats.filter((threat) => threat.status === 'active').length, 1);
     assert.equal(
         state.threats.find((threat) => threat.id === 's1.post.victor')?.name,
-        'Clarity Incorporated Regime',
+        'The Clarity Mandate',
     );
     assert.ok(state.recentEvents.some((event) => event.tags.includes('resistance')));
     assert.deepEqual(state.player.goals, [
@@ -330,7 +330,9 @@ test('concurrent trigger calls share one epilogue and one journal entry', async 
             };
         },
     };
-    const flow = makeFlow(store, settingsFor(), season, agent);
+    const flow = makeFlow(store, settingsFor({
+        ending: { paragraphs: 5, prompt: '', dynamic: true },
+    }), season, agent);
     const [first, second] = await Promise.all([flow.trigger({}), flow.trigger({})]);
     assert.equal(first.triggered, true);
     assert.equal(second.triggered, true);

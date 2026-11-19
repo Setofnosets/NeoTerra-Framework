@@ -317,8 +317,27 @@ export function validateBeat(beat, seasonId, context = {}) {
             add(errors, `${path}.deadlineDate`, 'must be a non-empty string or null');
         }
     }
-    if (beat.deadlineTurns == null && beat.deadlineDate == null) {
+    if (beat.deadlineTurns == null && beat.deadlineDate == null
+        && beat.flexibility !== 'optional') {
         add(errors, `${path}.deadlineTurns`, 'a soft deadline requires deadlineTurns or deadlineDate');
+    }
+    if (Number.isInteger(beat.deadlineTurns)
+        && Number.isInteger(context.finalDeadlineTurns)
+        && beat.deadlineTurns > context.finalDeadlineTurns) {
+        add(
+            errors,
+            `${path}.deadlineTurns`,
+            `beat deadline ${beat.deadlineTurns} is after the season deadline ${context.finalDeadlineTurns}`,
+        );
+    }
+    if (typeof beat.deadlineDate === 'string'
+        && typeof context.finalDeadlineDate === 'string'
+        && beat.deadlineDate > context.finalDeadlineDate) {
+        add(
+            errors,
+            `${path}.deadlineDate`,
+            `beat deadline ${beat.deadlineDate} is after the season deadline ${context.finalDeadlineDate}`,
+        );
     }
 
     if (!isObject(beat.conditions)) {
@@ -556,7 +575,9 @@ export function getCurrentAct(state, season) {
     const beats = beatList(season);
     for (const act of BEAT_ACTS) {
         const hasOpen = beats.some(
-            (beat) => beat.act === act && !isBeatTerminal(state, beat.id),
+            (beat) => beat.act === act
+                && beat.flexibility !== 'optional'
+                && !isBeatTerminal(state, beat.id),
         );
         if (hasOpen) {
             return act;

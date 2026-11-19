@@ -129,6 +129,9 @@ export const DEFAULT_SETTINGS = freezeDeep({
         // Default villain-victory epilogue length. Clamped to 3-8 by the flow.
         paragraphs: 5,
         prompt: '',
+        // Dynamic Epilogue-agent prose is review-gated and off by default. The
+        // deterministic season template always works without a model call.
+        dynamic: false,
     },
 
     // Season kickoff. The opening frame and the "your move" card are always

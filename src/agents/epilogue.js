@@ -165,7 +165,43 @@ export function buildDeterministicEpilogue({
         .filter((faction) => Number(faction?.influence ?? 0) >= 50)
         .sort((a, b) => Number(b.influence) - Number(a.influence))[0] ?? null;
 
-    const paragraphsOut = [
+    const paragraphsOut = [];
+    const authored = Array.isArray(season?.epilogue?.paragraphs)
+        ? season.epilogue.paragraphs.filter((paragraph) => typeof paragraph === 'string' && paragraph.trim().length > 0)
+        : [];
+    if (authored.length > 0) {
+        const values = {
+            victor: victor.name,
+            victorFaction: victorFaction ?? '',
+            faction: leadFaction?.name ?? victorFaction ?? '',
+            location,
+            fates: fates.map((fate) => fate.fate).join(' ') || 'The cast is scattered, and the survivors are still counting what they lost.',
+            leadFaction: leadFaction?.name ?? '',
+            player: `${name} (${player})`,
+            playerStatus: player,
+            name,
+            season: season?.title ?? state?.seasonId ?? 'Neo Terra',
+        };
+        for (const paragraph of authored) {
+            paragraphsOut.push(
+                paragraph.replace(/\{\{(victor|victorFaction|faction|location|fates|leadFaction|player|playerStatus|name|season)\}\}/g,
+                    (match, key) => (values[key] ? String(values[key]) : match)),
+            );
+        }
+        if (paragraphsOut.length < count) {
+            paragraphsOut.push('Beyond the ending, the city waits to see whether the new order can be endured, resisted, or joined.');
+        }
+        while (paragraphsOut.length < count) {
+            paragraphsOut.push('The next choice belongs to the player, not the epilogue.');
+        }
+        while (paragraphsOut.length > count) {
+            const merged = paragraphsOut.splice(paragraphsOut.length - 2, 2).join(' ');
+            paragraphsOut.push(merged);
+        }
+        return paragraphsOut.join('\n\n');
+    }
+
+    paragraphsOut.push(
         `${victor.name} has won. The season ends with ${victor.name} ascendant${victorFaction ? ` and ${victorFaction} standing openly behind it` : ''}, and ${location} belongs to the victor.`,
         `The victory was not a single blow but an accumulation: deadlines missed, allies worn down, and every opening spent before it could become a counterattack. ${victor.agenda ? victor.agenda : 'The city bent toward the victor before anyone agreed to kneel.'}`,
         fates.length >= 2
@@ -173,7 +209,7 @@ export function buildDeterministicEpilogue({
             : 'The cast is scattered, and the survivors are still counting what they lost.',
         `${leadFaction ? `${leadFaction.name} sets the tone of the new order. ` : ''}Faction control has hardened around the victor, and the places that once offered shelter are now checkpoints, offices, or memorials.`,
         `${name} survives the ending with ${player}. The story does not decide what happens next; the next choice does.`,
-    ];
+    );
 
     while (paragraphsOut.length < count) {
         paragraphsOut.push(`Beyond the immediate surrender, the city waits to see whether the new order can be endured, resisted, or joined.`);
