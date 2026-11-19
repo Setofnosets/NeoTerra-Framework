@@ -17,6 +17,7 @@ import {
     runTurnPipeline,
 } from '../src/agents/state-tracker.js';
 import { AgentAbortedError, validateJsonSchema } from '../src/agents/client.js';
+import { applyWorldEvents } from '../src/state/reducer.js';
 import { buildPlayerSheet, renderPlayerPanelMarkup } from '../src/ui/player-panel.js';
 import { createWorldStateStore } from '../src/state/store.js';
 import { createWorldTick } from '../src/flows/world-tick.js';
@@ -335,6 +336,46 @@ test('the prompt names the played canon character and the protected manual paths
     assert.match(prompt, /Carol|Bleeding Heart/);
     assert.match(prompt, /stamina\.current/);
     assert.match(prompt, /Never change NPCs/);
+    // Goals and agenda are steering signals the tracker must see and rewrite.
+    assert.match(prompt, /^Agenda: /m);
+    assert.match(prompt, /^Goals: /m);
+    assert.match(prompt, /complete new list/);
+});
+
+test('a goal change emits a full-replacement event; an unchanged list is a no-op', () => {
+    const store = makeStore('s1dark', {
+        identity: 'canon',
+        characterId: 's1dark.carol.bleeding-heart',
+    });
+    const state = store.get();
+    state.characters['s1dark.carol.bleeding-heart'].goals = ['Hold the tower'];
+    state.characters['s1dark.carol.bleeding-heart'].goalsSource = 'card';
+
+    const unchanged = normalizeStateTrackerResult({
+        result: {
+            changes: [{ path: 'goals', value: ['Hold the tower'], reason: 'no change' }],
+            relationships: [],
+            rationale: '',
+        },
+        state,
+    });
+    assert.equal(unchanged.events.length, 0);
+
+    const changed = normalizeStateTrackerResult({
+        result: {
+            changes: [{ path: 'goals', value: ['Hold the tower', 'Crush the resistance'], reason: 'new course' }],
+            relationships: [],
+            rationale: '',
+        },
+        state,
+    });
+    assert.deepEqual(changed.events, [{
+        type: 'SET_PLAYER_FIELDS',
+        goals: ['Hold the tower', 'Crush the resistance'],
+    }]);
+    const next = applyWorldEvents(state, changed.events, CONTEXT);
+    assert.deepEqual(next.characters['s1dark.carol.bleeding-heart'].goals, ['Hold the tower', 'Crush the resistance']);
+    assert.equal(next.player.goals[1], 'Crush the resistance');
 });
 
 test('the villain-POV sheet uses villain-side labels and the same modular fields', () => {

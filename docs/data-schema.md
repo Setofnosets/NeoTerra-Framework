@@ -104,6 +104,10 @@ card's `data.description` (`tools/build-data.mjs`). Never hand-edit it; run
       "appearance": "…",
       "attire": "…",
       "abilities": "…",
+      "abilitySummary": [{ "lead": "Light manipulation", "detail": "Bends light to cloak and create illusions" }],
+      "skills": ["Illusions out of light"],
+      "traits": ["Genius intellect", "Invisibility"],
+      "aliases": ["Colorgarde"],
       "personality": "…",
       "speech": "…",
       "likes": ["…"],
@@ -134,6 +138,50 @@ card's `data.description` (`tools/build-data.mjs`). Never hand-edit it; run
   after variant labels such as `Civilian Appearance` are resolved.
 - `likes`, `dislikes`, and `goals` are arrays: short, clearly separated items are
   split; prose bodies stay a single item.
+- `abilities` keeps the raw `Abilities:` prose because the card block renders
+  it. The derived fields beside it are what the codex tiles and the prompt use:
+  - `abilitySummary`: `[{ lead, detail }]` (lead = capability name, ≤40 chars;
+    detail = one-line gloss, ≤120 chars), at most 8 items. Deterministic
+    sentence splitting over the abilities prose; quoted dialogue is dropped.
+  - `skills`: short active capabilities (≤6 items, ≤60 chars each).
+  - `traits`: passive qualities (≤8 items, ≤60 chars each), from explicit
+    trait labels plus a deterministic passive-pattern pass. A card's
+    `weakness` is never folded into traits.
+  - `goals`: label-only. Populated exclusively from goal labels
+    (`Goals/Motives`, `Goals/Motive`, `Goal/Motives`, `Motive`, `Ultimate Goal`,
+    `Goals`, `Motivation`, `Motivations`, `Drive`, `Main drive`, `Ambition`,
+    `Objective`), split with `splitListText`, capped at 5 items of ≤160 chars.
+    There is no prose mining and no invention; most cards legitimately have
+    none.
+  - `aliases`: derived by one shared `parseAliases` implementation (registry
+    and profile agree). Compound lists split on `.`, `;`, newlines, `/`, `,`
+    and parenthetical role markers (`X (supervillain name)` → `X`); at most 6
+    aliases, fragments >60 chars or containing `:` dropped. Cards without an
+    alias label still yield `known as X` / `is X, a …` names.
+  - `missing` reports `skills`/`traits` when neither a label nor derivation
+    produced a value, and keeps reporting `goals` for cards without a goal
+    label.
+  `New Traits` / `Corrupted Traits` / `Former Traits` are form-scoped trait
+  text, not `extras`.
+
+Derivation counts for the current 78-card checkout (recorded 2026-11-19;
+`docs/data-schema.md` step 3 before/after):
+
+| Measure | Before | After |
+| --- | --- | --- |
+| Profiles with goals | 26 | 26 |
+| Profiles with skills | 0 (field did not exist) | 57 |
+| Profiles with traits | 0 (field did not exist) | 59 |
+| Profiles with an ability summary | 0 (field did not exist) | 61 |
+| Profiles with no goal label | 52 | 52 |
+
+Before this change a profile had no `skills`, `traits`, or `abilitySummary`
+fields at all; seeding guessed traits from `personality`/`speech` and left
+`skills` empty.
+
+Skills are still empty for 21 cards and traits for 19 (mostly cards whose
+`Abilities:` block is missing or describe a normal human). The optional
+enricher (plan step 7) exists for that gap but stays off by default.
 - `sensitive` keeps NSFW-labelled sections (`Sexual Information`,
   `Sexual Preference`, `Sexual Personality`, `Kink`) verbatim so the content
   gate, not the parser, decides visibility.

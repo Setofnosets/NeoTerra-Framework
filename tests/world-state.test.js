@@ -9,6 +9,7 @@ import { buildCharacterProfile } from '../src/context/worldbook.js';
 import { applyWorldEvent } from '../src/state/reducer.js';
 import {
     CURRENT_WORLD_STATE_VERSION,
+    backfillCharacterFacets,
     migrateWorldState,
 } from '../src/state/migrations.js';
 import {
@@ -298,6 +299,33 @@ test('validateWorldState reports missing references and invalid enums without th
 
     const notAnObject = validateWorldState('nope');
     assert.equal(notAnObject.ok, false);
+});
+
+test('backfillCharacterFacets fills empty fields once and never touches live goals', () => {
+    const profiles = readJson('data/characters/profiles.json').profiles;
+    const state = seed('s1');
+    const vaiva = 's1.vaiva.colorgarde';
+    // Simulate a pre-change world: no skills, a prose abilities blob, no tags.
+    state.characters[vaiva].skills = [];
+    state.characters[vaiva].abilities = ['A long old prose paragraph about her suit.'];
+    delete state.characters[vaiva].aliases;
+    state.characters[vaiva].goals = ['A tracker-written goal'];
+    state.characters[vaiva].goalsSource = 'live';
+
+    const once = backfillCharacterFacets(state, profiles);
+    assert.equal(once.changed, true);
+    const character = once.state.characters[vaiva];
+    assert.ok(character.skills.length > 0);
+    assert.ok(character.abilities.length > 0);
+    assert.ok(character.aliases.length > 0);
+    // A live goal list is plot-owned and untouched.
+    assert.deepEqual(character.goals, ['A tracker-written goal']);
+    assert.equal(character.goalsSource, 'live');
+
+    // A second pass is a no-op.
+    const twice = backfillCharacterFacets(once.state, profiles);
+    assert.equal(twice.changed, false);
+    assert.equal(twice.state, once.state);
 });
 
 test('migrations normalize v0, preserve unknown keys, and never downgrade', () => {

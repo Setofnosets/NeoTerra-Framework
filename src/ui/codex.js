@@ -13,9 +13,11 @@
 import { applyWorldEvent } from '../state/reducer.js';
 import { buildFormIndex, isLegalTransform } from '../data/forms.js';
 import { findFormSection, splitListText } from '../data/card-profile.js';
+import { abilityItems, abilitySummaryLines } from '../data/card-facets.js';
 import { applyContentGate } from '../core/content-gate.js';
 import { createLogger } from '../core/logger.js';
 import { applyFormProfileOverlay } from '../state/form-profiles.js';
+import { backfillCharacterFacets } from '../state/migrations.js';
 import { buildGeneratedCharacterEvent } from '../agents/character-creator.js';
 import { avatarMarkup, initAvatars, initialsFor } from './avatar.js';
 import { buildGeneratedFormsExport } from './codex-data.js';
@@ -726,12 +728,61 @@ export function mergeCardProfileIntoCharacter(character, profile) {
     setText('appearance', profile.appearance);
     setText('outfit', profile.attire);
     setText('notes', profile.background);
-    setList('abilities', splitListText(profile.abilities));
+    setList('abilities', abilitySummaryLines(profile.abilitySummary).length > 0
+        ? abilitySummaryLines(profile.abilitySummary)
+        : splitListText(profile.abilities));
+    setList('skills', profile.skills);
     setList('likes', profile.likes);
     setList('dislikes', profile.dislikes);
-    setList('goals', profile.goals);
-    setList('traits', listLikeCardTraits(profile));
+    // A tracker-owned goal list outranks the card.
+    if (next.goalsSource !== 'live') {
+        setList('goals', profile.goals);
+    }
+    setList('traits', Array.isArray(profile.traits) && profile.traits.length > 0
+        ? profile.traits
+        : listLikeCardTraits(profile));
+    if (!next.goalsSource) {
+        next.goalsSource = 'card';
+        changed = true;
+    }
 
+    return { character: changed ? next : character, changed };
+}
+
+/**
+ * Overwrite a character's derived facets from its card profile.
+ *
+ * Unlike the fill-empty importer this is explicit and destructive for
+ * skills/traits/abilities only; goals are plot-owned and never touched.
+ *
+ * @returns {{ character: object, changed: boolean }}
+ */
+export function rederiveCardFacets(character, profile) {
+    if (!character || !profile || profile.actors) {
+        return { character, changed: false };
+    }
+    const next = { ...character };
+    let changed = false;
+    const setList = (field, values) => {
+        const list = asArray(values).filter((value) => typeof value === 'string' && value.trim().length > 0);
+        if (list.length === 0) {
+            return;
+        }
+        if (!sameList(next[field], list)) {
+            next[field] = list.slice();
+            changed = true;
+        }
+    };
+    setList('skills', profile.skills);
+    setList('traits', profile.traits);
+    setList('abilities', abilitySummaryLines(profile.abilitySummary));
+    if (changed) {
+        const manual = new Set(asArray(next.manualFields));
+        for (const field of ['skills', 'traits', 'abilities']) {
+            manual.delete(field);
+        }
+        next.manualFields = [...manual];
+    }
     return { character: changed ? next : character, changed };
 }
 
@@ -791,6 +842,14 @@ function buildDetail({
     if (!entry && !character) {
         return null;
     }
+    // Aliases, tags, side, threat level, and form kind follow the active form.
+    const activeEntry = registryIndex(registry)[character?.formId]
+        ?? entry
+        ?? null;
+    const baseEntry = formIndex?.groupByMemberId?.[selectedId]?.base
+        ?? (character?.formGroup ? formIndex?.byGroup?.[character.formGroup]?.base : null)
+        ?? entry
+        ?? null;
     const roster = rosterIds(season);
     const record = state?.badEnds?.[selectedId] ?? null;
     const playAsOption = playAs.options.find((option) => option.characterId === selectedId)
@@ -837,7 +896,7 @@ function buildDetail({
         locationName: character?.locationId
             ? state?.locations?.[character.locationId]?.name ?? character.locationId
             : null,
-        threatLevel: character?.threatLevel ?? entry?.threatLevel ?? null,
+        threatLevel: activeEntry?.threatLevel ?? character?.threatLevel ?? entry?.threatLevel ?? null,
         resource: {
             stamina: {
                 current: Number.isFinite(stamina.current) ? clamp(stamina.current, 0, staminaMax) : 0,
@@ -861,11 +920,18 @@ function buildDetail({
             source: character?.corruption?.source ?? null,
         },
         profile: {
-            aliases: asArray(entry?.aliases),
-            tags: asArray(entry?.tags),
-            formKind: entry?.formKind ?? null,
-            formRole: entry?.formRole ?? null,
-            cardPath: entry?.cardPath ?? entry?.file ?? null,
+            aliases: asArray(character?.aliases).length > 0
+                ? asArray(character.aliases)
+                : asArray(activeEntry?.aliases),
+            tags: asArray(character?.tags).length > 0
+                ? asArray(character.tags)
+                : asArray(activeEntry?.tags),
+            baseAliases: asArray(baseEntry?.aliases),
+            baseTags: asArray(baseEntry?.tags),
+            formDiffers: Boolean(character?.formId && character.formId !== selectedId),
+            formKind: activeEntry?.formKind ?? null,
+            formRole: activeEntry?.formRole ?? null,
+            cardPath: activeEntry?.cardPath ?? entry?.cardPath ?? entry?.file ?? null,
             profileFormId: character?.profileFormId ?? character?.formId ?? null,
             profileSource: character?.profileSource ?? (character ? 'card' : null),
             profileMissing: character?.profileMissing ?? null,
@@ -875,11 +941,13 @@ function buildDetail({
             // Live and card values both pass the gate: imported/seeded card text
             // is stored raw, so the render layer is the single policy point.
             goals: gateList(liveList(character?.goals, card?.goals), settings, gateContext),
+            cardGoals: gateList(asArray(card?.goals), settings, gateContext),
+            goalsSource: character?.goalsSource ?? 'card',
             appearance: gateValue(liveText(character?.appearance, card?.appearance)),
             outfit: gateValue(liveText(character?.outfit, card?.attire)),
-            abilities: gateList(liveList(character?.abilities, card?.abilities), settings, gateContext),
-            skills: gateList(asArray(character?.skills), settings, gateContext),
-            traits: gateList(asArray(character?.traits), settings, gateContext),
+            abilities: gateList(liveList(character?.abilities, abilitySummaryLines(card?.abilitySummary)), settings, gateContext),
+            skills: gateList(liveList(character?.skills, card?.skills), settings, gateContext),
+            traits: gateList(liveList(character?.traits, card?.traits), settings, gateContext),
             likes: gateList(liveList(character?.likes, card?.likes), settings, gateContext),
             dislikes: gateList(liveList(character?.dislikes, card?.dislikes), settings, gateContext),
             notes: gateValue(character?.notes ?? ''),
@@ -1185,6 +1253,47 @@ function listMarkup(values, empty = 'None') {
     )).join('')}</ul>`;
 }
 
+/**
+ * Abilities render as lead + gloss pairs, never a paragraph.
+ *
+ * Old chats may still hold one prose blob; `abilityItems` splits it into short
+ * items or keeps an unparseable run-on whole.
+ */
+function abilityMarkup(values, empty = 'No abilities recorded.') {
+    const items = abilityItems(values);
+    if (items.length === 0) {
+        return `<p class="neoterra-empty">${escapeCodexHtml(empty)}</p>`;
+    }
+    const renderItem = (item) => `<li class="neoterra-codex-ability">
+        <strong>${escapeCodexHtml(item.lead)}</strong>${item.detail ? `<span class="neoterra-hint">${escapeCodexHtml(item.detail)}</span>` : ''}
+    </li>`;
+    const visible = items.slice(0, 6);
+    const rest = items.slice(6);
+    const hidden = rest.length > 0
+        ? `<details class="neoterra-codex-abilities-more"><summary>Show all (${items.length})</summary>
+            <ul class="neoterra-codex-abilities">${rest.map(renderItem).join('')}</ul>
+        </details>`
+        : '';
+    return `<ul class="neoterra-codex-abilities">${visible.map(renderItem).join('')}</ul>${hidden}`;
+}
+
+function goalsMarkup(profile) {
+    const live = asArray(profile.goals);
+    const card = asArray(profile.cardGoals);
+    const fromCard = card.length > 0 && !sameList(card, live);
+    const body = live.length > 0
+        ? listMarkup(live)
+        : (card.length > 0
+            ? `${listMarkup(card)}<p class="neoterra-hint">From card</p>`
+            : '<p class="neoterra-empty">No goals recorded in the card</p>');
+    const cardText = card.join('; ');
+    const capped = cardText.length > 240 ? `${cardText.slice(0, 239).trimEnd()}…` : cardText;
+    const extra = (live.length > 0 && fromCard)
+        ? `<p class="neoterra-hint">From card: ${escapeCodexHtml(capped)}</p>`
+        : '';
+    return `${body}${extra}`;
+}
+
 function badge(text, tone = 'default') {
     return `<span class="neoterra-badge neoterra-badge-${escapeCodexHtml(tone)}">${escapeCodexHtml(text)}</span>`;
 }
@@ -1306,6 +1415,7 @@ function renderCardProfile(card, detail) {
         card.attire !== live.liveOutfit ? cardParagraph('Attire', card.attire) : '',
         cardParagraph('Personality', card.personality),
         cardParagraph('Speech', card.speech),
+        cardParagraph('Abilities', card.abilities),
         card.background !== live.liveNotes ? cardParagraph('Background', card.background) : '',
     ].join('');
 
@@ -1344,6 +1454,7 @@ function renderCardProfile(card, detail) {
         <div class="neoterra-codex-card-profile-head">
             <h5>From the character card</h5>
             <button type="button" class="menu_button" data-neoterra-import-profile="${escapeCodexHtml(detail.characterId)}">Import card profile</button>
+            <button type="button" class="menu_button" data-neoterra-rederive-profile="${escapeCodexHtml(detail.characterId)}">Re-derive from card</button>
         </div>
         ${actorNames.length > 1 ? `<p class="neoterra-hint">Multi-actor card: ${escapeCodexHtml(actorNames.join(' & '))}</p>` : ''}
         ${paragraphs}
@@ -1458,13 +1569,23 @@ function renderDetail(detail, state) {
         <div class="neoterra-codex-profile-grid">
             ${profileList('Aliases', profile.aliases)}
             ${profileList('Tags', profile.tags)}
-            ${profileList('Goals', profile.goals)}
-            ${profileList('Abilities', profile.abilities)}
+            <section class="neoterra-codex-profile-block">
+                <h6>Goals</h6>
+                ${goalsMarkup(profile)}
+                <button type="button" class="menu_button" data-neoterra-reset-goals="${escapeCodexHtml(detail.characterId)}">Reset goals to card</button>
+            </section>
+            <section class="neoterra-codex-profile-block">
+                <h6>Abilities</h6>
+                ${abilityMarkup(profile.abilities)}
+            </section>
             ${profileList('Skills', profile.skills)}
             ${profileList('Traits', profile.traits)}
             ${profileList('Likes', profile.likes)}
             ${profileList('Dislikes', profile.dislikes)}
         </div>
+        ${profile.formDiffers && (profile.baseAliases.length > 0 || profile.baseTags.length > 0)
+            ? `<p class="neoterra-hint">Base: ${escapeCodexHtml([...profile.baseAliases, ...profile.baseTags].join(' · '))}</p>`
+            : ''}
 
         <section class="neoterra-codex-section">
             <h5>Profile</h5>
@@ -1812,6 +1933,21 @@ export function mountCodex({
     };
     mounted = state;
 
+    // Existing chats seeded before card facets existed: fill empty skills,
+    // traits, abilities, aliases, and card-sourced goals once. Fill-empty only,
+    // so a live/tracker goal is never overwritten and a second mount is a no-op.
+    if (profiles && typeof store.get === 'function') {
+        try {
+            const before = store.get();
+            const filled = backfillCharacterFacets(before, profiles);
+            if (filled.changed) {
+                store.replace(filled.state);
+            }
+        } catch (error) {
+            logger.warn('Card facet backfill failed; continuing with stored state', error);
+        }
+    }
+
     // Portraits are optional: the first paint shows initials while the manifest
     // loads, then a second paint swaps in the resolved avatars.
     void initAvatars({ registry, ctx }).then(() => paint()).catch(() => {});
@@ -2112,6 +2248,84 @@ export function mountCodex({
         paint();
     };
 
+    const applyRederiveFacets = (characterId) => {
+        try {
+            const before = store.get();
+            const character = before?.characters?.[characterId] ?? null;
+            if (!character) {
+                state.error = 'Unknown character.';
+                paint();
+                return;
+            }
+            const profile = profiles?.[character.formId] ?? profiles?.[characterId] ?? null;
+            if (!profile) {
+                state.error = 'No card profile exists for this character.';
+                paint();
+                return;
+            }
+            const result = rederiveCardFacets(character, profile);
+            if (!result.changed) {
+                state.error = null;
+                state.status = 'Card facets are already up to date.';
+                paint();
+                return;
+            }
+            const next = store.replace({
+                ...before,
+                characters: { ...before.characters, [characterId]: result.character },
+            });
+            state.error = null;
+            state.status = `Re-derived abilities, skills, and traits for ${next.characters?.[characterId]?.displayName ?? characterId}.`;
+            onWorldChange?.({ state: next, reason: 'card-facets', updated: [characterId] });
+        } catch (error) {
+            state.error = error?.message ?? String(error);
+            state.status = null;
+            logger.warn('Card facet re-derivation failed', error);
+        }
+        paint();
+    };
+
+    const applyResetGoals = (characterId) => {
+        try {
+            const before = store.get();
+            const character = before?.characters?.[characterId] ?? null;
+            const profile = profiles?.[character?.formId] ?? profiles?.[characterId] ?? null;
+            const cardGoals = Array.isArray(profile?.goals) ? profile.goals.slice() : [];
+            if (!character) {
+                state.error = 'Unknown character.';
+                paint();
+                return;
+            }
+            if (sameList(asArray(character.goals), cardGoals) && character.goalsSource === 'card') {
+                state.error = null;
+                state.status = 'Goals already match the card.';
+                paint();
+                return;
+            }
+            const next = store.replace({
+                ...before,
+                characters: {
+                    ...before.characters,
+                    [characterId]: {
+                        ...character,
+                        goals: cardGoals,
+                        goalsSource: 'card',
+                    },
+                },
+            });
+            state.error = null;
+            state.status = cardGoals.length > 0
+                ? `Reset goals to the card's list for ${next.characters?.[characterId]?.displayName ?? characterId}.`
+                : `Cleared live goals for ${next.characters?.[characterId]?.displayName ?? characterId} (the card has none).`;
+            onWorldChange?.({ state: next, reason: 'goals-reset', updated: [characterId] });
+        } catch (error) {
+            state.error = error?.message ?? String(error);
+            state.status = null;
+            logger.warn('Goal reset failed', error);
+        }
+        paint();
+    };
+
     const applyProfileBackfill = (ids, mode) => {
         try {
             const before = store.get();
@@ -2328,6 +2542,32 @@ export function mountCodex({
             state.status = null;
             state.error = null;
             applyProfileBackfill([importProfile.dataset.neoterraImportProfile], 'one');
+            return;
+        }
+        const rederiveProfile = event.target.closest?.('[data-neoterra-rederive-profile]');
+        if (rederiveProfile) {
+            const characterId = rederiveProfile.dataset.neoterraRederiveProfile;
+            const confirmed = typeof window === 'undefined'
+                || typeof window.confirm !== 'function'
+                || window.confirm('Overwrite this character\'s abilities, skills, and traits from the card? Goals are not touched.');
+            if (confirmed) {
+                state.status = null;
+                state.error = null;
+                applyRederiveFacets(characterId);
+            }
+            return;
+        }
+        const resetGoals = event.target.closest?.('[data-neoterra-reset-goals]');
+        if (resetGoals) {
+            const characterId = resetGoals.dataset.neoterraResetGoals;
+            const confirmed = typeof window === 'undefined'
+                || typeof window.confirm !== 'function'
+                || window.confirm('Replace the live goals with the goals labelled on the character card?');
+            if (confirmed) {
+                state.status = null;
+                state.error = null;
+                applyResetGoals(characterId);
+            }
             return;
         }
         const selectCard = event.target.closest?.('[data-neoterra-codex-select]');

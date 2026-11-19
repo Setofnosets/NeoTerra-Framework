@@ -307,6 +307,31 @@ export function buildStorylinePrompt({
     }
     lines.push('');
 
+    lines.push('## Cast');
+    const playerId = state?.player?.identity === 'canon' ? state?.player?.characterId : null;
+    let castCount = 0;
+    for (const character of Object.values(state?.characters ?? {}).filter(isObject)) {
+        if (playerId && character.charId === playerId) {
+            continue;
+        }
+        const goals = asArray(character.goals).join('; ') || '(none)';
+        lines.push([
+            character.charId,
+            character.side ?? 'neutral',
+            character.agenda || '(no agenda)',
+            `goals: ${goals}`,
+            `mood: ${character.mood || 'unknown'}`,
+        ].join(' — '));
+        castCount += 1;
+        if (castCount >= 24) {
+            break;
+        }
+    }
+    if (castCount === 0) {
+        lines.push('(no NPCs)');
+    }
+    lines.push('');
+
     lines.push('## Open canon beats');
     if (openBeats.length === 0) {
         lines.push('(none)');
@@ -341,6 +366,8 @@ export function buildStorylinePrompt({
     lines.push('## Rules');
     lines.push('Only use ids supplied above.');
     lines.push('Never edit the player-controlled character. The player state tracker owns the player.');
+    lines.push('Agenda is what an NPC is doing now; goals are what they are steering toward.');
+    lines.push('When you emit goals for a character, return the complete new list (up to 5). It replaces the stored list; never invent a goal the prose does not support.');
     lines.push('Threat progress only moves forward; never return a negative progressDelta.');
     lines.push('Transformations are legal only through a declared form rule.');
     lines.push('Beats may resolve only when their completion predicates are satisfied.');
@@ -486,16 +513,27 @@ export function normalizeStorylineResult({
                 });
             }
         }
-        const goals = asStringArray(character.goals).slice(0, 5);
+        const existing = state?.characters?.[character.id] ?? null;
+        const hasGoals = Array.isArray(character.goals);
+        const goals = hasGoals ? asStringArray(character.goals).slice(0, 5) : [];
+        const currentGoals = asArray(existing?.goals).map((item) => String(item).trim().toLowerCase());
+        const nextGoals = goals.map((item) => String(item).trim().toLowerCase());
+        // An empty array from a model that simply ran out of text must not wipe
+        // goals the prose did not actually abandon.
+        const wouldClear = goals.length === 0 && currentGoals.length > 0;
+        const goalsChanged = hasGoals && !wouldClear && (
+            currentGoals.length !== nextGoals.length
+            || currentGoals.some((item, index) => item !== nextGoals[index])
+        );
         if (typeof character.agenda === 'string'
             || typeof character.allegiance === 'string'
             || typeof character.mood === 'string'
-            || goals.length > 0) {
+            || goalsChanged) {
             events.push({
                 type: 'SET_CHARACTER_FIELDS',
                 characterId: character.id,
                 ...(typeof character.agenda === 'string' ? { agenda: character.agenda } : {}),
-                ...(goals.length > 0 ? { goals } : {}),
+                ...(goalsChanged ? { goals } : {}),
                 ...(typeof character.allegiance === 'string' ? { allegiance: character.allegiance } : {}),
                 ...(typeof character.mood === 'string' ? { mood: character.mood } : {}),
             });

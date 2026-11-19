@@ -376,6 +376,11 @@ const HANDLERS = Object.freeze({
             ...(Array.isArray(character.manualFields) ? character.manualFields : []),
             ...manualPaths,
         ];
+        // Goals are plot-owned once a tracker writes them: a swap must not
+        // overwrite a live goal with the card's starting list.
+        if (character.goalsSource === 'live') {
+            manualFields.push('goals');
+        }
         const overlay = dynamicForm?.overlay ?? character.formProfiles?.[formId] ?? null;
         if (overlay) {
             applyFormProfileOverlay(character, overlay, manualFields);
@@ -386,6 +391,19 @@ const HANDLERS = Object.freeze({
             character.profileFormId = formId;
             character.profileSource = 'missing';
             character.profileMissing = formId;
+        }
+        // Aliases and tags follow the active form, so a form with no metadata
+        // clears them instead of inheriting the previous form's list. The
+        // overlay value is a fallback for generated forms that have no
+        // registry entry.
+        character.aliases = Array.isArray(overlay?.aliases)
+            ? overlay.aliases.slice()
+            : (Array.isArray(targetEntry?.aliases) ? targetEntry.aliases.slice() : []);
+        character.tags = Array.isArray(overlay?.tags)
+            ? overlay.tags.slice()
+            : (Array.isArray(targetEntry?.tags) ? targetEntry.tags.slice() : []);
+        if (character.goalsSource !== 'live') {
+            character.goalsSource = 'card';
         }
         if (dynamicForm) {
             const generated = isObject(state.flags?.generatedForms) ? state.flags.generatedForms : {};
@@ -1137,6 +1155,7 @@ const HANDLERS = Object.freeze({
         }
         if (event.goals !== undefined) {
             character.goals = requireStringList(event.goals, 'SET_CHARACTER_FIELDS goals');
+            character.goalsSource = event.goalsSource === 'card' ? 'card' : 'live';
         }
         if (event.allegiance !== undefined) {
             if (typeof event.allegiance !== 'string') {
@@ -1170,6 +1189,14 @@ const HANDLERS = Object.freeze({
         }
         if (event.injuries !== undefined) {
             character.injuries = requireStringList(event.injuries, 'SET_CHARACTER_FIELDS injuries');
+        }
+        // Player/Codex edits may mark fields that must survive a form swap.
+        if (event.manualFields !== undefined) {
+            const manual = new Set([
+                ...(Array.isArray(character.manualFields) ? character.manualFields : []),
+                ...requireStringList(event.manualFields, 'SET_CHARACTER_FIELDS manualFields'),
+            ]);
+            character.manualFields = [...manual];
         }
         character.lastUpdatedTurn = state.meta.turn;
         syncPlayerMirror(state);
@@ -1227,6 +1254,7 @@ const HANDLERS = Object.freeze({
             }
             if (event.goals !== undefined) {
                 target.goals = requireStringList(event.goals, 'SET_PLAYER_FIELDS goals');
+                target.goalsSource = event.goalsSource === 'card' ? 'card' : 'live';
             }
             if (event.allegiance !== undefined) {
                 target.allegiance = String(event.allegiance);

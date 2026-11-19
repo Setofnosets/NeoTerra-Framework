@@ -141,7 +141,14 @@ test('a good card validates, assembles, and round-trips through the card parser'
     assert.ok(profile.likes.length >= 2);
     // Identity round-trips through the dedicated label, not just the preamble.
     assert.equal(profile.identity, result.value.identity);
-    assert.deepEqual(profile.missing, []);
+    // skills/traits are derived facets; when a card labels neither they are
+    // reported as missing rather than silently empty.
+    assert.deepEqual(
+        profile.missing.filter((key) => key !== 'skills' && key !== 'traits'),
+        [],
+    );
+    // The abilities prose still yields a deterministic skill.
+    assert.deepEqual(profile.skills, ['Deaden a room']);
 });
 
 test('required sections block the preview', () => {

@@ -23,6 +23,7 @@ import {
 import {
     buildCastProfiles,
     buildCharacterProfile,
+    buildProfileLines,
 } from '../src/context/worldbook.js';
 import {
     CONTEXT_MARKER,
@@ -925,6 +926,26 @@ function newsState() {
         },
     });
 }
+
+test('goals and agenda stay within one prompt budget', () => {
+    const lines = buildProfileLines({
+        character: {
+            displayName: 'Long Goals',
+            agenda: 'Hold the tower',
+            goals: [
+                'Recruit the remaining Knights into a single court',
+                'Find the missing shipment before Clarity does',
+                'Break the resistance without killing its leaders',
+                'Rewrite the city charter in her own favour',
+                'Keep the Wonderland illusion stable',
+            ],
+        },
+    });
+    const goalLine = lines.find((line) => line.startsWith('Goals: '));
+    assert.ok(goalLine);
+    assert.ok(goalLine.length <= 240, `goal line is ${goalLine.length} chars`);
+    assert.ok(goalLine.endsWith('…'));
+});
 
 test('the news block renders only while the feature is on and the block is enabled', () => {
     const off = settingsWith();

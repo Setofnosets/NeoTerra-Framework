@@ -420,15 +420,21 @@ export function buildGeneratedCardEnvelope(card, { description, creatorNotes = '
 export function buildGeneratedProfile(card) {
     const value = isObject(card) ? card : {};
     const name = text(value.name, MAX_NAME) || 'Unnamed';
+    const traitsSource = text(value.personality) || text(value.speech);
+    const traits = splitListText(traitsSource);
     return {
         name,
         gender: text(value.gender, 40),
         species: text(value.species, 60),
         occupation: text(value.occupation, 80),
         faction: text(value.faction, 80),
+        aliases: [],
         appearance: text(value.appearance),
         attire: text(value.attire),
         abilities: text(value.abilities),
+        abilitySummary: [],
+        skills: [],
+        traits: traits.length >= 2 ? traits : [],
         personality: text(value.personality),
         speech: text(value.speech),
         likes: list(value.likes, { maxLength: 120 }),

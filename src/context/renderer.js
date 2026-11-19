@@ -226,7 +226,9 @@ function renderPlayer(state, settings) {
         lines.push(`Agenda: ${character.agenda}`);
     }
     if (Array.isArray(character.goals) && character.goals.length > 0) {
-        lines.push(`Goals: ${character.goals.join(', ')}`);
+        const combined = character.goals.join(', ');
+        const budget = Math.max(80, 240 - (character.agenda?.length ?? 0) - 'Goals: '.length);
+        lines.push(`Goals: ${combined.length > budget ? `${combined.slice(0, budget - 1).trimEnd()}…` : combined}`);
     }
     if (character.outfit) {
         lines.push(`Outfit: ${character.outfit}`);

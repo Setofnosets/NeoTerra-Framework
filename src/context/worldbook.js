@@ -136,7 +136,10 @@ export function buildProfileLines({ entry = null, character = null, location = n
     }
     const goals = joinList(character?.goals);
     if (goals) {
-        lines.push(`Goals: ${goals}`);
+        // Keep agenda + goals within one budget so five long goals cannot
+        // bloat the prompt.
+        const budget = Math.max(80, 240 - (character?.agenda?.length ?? 0));
+        lines.push(`Goals: ${shorten(goals, budget - 'Goals: '.length)}`);
     }
     if (character?.mood) {
         lines.push(`Mood: ${character.mood}`);

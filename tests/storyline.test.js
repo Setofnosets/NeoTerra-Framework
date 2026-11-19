@@ -327,12 +327,65 @@ test('the prompt is deterministic and lists the current act and open beats', () 
     assert.match(prompt, /Act: opening/);
     assert.match(prompt, /s4\.opening\.claire-returns/);
     assert.match(prompt, /Never edit the player-controlled character/);
+    // The cast block carries agenda and goals so an NPC goal can be revised.
+    assert.match(prompt, /## Cast/);
+    assert.match(prompt, /goals: /);
+    assert.match(prompt, /complete new list/);
     assert.equal(prompt, buildStorylinePrompt({
         state: store.get(),
         season: seasons.s4,
         pressure: 'standard',
         recentProse: 'The city freezes.',
     }));
+});
+
+test('an NPC goal change becomes a full-replacement event; unchanged goals do not', () => {
+    const store = makeStore('s1');
+    const state = store.get();
+    const npcId = 's1.vaiva.colorgarde';
+    state.characters[npcId].goals = ['Protect the city'];
+    state.characters[npcId].goalsSource = 'card';
+
+    const unchanged = normalizeStorylineResult({
+        result: {
+            ...emptyResult,
+            characters: [{ id: npcId, goals: ['Protect the city'] }],
+        },
+        state,
+        season: seasons.s1,
+        formRules,
+    });
+    assert.ok(!unchanged.events.some((event) => event.type === 'SET_CHARACTER_FIELDS'));
+
+    const changed = normalizeStorylineResult({
+        result: {
+            ...emptyResult,
+            characters: [{ id: npcId, goals: ['Protect the city', 'Hunt the Clarity board'] }],
+        },
+        state,
+        season: seasons.s1,
+        formRules,
+    });
+    const event = changed.events.find((entry) => entry.type === 'SET_CHARACTER_FIELDS');
+    assert.deepEqual(event.goals, ['Protect the city', 'Hunt the Clarity board']);
+    const next = applyWorldEvents(state, changed.events, CONTEXT);
+    assert.deepEqual(next.characters[npcId].goals, ['Protect the city', 'Hunt the Clarity board']);
+    assert.equal(next.characters[npcId].goalsSource, 'live');
+
+    // An empty array from a model that simply ran out of text must not wipe a
+    // goal list the prose did not actually abandon.
+    const cleared = normalizeStorylineResult({
+        result: {
+            ...emptyResult,
+            characters: [{ id: npcId, goals: [] }],
+        },
+        state,
+        season: seasons.s1,
+        formRules,
+    });
+    assert.ok(!cleared.events.some(
+        (entry) => entry.type === 'SET_CHARACTER_FIELDS' && entry.goals !== undefined,
+    ));
 });
 
 test('tracker failure and abort never mutate state; disabled mode makes no call', async () => {

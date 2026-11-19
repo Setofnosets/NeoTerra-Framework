@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { parseCardProfile } from '../src/data/card-profile.js';
+import { parseAliases, parseCardProfile } from '../src/data/card-profile.js';
 import { requirePngCard } from './png-card.mjs';
 import {
     FORM_KINDS,
@@ -198,51 +198,11 @@ function matchesTag(tag, candidates) {
     return candidates.has(normalized);
 }
 
-/** Parse aliases from the first `Aliases:` / `Common Aliases:` line(s). */
-export function parseAliases(description) {
-    if (typeof description !== 'string' || description.length === 0) {
-        return [];
-    }
-
-    const aliases = [];
-    const blockPattern =
-        /^[ \t]*[^\n:]{0,60}?Aliases?(?:\/Codenames)?[ \t]*:[ \t]*([\s\S]*?)(?=\r?\n[ \t]*\r?\n|$)/gim;
-    let match;
-    while ((match = blockPattern.exec(description)) !== null) {
-        // Dialogue often follows an alias list; drop quoted material before
-        // splitting so a prose paragraph never becomes an alias.
-        const value = match[1]
-            .replace(/"[^"]*"/g, ' ')
-            .replace(/\u201c[^\u201d]*\u201d/g, ' ');
-
-        const fragments = value.split(/;[ \t]*|\.(?=\s|$)|[\r\n]+/);
-        for (const fragment of fragments) {
-            let alias = fragment
-                .replace(/\([^)]*\)/g, ' ')
-                .replace(/["\u201c\u201d]/g, '')
-                .replace(/^[\s,;.\-\u2013\u2014]+|[\s,;.\-\u2013\u2014]+$/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            if (!alias) {
-                continue;
-            }
-            if (alias.length > 80 || alias.split(/\s+/).length > 10) {
-                continue;
-            }
-            // A following metadata field (e.g. `Occupation: ...`) is not an
-            // alias even when the card omits the blank line between fields.
-            if (/^[A-Za-z][A-Za-z0-9 /'()-]{0,30}\s*:/.test(alias)) {
-                continue;
-            }
-            if (!aliases.some((existing) => existing.toLowerCase() === alias.toLowerCase())) {
-                aliases.push(alias);
-            }
-        }
-    }
-
-    return aliases;
-}
+/**
+ * Re-export the single alias parser so `build-avatars.mjs` and the profile
+ * parser cannot drift apart.
+ */
+export { parseAliases };
 
 /**
  * Resolve a side using the documented precedence:
@@ -332,7 +292,7 @@ export function parseCard(raw, { file, seasonId, seasonIds = SEASON_IDS, avatarP
     const stem = filename.replace(/\.(?:json|png)$/i, '');
     const dataName = data.name.trim();
     const displayName = baseLabel || dataName;
-    const aliases = parseAliases(description);
+    const aliases = parseAliases(description, { displayName });
     const side = parseSide(description, formKind, tags);
     const threat = parseThreatLevel(description);
 

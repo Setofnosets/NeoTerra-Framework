@@ -8,6 +8,7 @@
 
 import { BEAT_STATUSES } from '../data/beats.js';
 import { splitListText } from '../data/card-profile.js';
+import { abilitySummaryLines } from '../data/card-facets.js';
 import { TIME_SLOTS } from '../core/constants.js';
 import { FACTION_STATUSES, buildFactionIndex } from '../data/factions.js';
 import {
@@ -155,6 +156,10 @@ function deriveAgenda(side, season, isPlayer) {
     return `Survive the events of ${season?.title ?? 'Neo Terra'}`;
 }
 
+function asArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+
 /**
  * A card body is only promoted to live list state when the tolerant splitter
  * finds a real list; a prose paragraph stays out of `traits`.
@@ -171,11 +176,26 @@ function cardProfileFor(member, profiles) {
     return profiles[member.formId] ?? profiles[member.characterId] ?? null;
 }
 
+function cardFacets(card) {
+    if (!card) {
+        return { skills: [], traits: [], abilities: [] };
+    }
+    return {
+        skills: Array.isArray(card.skills) ? card.skills.slice() : [],
+        traits: Array.isArray(card.traits) && card.traits.length > 0
+            ? card.traits.slice()
+            : listLikeTraits(card.personality || card.speech),
+        abilities: Array.isArray(card.abilitySummary) && card.abilitySummary.length > 0
+            ? abilitySummaryLines(card.abilitySummary)
+            : splitListText(card.abilities),
+    };
+}
+
 /**
  * Store every form's card profile on the character so a later transform can
  * swap the profile without another fetch. Bundles are never form groups.
  */
-function buildFormProfilesFor(member, formGroups, profiles) {
+function buildFormProfilesFor(member, formGroups, profiles, registry = null) {
     if (!profiles || typeof profiles !== 'object' || member.character?.bundle === true) {
         return null;
     }
@@ -191,6 +211,9 @@ function buildFormProfilesFor(member, formGroups, profiles) {
     const byPath = new Map(
         Object.entries(profiles).map(([id, profile]) => [profile?.source?.cardPath ?? id, id]),
     );
+    const entriesById = new Map(
+        asArray(registry?.entries).map((entry) => [entry.id, entry]),
+    );
     const formProfiles = {};
     for (const path of group.members ?? []) {
         const normalized = String(path).split('\\').join('/').replace(/^Chars\//, '');
@@ -198,7 +221,11 @@ function buildFormProfilesFor(member, formGroups, profiles) {
         if (!id) {
             continue;
         }
-        const overlay = buildFormProfileOverlay(profiles[id], { formId: id, source: 'card' });
+        const overlay = buildFormProfileOverlay(profiles[id], {
+            formId: id,
+            source: 'card',
+            entry: entriesById.get(id) ?? null,
+        });
         if (overlay) {
             formProfiles[id] = overlay;
         }
@@ -206,16 +233,15 @@ function buildFormProfilesFor(member, formGroups, profiles) {
     return Object.keys(formProfiles).length > 0 ? formProfiles : null;
 }
 
-function seedCharacter(member, { isPlayer, season, profiles = null, formGroups = null }) {
+function seedCharacter(member, { isPlayer, season, profiles = null, formGroups = null, registry = null }) {
     const character = member.character;
     const form = member.form;
     const side = form?.side ?? character?.side ?? 'neutral';
     const card = cardProfileFor(member, profiles);
-    const traits = card
-        ? listLikeTraits(card.personality || card.speech)
-        : [];
-    const formProfiles = buildFormProfilesFor(member, formGroups, profiles);
+    const facets = cardFacets(card);
+    const formProfiles = buildFormProfilesFor(member, formGroups, profiles, registry);
     const activeOverlay = formProfiles?.[member.formId] ?? formProfiles?.[member.characterId] ?? null;
+    const activeEntry = member.form ?? character ?? null;
 
     return {
         charId: member.characterId,
@@ -233,13 +259,16 @@ function seedCharacter(member, { isPlayer, season, profiles = null, formGroups =
         willpower: emptyResource(),
         agenda: deriveAgenda(side, season, isPlayer),
         goals: activeOverlay?.goals ?? (Array.isArray(card?.goals) ? card.goals.slice() : []),
+        goalsSource: 'card',
         mood: 'neutral',
         allegiance: side,
         appearance: activeOverlay?.appearance ?? card?.appearance ?? '',
         outfit: activeOverlay?.outfit ?? card?.attire ?? '',
-        abilities: activeOverlay?.abilities ?? (card ? splitListText(card.abilities) : []),
-        skills: [],
-        traits: activeOverlay?.traits ?? traits,
+        abilities: activeOverlay?.abilities ?? facets.abilities,
+        skills: activeOverlay?.skills ?? facets.skills,
+        traits: activeOverlay?.traits ?? facets.traits,
+        aliases: activeOverlay?.aliases ?? asArray(activeEntry?.aliases),
+        tags: activeOverlay?.tags ?? asArray(activeEntry?.tags),
         likes: activeOverlay?.likes ?? (Array.isArray(card?.likes) ? card.likes.slice() : []),
         dislikes: activeOverlay?.dislikes ?? (Array.isArray(card?.dislikes) ? card.dislikes.slice() : []),
         relationships: [],
@@ -418,6 +447,7 @@ export function createWorldState(options = {}) {
             season,
             profiles,
             formGroups,
+            registry,
         });
     }
 
@@ -771,6 +801,16 @@ function validateCharacter(errors, id, character, state) {
     requireString(errors, `${path}.outfit`, character.outfit, { nonEmpty: false });
     for (const field of ['abilities', 'skills', 'traits', 'likes', 'dislikes']) {
         requireStringArray(errors, `${path}.${field}`, character[field]);
+    }
+    for (const field of ['aliases', 'tags']) {
+        if (character[field] !== undefined) {
+            requireStringArray(errors, `${path}.${field}`, character[field]);
+        }
+    }
+    if (character.goalsSource !== undefined
+        && character.goalsSource !== 'card'
+        && character.goalsSource !== 'live') {
+        add(errors, `${path}.goalsSource`, 'must be "card" or "live"');
     }
     if (!Array.isArray(character.relationships)) {
         add(errors, `${path}.relationships`, 'must be an array');

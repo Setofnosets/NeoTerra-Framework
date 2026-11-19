@@ -14,6 +14,8 @@ import { buildFormProfileOverlay, FORM_PROFILE_FIELDS } from '../state/form-prof
 
 export const MAX_FORM_FIELD = 1200;
 export const MAX_FORM_LIST_ITEMS = 12;
+export const MAX_FORM_SKILL_ITEMS = 6;
+export const MAX_FORM_TRAIT_ITEMS = 8;
 
 export const FORM_ARCHITECT_SCHEMA = Object.freeze({
     type: 'object',
@@ -27,6 +29,8 @@ export const FORM_ARCHITECT_SCHEMA = Object.freeze({
         'personality',
         'speech',
         'abilities',
+        'skills',
+        'traits',
         'likes',
         'dislikes',
         'goals',
@@ -45,6 +49,16 @@ export const FORM_ARCHITECT_SCHEMA = Object.freeze({
             type: 'array',
             maxItems: MAX_FORM_LIST_ITEMS,
             items: { type: 'string', maxLength: 300 },
+        },
+        skills: {
+            type: 'array',
+            maxItems: MAX_FORM_SKILL_ITEMS,
+            items: { type: 'string', maxLength: 60 },
+        },
+        traits: {
+            type: 'array',
+            maxItems: MAX_FORM_TRAIT_ITEMS,
+            items: { type: 'string', maxLength: 60 },
         },
         likes: {
             type: 'array',
@@ -147,6 +161,8 @@ export function validateGeneratedForm(value) {
             personality: clipped(value.personality),
             speech: clipped(value.speech),
             abilities: clippedList(value.abilities),
+            skills: clippedList(value.skills, MAX_FORM_SKILL_ITEMS).map((item) => item.slice(0, 60)),
+            traits: clippedList(value.traits, MAX_FORM_TRAIT_ITEMS).map((item) => item.slice(0, 60)),
             likes: clippedList(value.likes),
             dislikes: clippedList(value.dislikes),
             goals: clippedList(value.goals),
@@ -172,6 +188,12 @@ export function generatedFormOverlay(form, { formId = null, model = null, now = 
     }, { formId, source: 'generated' });
     if (!overlay) {
         return null;
+    }
+    if (Array.isArray(form.skills)) {
+        overlay.skills = form.skills.slice(0, MAX_FORM_SKILL_ITEMS);
+    }
+    if (Array.isArray(form.traits)) {
+        overlay.traits = form.traits.slice(0, MAX_FORM_TRAIT_ITEMS);
     }
     return {
         ...overlay,
@@ -219,7 +241,8 @@ export function buildFormArchitectPrompt({
             appearance: character.appearance,
             attire: character.outfit,
             abilities: asArray(character.abilities).slice(0, 8),
-            traits: asArray(character.traits).slice(0, 8),
+            skills: asArray(character.skills).slice(0, MAX_FORM_SKILL_ITEMS),
+            traits: asArray(character.traits).slice(0, MAX_FORM_TRAIT_ITEMS),
             likes: asArray(character.likes).slice(0, 8),
             dislikes: asArray(character.dislikes).slice(0, 8),
             goals: asArray(character.goals).slice(0, 8),
@@ -232,6 +255,7 @@ export function buildFormArchitectPrompt({
         'Do not invent a new canon character, a new faction, or future knowledge. Keep the same person recognizable.',
         'Respect the content gate and keep all fields concise. Return JSON only.',
         `Every string field is capped at ${MAX_FORM_FIELD} characters; list fields hold at most ${MAX_FORM_LIST_ITEMS} items.`,
+        `skills holds at most ${MAX_FORM_SKILL_ITEMS} short capabilities and traits at most ${MAX_FORM_TRAIT_ITEMS} short passives.`,
         '',
         '## Transform',
         JSON.stringify({

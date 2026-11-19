@@ -12,8 +12,9 @@
  * attire). Unknown labels are kept in `extras` rather than dropped.
  */
 
-const LABEL_PATTERN = /^[ \t]*([A-Z][^\n:]{1,40}?)[ \t]*:[ \t]*/gm;
+import { deriveCardFacets } from './card-facets.js';
 
+const LABEL_PATTERN = /^[ \t]*([A-Z][^\n:]{1,40}?)[ \t]*:[ \t]*/gm;
 const FIELD_LABELS = Object.freeze({
     appearance: [
         'Appearance',
@@ -55,7 +56,30 @@ const FIELD_LABELS = Object.freeze({
     speech: ['Speech', 'Speech/Mannerisms', 'Speech/Mannerism', 'Communication'],
     likes: ['Likes', 'Like', 'Loves'],
     dislikes: ['Dislikes', 'Dislike', 'Most Hated'],
-    goals: ['Goals/Motives', 'Goals/Motive', 'Goal/Motives', 'Motive', 'Ultimate Goal'],
+    goals: [
+        'Goals/Motives',
+        'Goals/Motive',
+        'Goal/Motives',
+        'Motive',
+        'Ultimate Goal',
+        'Goals',
+        'Motivation',
+        'Motivations',
+        'Drive',
+        'Main drive',
+        'Ambition',
+        'Objective',
+    ],
+    skills: ['Skills', 'Skill', 'Abilities/Skills'],
+    traits: [
+        'Traits',
+        'Trait',
+        'Passives',
+        'Passive',
+        'New Traits',
+        'Corrupted Traits',
+        'Former Traits',
+    ],
     background: ['Background', 'Old Life'],
     identity: ['Identity Status', 'Name'],
     gender: ['Gender'],
@@ -104,6 +128,106 @@ const PROFILE_KEYS = Object.freeze([
 ]);
 
 const LIST_KEYS = new Set(['likes', 'dislikes', 'goals']);
+
+const MAX_GOALS = 5;
+const MAX_GOAL_CHARS = 160;
+const TRAILING_GOAL_JUNK = /[\s,;:.\-\u2013\u2014]+$/;
+
+const ALIAS_LABEL_PATTERN = /^[ \t]*[^\n:]{0,60}?Aliases?(?:\/Codenames)?[ \t]*:[ \t]*([\s\S]*?)(?=\r?\n[ \t]*\r?\n|$)/gim;
+
+/** Alias fragments that are really role notes, not names. */
+const ALIAS_STOPWORDS = new Set(['supervillain name', 'superhero name', 'former superhero name', 'civilian name', 'former civilian name', 'official supervillain name', 'knight name']);
+
+function cleanAlias(fragment) {
+    return String(fragment ?? '')
+        .replace(/["\u201c\u201d\u2018\u2019]/g, '')
+        .replace(/^[\s,;.\-\u2013\u2014:]+|[\s,;.\-\u2013\u2014:]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isAliasCandidate(value) {
+    if (!value) {
+        return false;
+    }
+    if (value.length > 60 || value.includes(':')) {
+        return false;
+    }
+    if (value.split(/\s+/).length > 6) {
+        return false;
+    }
+    return !ALIAS_STOPWORDS.has(value.toLowerCase());
+}
+
+function pushAlias(list, value) {
+    const alias = cleanAlias(value);
+    if (!isAliasCandidate(alias)) {
+        return;
+    }
+    if (list.some((existing) => existing.toLowerCase() === alias.toLowerCase())) {
+        return;
+    }
+    if (list.length < 6) {
+        list.push(alias);
+    }
+}
+
+/**
+ * Derive aliases from a card description.
+ *
+ * Alias labels are preferred; a card without one still yields the names in
+ * the opening line (`known as X`, `is X, a …`). Both the registry build and
+ * the profile parser use this single implementation so they cannot disagree.
+ *
+ * @param {unknown} description
+ * @param {{ displayName?: string }} [options]
+ * @returns {string[]}
+ */
+export function parseAliases(description, { displayName = '' } = {}) {
+    if (typeof description !== 'string' || description.length === 0) {
+        return [];
+    }
+    const text = normalizeCardText(description);
+    const aliases = [];
+
+    // An alias label owns the rest of its line(s) up to a blank line.
+    const labelPattern = new RegExp(ALIAS_LABEL_PATTERN.source, 'gim');
+    let labelled = false;
+    let match;
+    while ((match = labelPattern.exec(text)) !== null) {
+        labelled = true;
+        const body = match[1]
+            .replace(/"[^"]*"/g, ' ')
+            .replace(/\u201c[^\u201d]*\u201d/g, ' ');
+        // A parenthetical is a role marker (`(supervillain name)`); it splits
+        // the names on both sides instead of swallowing the next one.
+        for (const fragment of body.replace(/\([^)]*\)/g, ';').split(/[.;\n\/]|,(?=\s)/)) {
+            pushAlias(aliases, fragment);
+        }
+    }
+
+    if (!labelled) {
+        // A derived alias that merely repeats the display name adds nothing.
+        const derived = [];
+        // `a superhero known as 'Hula Hawk'` / `known as Longshot`
+        const known = text.match(/known as\s+['\u2018\u201c]?([A-Z][^'\u2019\u201d.,;\n]{1,40})/);
+        if (known) {
+            pushAlias(derived, known[1]);
+        }
+        // `is Aurelia Selwind, a superhero …`
+        const identity = text.match(/\bis\s+([A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-]+){0,3}),\s*(?:a|an|the)\s/);
+        if (identity) {
+            pushAlias(derived, identity[1]);
+        }
+        for (const alias of derived) {
+            if (!displayName || alias.toLowerCase() !== displayName.toLowerCase()) {
+                aliases.push(alias);
+            }
+        }
+    }
+
+    return aliases;
+}
 
 function normalizeLabel(label) {
     return String(label ?? '')
@@ -181,9 +305,10 @@ function classifyLabel(rawLabel) {
     if (IGNORED_LABELS.has(normalized)) {
         return { ignored: true };
     }
-    // Aliases are already derived into registry entries.
+    // Aliases are registry metadata and a profile field; both are derived by
+    // `parseAliases` from the same text so they cannot disagree.
     if (/alias|codename/.test(normalized)) {
-        return { ignored: true };
+        return { alias: true };
     }
 
     const formMatch = label.match(/^(?:transformation into|transform into)\s+(.+)$/i);
@@ -272,6 +397,11 @@ function collectFields(sections) {
             (fields[classified.key] ??= []).push(section);
             continue;
         }
+        // Alias labels are registry/profile metadata derived by `parseAliases`
+        // from the whole description; they are never prose for the card block.
+        if (classified.alias) {
+            continue;
+        }
         if (classified.sensitive) {
             sensitive.push({ label: section.rawLabel, text: section.body });
             continue;
@@ -282,8 +412,24 @@ function collectFields(sections) {
     return { fields, forms, sensitive, extras };
 }
 
-function buildProfile({ sections, name, source }) {
+function buildProfile({ sections, name, source, description = '' }) {
     const { fields, forms, sensitive, extras } = collectFields(sections);
+
+    const goals = splitListText(pickSection(fields, 'goals'))
+        .map((goal) => (goal.length > MAX_GOAL_CHARS
+            ? goal.slice(0, MAX_GOAL_CHARS).replace(/\s+\S*$/, '').replace(TRAILING_GOAL_JUNK, '').trim()
+            : goal))
+        .filter(Boolean)
+        .slice(0, MAX_GOALS);
+    const explicitTraits = pickSection(fields, 'traits');
+    const explicitSkills = pickSection(fields, 'skills');
+    const abilities = pickSection(fields, 'abilities');
+    const facets = deriveCardFacets({
+        name,
+        abilities,
+        explicitSkills,
+        explicitTraits,
+    });
 
     const profile = {
         name,
@@ -291,14 +437,18 @@ function buildProfile({ sections, name, source }) {
         species: pickSection(fields, 'species'),
         occupation: pickSection(fields, 'occupation'),
         faction: pickSection(fields, 'faction'),
+        aliases: parseAliases(description, { displayName: name }),
         appearance: pickSection(fields, 'appearance'),
         attire: pickSection(fields, 'attire'),
-        abilities: pickSection(fields, 'abilities'),
+        abilities,
+        abilitySummary: facets.abilitySummary,
+        skills: facets.skills,
+        traits: facets.traits,
         personality: pickSection(fields, 'personality'),
         speech: pickSection(fields, 'speech'),
         likes: splitListText(pickSection(fields, 'likes')),
         dislikes: splitListText(pickSection(fields, 'dislikes')),
-        goals: splitListText(pickSection(fields, 'goals')),
+        goals,
         background: pickSection(fields, 'background'),
         identity: pickSection(fields, 'identity'),
         combatStyle: pickSection(fields, 'combatStyle'),
@@ -311,6 +461,11 @@ function buildProfile({ sections, name, source }) {
         missing: PROFILE_KEYS.filter((key) => pickSection(fields, key).trim().length === 0),
         source,
     };
+    for (const key of ['skills', 'traits']) {
+        if (profile[key].length === 0) {
+            profile.missing.push(key);
+        }
+    }
 
     // Keep list fields stable even if a future field joins LIST_KEYS.
     for (const key of LIST_KEYS) {
@@ -397,6 +552,7 @@ export function parseCardProfile(card, source = {}) {
             sections: collectSections(text),
             name: dataName,
             source: sourceInfo,
+            description: text,
         });
     }
 
@@ -405,6 +561,7 @@ export function parseCardProfile(card, source = {}) {
         sections: [...actorSections, ...blocks.preamble],
         name: actorName(actorSections, dataName),
         source: sourceInfo,
+        description: text,
     }));
 
     if (actorProfiles.length === 1) {

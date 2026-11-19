@@ -213,6 +213,8 @@ export function buildStateTrackerPrompt({ state, message = '', recentMessages = 
     lines.push(`Willpower: ${role.willpower?.current ?? '?'}/${role.willpower?.max ?? '?'}`);
     lines.push(`Corruption: stage ${role.corruption?.stage ?? 0} (${role.corruption?.progress ?? 0}%)`);
     lines.push(`Outfit: ${role.outfit || '(none)'}`);
+    lines.push(`Agenda: ${role.agenda || '(none)'}`);
+    lines.push(`Goals: ${asArray(role.goals).join('; ') || '(none)'}`);
     lines.push(`Skills: ${asArray(role.skills).join(', ') || '(none)'}`);
     lines.push(`Traits: ${asArray(role.traits).join(', ') || '(none)'}`);
     lines.push(`Injuries: ${asArray(role.injuries).join(', ') || '(none)'}`);
@@ -252,6 +254,9 @@ export function buildStateTrackerPrompt({ state, message = '', recentMessages = 
     lines.push('Report only the player character. Never change NPCs, locations, factions, or threats.');
     lines.push('A status change may only use a declared character status.');
     lines.push('Do not invent skills, injuries, or relationship changes that the prose does not support.');
+    lines.push('Agenda is what the character is doing now; goals are what they are steering toward.');
+    lines.push('Emit goals only when the prose shows the character choosing or abandoning a course.');
+    lines.push('When you emit goals, return the complete new list (up to 5). It replaces the stored list; never invent a goal the prose does not support.');
     lines.push('Return JSON only. No prose.');
     lines.push('');
     lines.push('## Response shape');
@@ -368,6 +373,16 @@ export function normalizeStateTrackerResult({ result, state } = {}) {
         if (!normalized.ok) {
             rejected.push({ path, reason: normalized.reason });
             continue;
+        }
+
+        // Goals are a replacement list. Returning the current list is a no-op
+        // and must not produce an event (or a manual-edit marker).
+        if (path === 'goals') {
+            const current = asArray(view.role?.goals).map((item) => String(item).trim().toLowerCase());
+            const next = normalized.value.map((item) => item.trim().toLowerCase());
+            if (current.length === next.length && current.every((item, index) => item === next[index])) {
+                continue;
+            }
         }
 
         seenPaths.add(path);

@@ -53,7 +53,7 @@ test('seeding stores one overlay per form in the group', () => {
     assert.match(character.formProfiles[LIGHT_SHADE].appearance, /Light Shade/);
 });
 
-test('transform swaps appearance, attire, abilities, likes, and goals', () => {
+test('transform swaps appearance, attire, abilities, skills, traits, aliases, tags, and likes', () => {
     const state = seed();
     const before = state.characters[VAIVA];
     const next = applyWorldEvent(
@@ -68,12 +68,76 @@ test('transform swaps appearance, attire, abilities, likes, and goals', () => {
     assert.notEqual(after.appearance, before.appearance);
     assert.match(after.appearance, /Light Shade/);
     assert.deepEqual(after.abilities, after.formProfiles[LIGHT_SHADE].abilities);
+    assert.deepEqual(after.skills, after.formProfiles[LIGHT_SHADE].skills);
+    assert.deepEqual(after.traits, after.formProfiles[LIGHT_SHADE].traits);
     assert.deepEqual(after.likes, after.formProfiles[LIGHT_SHADE].likes);
+    // Aliases/tags follow the active form's registry entry (Light Shade's card
+    // labels no aliases, so the list is honestly empty).
+    assert.deepEqual(after.aliases, []);
+    assert.equal(after.tags[0], 'femdom');
+    assert.equal(after.tags.includes('Corruption'), true);
     // Resources and status are untouched.
     assert.deepEqual(after.stamina, before.stamina);
     assert.deepEqual(after.willpower, before.willpower);
     assert.deepEqual(after.corruption, before.corruption);
     assert.equal(after.status, before.status);
+});
+
+test('reverting restores base aliases and facets', () => {
+    const dark = readJson('data/seasons/s1dark.json');
+    const base = createWorldState({
+        season: dark,
+        registry,
+        factions,
+        locations,
+        formGroups,
+        formRules,
+        profiles,
+        chatId: 'form-profile-dark',
+        player: { identity: 'custom' },
+        now: 1,
+    });
+    const characterId = 's1dark.carol.bleeding-heart';
+    const altId = 's1dark.carol.cleansed.bleeding.heart';
+    const baseCharacter = base.characters[characterId];
+    const baseAliases = baseCharacter.aliases.slice();
+    const baseSkills = baseCharacter.skills.slice();
+    assert.ok(baseAliases.includes('Bleeding Heart'));
+
+    const transformed = applyWorldEvent(
+        base,
+        { type: 'TRANSFORM', characterId, formId: altId },
+        CONTEXT,
+    );
+    assert.deepEqual(transformed.characters[characterId].aliases, base.characters[altId]?.aliases
+        ?? registry.entries.find((entry) => entry.id === altId).aliases);
+
+    const reverted = applyWorldEvent(
+        transformed,
+        { type: 'TRANSFORM', characterId, formId: characterId },
+        CONTEXT,
+    );
+    const after = reverted.characters[characterId];
+    assert.deepEqual(after.aliases, baseAliases);
+    assert.deepEqual(after.skills, baseSkills);
+});
+
+test('a tracker-written goal survives a transform and a form swap keeps it', () => {
+    const state = seed();
+    state.characters[VAIVA].goals = ['Expose Clairity Incorporated'];
+    state.characters[VAIVA].goalsSource = 'live';
+    const next = applyWorldEvent(
+        state,
+        { type: 'TRANSFORM', characterId: VAIVA, formId: LIGHT_SHADE },
+        CONTEXT,
+    );
+    assert.deepEqual(next.characters[VAIVA].goals, ['Expose Clairity Incorporated']);
+    assert.equal(next.characters[VAIVA].goalsSource, 'live');
+});
+
+test('seeded goals carry the card source marker', () => {
+    const state = seed();
+    assert.equal(state.characters[VAIVA].goalsSource, 'card');
 });
 
 test('reverting restores the base overlay', () => {
@@ -142,6 +206,41 @@ test('a form without a card profile keeps the previous fields and records a note
     assert.equal(after.appearance, previousAppearance);
     assert.equal(after.profileSource, 'missing');
     assert.equal(after.profileMissing, LIGHT_SHADE);
+});
+
+test('a generated form with no registry metadata clears aliases instead of inheriting', () => {
+    const state = seed();
+    const character = state.characters[VAIVA];
+    assert.ok(character.aliases.length > 0);
+    const next = applyWorldEvent(
+        state,
+        {
+            type: 'TRANSFORM',
+            characterId: VAIVA,
+            formId: 'generated.light.shade',
+            dynamicForm: {
+                formId: 'generated.light.shade',
+                displayName: 'Generated Shade',
+                side: 'villain',
+                overlay: {
+                    appearance: 'A generated appearance.',
+                    outfit: '',
+                    abilities: ['Generated ability'],
+                    skills: [],
+                    traits: [],
+                    likes: [],
+                    dislikes: [],
+                    goals: [],
+                    notes: '',
+                    source: 'generated',
+                },
+            },
+        },
+        CONTEXT,
+    );
+    // No metadata means no stale aliases from the previous form.
+    assert.deepEqual(next.characters[VAIVA].aliases, []);
+    assert.deepEqual(next.characters[VAIVA].tags, []);
 });
 
 test('the overlay helper never touches live combat state', () => {

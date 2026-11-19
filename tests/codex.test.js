@@ -14,6 +14,7 @@ import {
     performFormSwap,
     performPlayAs,
     performPlayAsCustom,
+    rederiveCardFacets,
     renderCodexMarkup,
     renderPlayAsDialog,
 } from '../src/ui/codex.js';
@@ -285,6 +286,87 @@ test('Play-as confirmation dialog and codex markup are rendered safely', () => {
     assert.match(markup, /data-neoterra-form-swap-target/);
 });
 
+test('codex reads aliases, tags, and abilities from the active form', () => {
+    const store = makeStore('s1dark', { identity: 'canon', characterId: CAROL });
+    const before = viewFor(store, 's1dark', { profiles, selectedId: CAROL });
+    assert.ok(before.selected.profile.aliases.includes('Bleeding Heart'));
+    const baseAliases = before.selected.profile.aliases.slice();
+    const baseAbilities = before.selected.profile.abilities.slice();
+
+    mutate(store, { type: 'TRANSFORM', characterId: CAROL, formId: CAROL_CLEANSED });
+    const after = viewFor(store, 's1dark', { profiles, selectedId: CAROL });
+    const current = store.get().characters[CAROL];
+    assert.equal(after.selected.form.id, CAROL_CLEANSED);
+    // Aliases/tags follow the active form; the base list remains a hint.
+    assert.deepEqual(after.selected.profile.aliases, current.aliases);
+    assert.deepEqual(after.selected.profile.baseAliases, baseAliases);
+    assert.notDeepEqual(after.selected.profile.abilities, baseAbilities);
+    const markup = renderCodexMarkup(after);
+    assert.match(markup, /Base:/);
+});
+
+test('the Abilities tile renders lead + gloss items, never one paragraph', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const view = viewFor(store, 's1', { profiles, selectedId: 's1.vaiva.colorgarde' });
+    const markup = renderCodexMarkup(view);
+    assert.match(markup, /neoterra-codex-abilities/);
+    // Each item is a bold lead with an optional muted gloss.
+    assert.match(markup, /<li class="neoterra-codex-ability">\s*<strong>/);
+    const raw = profiles['s1.vaiva.colorgarde'].abilities;
+    assert.ok(raw.length > 400);
+    assert.match(markup, /Abilities:/); // raw prose lives on the card block
+});
+
+test('live goals win over the card and the card value is labelled', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const vaiva = 's1.vaiva.colorgarde';
+    const state = store.get();
+    state.characters[vaiva].goals = ['Live goal from the tracker'];
+    state.characters[vaiva].goalsSource = 'live';
+    store.replace(state);
+    const view = viewFor(store, 's1', { profiles, selectedId: vaiva });
+    assert.deepEqual(view.selected.profile.goals, ['Live goal from the tracker']);
+    const markup = renderCodexMarkup(view);
+    assert.match(markup, /Live goal from the tracker/);
+});
+
+test('a card without goals shows an honest empty state', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const view = viewFor(store, 's1', { profiles, selectedId: 's1.vaiva.colorgarde' });
+    assert.deepEqual(view.selected.profile.goals, []);
+    assert.match(renderCodexMarkup(view), /No goals recorded in the card/);
+});
+
+test('re-derive overwrites abilities, skills, and traits but never goals', () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const vaiva = 's1.vaiva.colorgarde';
+    const state = store.get();
+    state.characters[vaiva].abilities = ['stale ability'];
+    state.characters[vaiva].goals = ['Plot goal'];
+    state.characters[vaiva].goalsSource = 'live';
+    store.replace(state);
+
+    const character = store.get().characters[vaiva];
+    const result = rederiveCardFacets(character, profiles[vaiva]);
+    assert.equal(result.changed, true);
+    assert.notDeepEqual(result.character.abilities, ['stale ability']);
+    assert.ok(result.character.skills.length > 0);
+    // Goals are plot-owned and untouched.
+    assert.deepEqual(result.character.goals, ['Plot goal']);
+    assert.equal(result.character.goalsSource, 'live');
+
+    // The helper is idempotent.
+    assert.equal(rederiveCardFacets(result.character, profiles[vaiva]).changed, false);
+});
+
+test('tracker-written goals survive a form swap', () => {
+    const store = makeStore('s1dark', { identity: 'canon', characterId: CAROL });
+    mutate(store, { type: 'SET_CHARACTER_FIELDS', characterId: CAROL, goals: ['Steal the crown'] });
+    assert.equal(store.get().characters[CAROL].goalsSource, 'live');
+    mutate(store, { type: 'TRANSFORM', characterId: CAROL, formId: CAROL_CLEANSED });
+    assert.deepEqual(store.get().characters[CAROL].goals, ['Steal the crown']);
+});
+
 test('card profiles fill empty live fields and never override live values', () => {
     const store = makeStore('s1', { identity: 'custom' });
     const vaiva = 's1.vaiva.colorgarde';
@@ -292,8 +374,12 @@ test('card profiles fill empty live fields and never override live values', () =
     assert.ok(view.selected.profile.card);
     assert.match(view.selected.profile.appearance, /captivating 25-year-old/);
     assert.match(view.selected.profile.outfit, /chic fashion/);
+    // The Abilities tile is the structured summary; the raw prose lives on
+    // the card block (`From the character card`).
     assert.ok(view.selected.profile.abilities.length > 0);
-    assert.match(view.selected.profile.abilities.join(' '), /normal human/);
+    assert.ok(view.selected.profile.abilities.length <= 6);
+    assert.ok(view.selected.profile.abilities.every((item) => item.length <= 120));
+    assert.match(view.selected.profile.card.abilities, /normal human/);
     assert.match(view.selected.profile.personality, /Vaiva's personality/);
     assert.ok(view.selected.profile.speech.length > 0);
     assert.ok(view.selected.profile.likes.length >= 2);

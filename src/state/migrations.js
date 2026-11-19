@@ -8,6 +8,7 @@
 
 export const CURRENT_WORLD_STATE_VERSION = 2;
 
+import { abilitySummaryLines } from '../data/card-facets.js';
 const STATUSES = Object.freeze([
     'active',
     'offscreen',
@@ -188,6 +189,87 @@ export const WORLD_STATE_MIGRATIONS = Object.freeze({
     1: migrateV1ToV2,
 });
 
+function normalizeCharacterFacets(document) {
+    if (!isObject(document?.characters)) {
+        return document;
+    }
+    for (const character of Object.values(document.characters)) {
+        if (!isObject(character)) {
+            continue;
+        }
+        for (const field of ['abilities', 'skills', 'traits', 'goals', 'aliases', 'tags']) {
+            if (!Array.isArray(character[field])) {
+                character[field] = [];
+            }
+        }
+        // `goalsSource` is optional. An old document with a non-empty goal list
+        // may have been written by a tracker or the player, so it is treated as
+        // live and protected from a card swap; only an empty list is certainly
+        // card-sourced.
+        if (character.goalsSource !== 'live' && character.goalsSource !== 'card') {
+            character.goalsSource = Array.isArray(character.goals) && character.goals.length > 0
+                ? 'live'
+                : 'card';
+        }
+    }
+    return document;
+}
+
+/**
+ * Fill missing card-derived facets (skills, traits, abilities, goals, aliases,
+ * tags) on a stored world from `profiles.json`. Fill-empty only and idempotent:
+ * a live/tracker goal is never touched.
+ *
+ * @param {object} raw
+ * @param {Record<string, object>|null} profiles
+ * @returns {{ state: object, changed: boolean }}
+ */
+export function backfillCharacterFacets(raw, profiles) {
+    if (!isObject(raw) || !isObject(raw.characters) || !isObject(profiles)) {
+        return { state: raw, changed: false };
+    }
+    let changed = false;
+    const characters = { ...raw.characters };
+    for (const [id, character] of Object.entries(characters)) {
+        if (!isObject(character)) {
+            continue;
+        }
+        const profile = profiles[character.formId] ?? profiles[id] ?? null;
+        if (!profile) {
+            continue;
+        }
+        const next = { ...character };
+        const fillList = (field, values) => {
+            if (!Array.isArray(values) || values.length === 0) {
+                return;
+            }
+            if (!Array.isArray(next[field]) || next[field].length === 0) {
+                next[field] = values.slice();
+                changed = true;
+            }
+        };
+        fillList('skills', profile.skills);
+        fillList('traits', profile.traits);
+        fillList('abilities', abilitySummaryLines(profile.abilitySummary));
+        fillList('aliases', profile.aliases);
+        if (next.goalsSource !== 'live') {
+            fillList('goals', profile.goals);
+        }
+        // An old world has no source marker. A non-empty goal list may be
+        // tracker- or player-authored, so it is treated as live and protected;
+        // only an empty list is safely card-sourced.
+        if (next.goalsSource !== 'card' && next.goalsSource !== 'live') {
+            next.goalsSource = Array.isArray(next.goals) && next.goals.length > 0 ? 'live' : 'card';
+            changed = true;
+        }
+        characters[id] = next;
+    }
+    return {
+        state: changed ? { ...raw, characters } : raw,
+        changed,
+    };
+}
+
 /**
  * Migrate an arbitrary stored document to the current WorldState version.
  *
@@ -222,7 +304,7 @@ export function migrateWorldState(raw) {
     }
 
     document.schemaVersion = CURRENT_WORLD_STATE_VERSION;
-    return document;
+    return normalizeCharacterFacets(document);
 }
 
 /** True when a stored document needs migration. */

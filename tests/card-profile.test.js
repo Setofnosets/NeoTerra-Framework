@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
     findFormSection,
+    parseAliases,
     parseCardProfile,
     splitListText,
 } from '../src/data/card-profile.js';
@@ -157,6 +158,38 @@ test('a body line that looks like a label is an extra and does not leak', () => 
     const emptyLabel = parseCardProfile(card('Appearance:\n\nBackground: Raised in the capital.'));
     assert.ok(emptyLabel);
     assert.equal(emptyLabel.missing.includes('appearance'), true);
+});
+
+test('aliases are derived once and never leak into extras', () => {
+    const bloodBound = parseCardProfile(readCard('Chars/S3/Blood Bound (Corrupted Emeral Allure).json'));
+    assert.deepEqual(bloodBound.aliases, ['Blood Bound', 'Emerald Allure', 'Tessa Ervone']);
+    assert.equal(bloodBound.extras.some((entry) => /alias/i.test(entry.label)), false);
+
+    const aurelia = parseCardProfile(readCard('Chars/S1/Aurelia-Longshot.json'));
+    assert.deepEqual(aurelia.aliases, ['Longshot', 'Aurelia Selwind']);
+
+    const brie = parseCardProfile(readCard('Chars/S4/Brie Anderson-Hula Hawk.json'));
+    assert.deepEqual(brie.aliases, ['Hula Hawk', 'Brie Anderson', 'Brjiip Haadge']);
+
+    // `Common Aliases/Codenames` is a label variant, not an extras section.
+    const bittersweet = parseCardProfile(readCard('Chars/S1Dark/Bittersweet (Knighted Poisoness).json'));
+    assert.deepEqual(bittersweet.aliases, ['Bittersweet', 'Poisoness', 'Jacqueline Webb']);
+    assert.equal(bittersweet.extras.some((entry) => /alias/i.test(entry.label)), false);
+
+    // A card with no alias information returns an empty list, never a guess.
+    const minimal = parseCardProfile(card('Personality: Quiet and watchful.'));
+    assert.deepEqual(minimal.aliases, []);
+    assert.deepEqual(parseAliases(null), []);
+    assert.deepEqual(parseAliases(42), []);
+    assert.deepEqual(parseAliases(''), []);
+    assert.deepEqual(parseAliases('Aliases:  "A long quoted paragraph, not an alias." '), []);
+});
+
+test('explicit trait labels become profile traits instead of extras', () => {
+    const bittersweet = parseCardProfile(readCard('Chars/S1Dark/Bittersweet (Knighted Poisoness).json'));
+    assert.ok(bittersweet.traits.length >= 2, JSON.stringify(bittersweet.traits));
+    assert.equal(bittersweet.extras.some((entry) => /traits/i.test(entry.label)), false);
+    assert.ok(!bittersweet.traits.some((trait) => /weakness/i.test(trait)));
 });
 
 test('profiles are JSON-serialisable and deterministic', () => {

@@ -77,7 +77,10 @@
       "seasonId": "s1",
       "dataName": "Aurelia",
       "displayName": "Aurelia Longshot",
-      "aliases": [],
+      "aliases": [
+        "Longshot",
+        "Aurelia Selwind"
+      ],
       "side": "hero",
       "threatLevel": null,
       "formRole": "base",
@@ -111,7 +114,9 @@
       "seasonId": "s1",
       "dataName": "Blood Frenzy",
       "displayName": "Blood Frenzy",
-      "aliases": [],
+      "aliases": [
+        "Tindur Menis"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "alt",
@@ -307,7 +312,9 @@
       "seasonId": "s1",
       "dataName": "Redraw",
       "displayName": "Redraw",
-      "aliases": [],
+      "aliases": [
+        "Aurelia Selwind"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "alt",
@@ -353,7 +360,10 @@
       "seasonId": "s1",
       "dataName": "Tindur",
       "displayName": "Tindur Sharkbite",
-      "aliases": [],
+      "aliases": [
+        "Sharkbite",
+        "Tindur Menis"
+      ],
       "side": "hero",
       "threatLevel": null,
       "formRole": "base",
@@ -382,7 +392,9 @@
       "seasonId": "s1",
       "dataName": "Twisting Fate",
       "displayName": "Twisting Fate",
-      "aliases": [],
+      "aliases": [
+        "Carol Fate"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "base",
@@ -421,7 +433,9 @@
       "seasonId": "s1",
       "dataName": "Vaiva",
       "displayName": "Vaiva Colorgarde",
-      "aliases": [],
+      "aliases": [
+        "Colorgarde"
+      ],
       "side": "hero",
       "threatLevel": null,
       "formRole": "base",
@@ -495,8 +509,11 @@
       "displayName": "Aurelia (Dark)",
       "aliases": [
         "Longshot",
-        "Redraw Beatrix, Felicia, Felicity, Fortuna, Fausta, Penny",
-        "Yellow, Gold, Hare, Dice"
+        "Redraw",
+        "Beatrix",
+        "Felicia",
+        "Felicity",
+        "Fortuna"
       ],
       "side": "hero",
       "threatLevel": null,
@@ -529,7 +546,8 @@
       "dataName": "Bittersweet",
       "displayName": "Bittersweet",
       "aliases": [
-        "Bittersweet Poisoness",
+        "Bittersweet",
+        "Poisoness",
         "Jacqueline Webb"
       ],
       "side": "villain",
@@ -674,7 +692,8 @@
       "displayName": "Carol",
       "aliases": [
         "Cyber Heart",
-        "Bleeding Heart Carol Fate"
+        "Bleeding Heart",
+        "Carol Fate"
       ],
       "side": "villain",
       "threatLevel": null,
@@ -727,8 +746,7 @@
       "displayName": "Heart Attack",
       "aliases": [
         "Cyber Sakura",
-        "Heart Attack (current supervillain/Knight name]",
-        "Akui Koden"
+        "Heart Attack"
       ],
       "side": "villain",
       "threatLevel": null,
@@ -875,8 +893,10 @@
       "aliases": [
         "White Rabbit",
         "Longshot",
-        "Beatrix, Felicia, Felicity, Fortuna, Fausta, Penny",
-        "Redraw"
+        "Beatrix",
+        "Felicia",
+        "Felicity",
+        "Fortuna"
       ],
       "side": "villain",
       "threatLevel": null,
@@ -973,8 +993,10 @@
       "aliases": [
         "Iron Maiden",
         "Steel Heart",
-        "Warden, Green, Hyde",
-        "Luna, Anna"
+        "Warden",
+        "Green",
+        "Hyde",
+        "Luna"
       ],
       "side": "hero",
       "threatLevel": null,
@@ -1065,7 +1087,9 @@
       "seasonId": "s2",
       "dataName": "Gintvilas",
       "displayName": "Gintvilas Petrauskas Darkgarde",
-      "aliases": [],
+      "aliases": [
+        "Darkgarde"
+      ],
       "side": "hero",
       "threatLevel": null,
       "formRole": "base",
@@ -1400,7 +1424,8 @@
       "dataName": "Tribal Temptress",
       "displayName": "Tribal Temptress",
       "aliases": [
-        "Tribal Temptress Seasonal Siren",
+        "Tribal Temptress",
+        "Seasonal Siren",
         "Mint Mistress",
         "Pepper Keller"
       ],
@@ -1484,7 +1509,8 @@
       "aliases": [
         "Wild Maiden",
         "Iron Maiden",
-        "Luna, Anna"
+        "Luna",
+        "Anna"
       ],
       "side": "villain",
       "threatLevel": null,
@@ -1527,7 +1553,10 @@
       "seasonId": "s3",
       "dataName": "Shacklaw",
       "displayName": "Adrian Tylow Shacklaw",
-      "aliases": [],
+      "aliases": [
+        "Shacklaw",
+        "Adrian Tylow"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "base",
@@ -1568,7 +1597,8 @@
       "dataName": "Blood Bound",
       "displayName": "Blood Bound",
       "aliases": [
-        "Blood Bound Emerald Allure",
+        "Blood Bound",
+        "Emerald Allure",
         "Tessa Ervone"
       ],
       "side": "villain",
@@ -1774,7 +1804,9 @@
       "seasonId": "s3",
       "dataName": "Ellie",
       "displayName": "Elizabeth Ellie Addison",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "base",
@@ -1876,7 +1908,9 @@
       "seasonId": "s3",
       "dataName": "Keira",
       "displayName": "Keira Cooper",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat"
+      ],
       "side": "neutral",
       "threatLevel": null,
       "formRole": "base",
@@ -1968,7 +2002,9 @@
       "seasonId": "s3",
       "dataName": "Lucia",
       "displayName": "Lucia Lulu Illusi Chamisulli",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "base",
@@ -2011,7 +2047,9 @@
       "seasonId": "s3",
       "dataName": "Liz",
       "displayName": "Melissa Liz Ashton",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "base",
@@ -2097,7 +2135,9 @@
       "seasonId": "s3",
       "dataName": "Miracle",
       "displayName": "Miracle Mira Nillava VanillaMirror",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat"
+      ],
       "side": "hero",
       "threatLevel": null,
       "formRole": "base",
@@ -2358,7 +2398,10 @@
       "seasonId": "s3",
       "dataName": "Midnight Treat",
       "displayName": "Vireze Tylow Midnight Treat",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat",
+        "Vireze Tylow"
+      ],
       "side": "villain",
       "threatLevel": null,
       "formRole": "base",
@@ -2402,7 +2445,9 @@
       "seasonId": "s3",
       "dataName": "Zara",
       "displayName": "Zara Embarr",
-      "aliases": [],
+      "aliases": [
+        "Midnight Treat"
+      ],
       "side": "neutral",
       "threatLevel": null,
       "formRole": "base",
@@ -2630,7 +2675,8 @@
       "aliases": [
         "Claire Atropos",
         "Claire Lachesis",
-        "Queen of Neo Terra, Gene Maestra"
+        "Queen of Neo Terra",
+        "Gene Maestra"
       ],
       "side": "villain",
       "threatLevel": "S+",
@@ -2677,7 +2723,8 @@
       "dataName": "Cyber Dragon",
       "displayName": "Cyber Dragon",
       "aliases": [
-        "Cyber Dragon Crimson Crush",
+        "Cyber Dragon",
+        "Crimson Crush",
         "Christina Goldclaw",
         "Christina Flannery",
         "Chris"
@@ -2742,7 +2789,8 @@
       "dataName": "Dark Dragon",
       "displayName": "Dark Dragon",
       "aliases": [
-        "Dark Dragon Crimson Crush",
+        "Dark Dragon",
+        "Crimson Crush",
         "Christina Goldclaw",
         "Christina Flannery",
         "Chris"
@@ -2812,7 +2860,8 @@
       "dataName": "Frost Flight",
       "displayName": "Frost Flight",
       "aliases": [
-        "Frost Flight Hula Hawk",
+        "Frost Flight",
+        "Hula Hawk",
         "Brie Anderson",
         "Brjiip Haadge"
       ],
@@ -2900,7 +2949,8 @@
         "Ice Queen",
         "Claire Atropos",
         "Claire Lachesis",
-        "Gene Maestra, Queen of Neo Terra"
+        "Gene Maestra",
+        "Queen of Neo Terra"
       ],
       "side": "villain",
       "threatLevel": "EX",
@@ -3059,8 +3109,9 @@
         "Gravitasha",
         "Anastasia Carnaz",
         "Snowfall",
-        "O.V.E.N",
-        "Omnipurpose Variable Evaluation Network"
+        "O",
+        "V",
+        "E"
       ],
       "side": "villain",
       "threatLevel": "EX",
@@ -3127,7 +3178,9 @@
       "seasonId": "s4",
       "dataName": "Rosy",
       "displayName": "Roseline Rosy Bellington Pink Power",
-      "aliases": [],
+      "aliases": [
+        "Pink Power"
+      ],
       "side": "hero",
       "threatLevel": "S",
       "formRole": "base",
@@ -3175,7 +3228,10 @@
       "seasonId": "s4",
       "dataName": "Selina",
       "displayName": "Selina Cross Umbra",
-      "aliases": [],
+      "aliases": [
+        "Umbra",
+        "Selina Cross"
+      ],
       "side": "hero",
       "threatLevel": "SS",
       "formRole": "base",
