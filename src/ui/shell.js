@@ -42,7 +42,7 @@ import { mountJournal } from './journal.js';
 import { mountCommandPalette } from './command-palette.js';
 import { mountTurnStatus } from './turn-status.js';
 import { buildArrivalToast, buildErrorToasts, diffWorldState, mountToasts } from './toasts.js';
-import { buildArrivalSummary } from './arrival-summary.js';
+import { buildArrivalSummary, writeArrivalIntro } from './arrival-summary.js';
 import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
 import { loadRegistry } from '../data/registry.js';
 import { loadLocations } from '../data/locations.js';
@@ -1550,6 +1550,17 @@ function buildMapTravelHandler(context, runtime, panelRef) {
                     logger.debug('Could not show the arrival toast', error);
                 }
             }
+            // Persist the arrival prose and its arrival-time facts so the
+            // sidebar card survives the panel being disposed (close → reopen).
+            if (announceArrival && summary?.key && result.intro?.text) {
+                writeArrivalIntro(refreshContext() ?? context, summary.key, result.intro.text, {
+                    timeSlot: summary.timeSlot,
+                    district: summary.district,
+                    turns: summary.turns,
+                    hasEncounter: summary.hasEncounter,
+                    hostiles: summary.hostiles,
+                });
+            }
             // Only a real arrival that leaves the map open pulses the Return
             // button; a closing map has nothing to point at.
             if (announceArrival && shouldPulseReturn({ settings: settingsNow, posted })) {
@@ -1653,6 +1664,7 @@ async function mountMapPanelComponent(context, host = document.querySelector('[d
             registry: context?.chatMetadata?.neoterra?.registry ?? null,
             settings: mapSettingsNow(),
             getSettings: mapSettingsNow,
+            getContext: () => refreshContext() ?? context,
             store: runtime?.store ?? null,
             pacing: runtime?.pacing ?? null,
             scene: runtime?.scene ?? null,

@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildArrivalSummary } from '../src/ui/arrival-summary.js';
+import {
+    buildArrivalCard,
+    dismissArrival,
+    readArrivalDismissedKey,
+    readArrivalIntro,
+    readArrivalSnapshot,
+    renderArrivalCardMarkup,
+    writeArrivalDismissedKey,
+    writeArrivalIntro,
+} from '../src/ui/arrival-summary.js';
 import { buildArrivalToast, renderToastMarkup, toastLifetime } from '../src/ui/toasts.js';
 import { shouldAnnounceArrival, shouldPulseReturn } from '../src/ui/shell.js';
 import { pulseReturnButton } from '../src/ui/map-panel.js';
@@ -343,4 +353,133 @@ test('pulseReturnButton shows the static badge instead of animating under reduce
     assert.equal(button.dataset.neoterraArrivalCue, 'New arrival');
     assert.equal(button.classList.contains('is-pulsing'), false);
     assert.equal(button.listenerCount(), 0);
+});
+
+test('the sidebar card carries destination, district, slot, turns, and encounter', () => {
+    const state = makeState({
+        flags: TRAVEL_FLAGS,
+        encounter: { locationId: 'loc.b', characterIds: ['npc.ghost'], threatNames: [], source: 'travel' },
+        characters: { 'npc.ghost': { displayName: 'Ghost' } },
+    });
+    const summary = buildArrivalSummary({ state });
+    const card = buildArrivalCard({ summary, introText: 'You walk in.\nThe door shuts.' });
+    assert.ok(card);
+    assert.equal(card.key, summary.key);
+    assert.equal(card.destination, 'Docks');
+    assert.equal(card.district, 'West');
+    assert.equal(card.timeSlot, 'Evening');
+    assert.equal(card.turns, 2);
+    assert.equal(card.hasEncounter, true);
+    assert.equal(card.encounterLine, 'Ghost is present.');
+    assert.equal(card.introText, 'You walk in.\nThe door shuts.');
+
+    const markup = renderArrivalCardMarkup(card);
+    assert.match(markup, /data-neoterra-arrival-summary/);
+    assert.match(markup, /data-arrival-key="[^"]+"/);
+    assert.match(markup, /Docks/);
+    assert.match(markup, /West/);
+    assert.match(markup, /Evening/);
+    assert.match(markup, /2 turns/);
+    assert.match(markup, /Ghost is present/);
+    // The prose stays reachable and the spike selector still resolves.
+    assert.match(markup, /<details data-neoterra-map-intro>/);
+    assert.match(markup, /You walk in\.<br>The door shuts\./);
+    // Dismiss remains the same selector as before.
+    assert.match(markup, /data-neoterra-intro-dismiss/);
+});
+
+test('a peaceful arrival card says no hostiles and omits the prose disclosure', () => {
+    const summary = buildArrivalSummary({ state: makeState({ flags: TRAVEL_FLAGS }) });
+    const card = buildArrivalCard({ summary });
+    assert.equal(card.hasEncounter, false);
+    assert.equal(card.encounterLine, 'No hostiles detected.');
+    const markup = renderArrivalCardMarkup(card);
+    assert.match(markup, /No hostiles detected/);
+    assert.doesNotMatch(markup, /<details/);
+    assert.equal(buildArrivalCard({ summary: null }), null);
+    assert.equal(renderArrivalCardMarkup(null), '');
+});
+
+test('dismissing hides only that arrival and the next travel shows again', () => {
+    const context = { chatMetadata: {}, saveMetadataDebounced: () => {} };
+    const summary = buildArrivalSummary({ state: makeState({ flags: TRAVEL_FLAGS }) });
+    assert.equal(readArrivalDismissedKey(context), null);
+    assert.equal(writeArrivalDismissedKey(context, summary.key), true);
+    assert.equal(readArrivalDismissedKey(context), summary.key);
+    assert.equal(buildArrivalCard({ summary, dismissedKey: readArrivalDismissedKey(context) }), null);
+
+    // A later trip has a different key, so the new card shows untouched.
+    const nextSummary = { ...summary, key: 'travel:loc.b:loc.a:999' };
+    const nextCard = buildArrivalCard({ summary: nextSummary, dismissedKey: readArrivalDismissedKey(context) });
+    assert.ok(nextCard);
+    assert.equal(nextCard.key, 'travel:loc.b:loc.a:999');
+
+    // The write is scoped to neoterra.ui.map.
+    assert.equal(context.chatMetadata.neoterra.ui.map.arrivalDismissedKey, summary.key);
+});
+
+test('the arrival prose persists per chat for the reopen path', () => {
+    const context = { chatMetadata: {}, saveMetadataDebounced: () => {} };
+    assert.equal(readArrivalIntro(context), null);
+    assert.equal(writeArrivalIntro(context, 'travel:a:b:1', 'Full prose.'), true);
+    assert.equal(readArrivalIntro(context), 'Full prose.');
+    assert.equal(readArrivalIntro(context, 'travel:a:b:1'), 'Full prose.');
+    // A different arrival never shows the previous prose.
+    assert.equal(readArrivalIntro(context, 'travel:b:c:2'), null);
+    assert.equal(context.chatMetadata.neoterra.ui.map.lastArrivalIntro.text, 'Full prose.');
+    // The canonical metadata slot keeps its schema marker.
+    assert.equal(context.chatMetadata.neoterra.schemaVersion, 1);
+});
+
+test('a stored arrival keeps its arrival-time facts after the world moves on', () => {
+    const context = { chatMetadata: {}, saveMetadataDebounced: () => {} };
+    const arrivalState = makeState({
+        flags: TRAVEL_FLAGS,
+        timeOfDay: 'evening',
+        encounter: { locationId: 'loc.b', characterIds: ['npc.ghost'], threatNames: [], source: 'travel' },
+        characters: { 'npc.ghost': { displayName: 'Ghost' } },
+    });
+    const summary = buildArrivalSummary({ state: arrivalState });
+    writeArrivalIntro(context, summary.key, 'You arrive.', {
+        timeSlot: summary.timeSlot,
+        district: summary.district,
+        turns: summary.turns,
+        hasEncounter: summary.hasEncounter,
+        hostiles: summary.hostiles,
+    });
+    // A later turn changes the clock and clears the encounter.
+    const laterState = makeState({ flags: TRAVEL_FLAGS, timeOfDay: 'night', encounter: null });
+    const laterSummary = buildArrivalSummary({ state: laterState });
+    assert.notEqual(laterSummary.timeSlot, summary.timeSlot);
+    const snapshot = readArrivalSnapshot(context, laterSummary.key);
+    assert.ok(snapshot);
+    const card = buildArrivalCard({ summary: laterSummary, snapshot });
+    assert.equal(card.timeSlot, 'Evening');
+    assert.equal(card.turns, 2);
+    assert.equal(card.hasEncounter, true);
+    assert.equal(card.encounterLine, 'Ghost is present.');
+    assert.equal(card.introText, 'You arrive.');
+});
+
+test('dismissArrival persists the key and reports a failed write', () => {
+    const context = { chatMetadata: {}, saveMetadataDebounced: () => {} };
+    const state = makeState({ flags: TRAVEL_FLAGS });
+    const key = dismissArrival(context, state);
+    assert.equal(key, `travel:loc.a:loc.b:${LAST_AT}`);
+    assert.equal(readArrivalDismissedKey(context), key);
+    assert.equal(dismissArrival(context, makeState()), null);
+    // A metadata-less context cannot persist, so the card must stay.
+    assert.equal(dismissArrival(null, state), null);
+});
+
+test('arrivalFeedback:false suppresses the card in the panel', () => {
+    const panel = readFileSync(new URL('../src/ui/map-panel.js', import.meta.url), 'utf8');
+    assert.match(panel, /state\.settings\?\.arrivalFeedback === false[\s\S]{0,80}\? null/);
+    assert.match(panel, /state\.settings\?\.arrivalFeedback !== false && state\.lastIntro\?\.text/);
+});
+
+test('no card when the chat has no travel history', () => {
+    const state = makeState();
+    assert.equal(buildArrivalSummary({ state }), null);
+    assert.equal(buildArrivalCard({ summary: null, introText: 'orphan prose' }), null);
 });

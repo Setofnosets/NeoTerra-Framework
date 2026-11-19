@@ -1168,6 +1168,64 @@
     margin: 0.25rem 0 0;
 }
 
+/* ---------- Structured arrival card ---------- */
+
+.neoterra-map-arrival {
+    border: 1px solid var(--nt-border-strong);
+    border-left: 3px solid var(--nt-accent);
+    border-radius: var(--nt-radius-sm);
+    background: var(--nt-bg-hover);
+    padding: 0.4rem 0.5rem;
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.neoterra-map-arrival header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.neoterra-map-arrival h5 {
+    margin: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nt-accent);
+}
+
+.neoterra-map-arrival-destination {
+    margin: 0.2rem 0 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.neoterra-map-arrival-facts,
+.neoterra-map-arrival-encounter {
+    margin: 0.15rem 0 0;
+    color: var(--nt-text-faint);
+}
+
+.neoterra-map-arrival-encounter.is-hostile {
+    color: var(--nt-warning);
+}
+
+.neoterra-map-arrival details {
+    margin-top: 0.3rem;
+}
+
+.neoterra-map-arrival details summary {
+    cursor: pointer;
+    color: var(--nt-accent);
+    font-size: 0.72rem;
+}
+
+.neoterra-map-arrival details p {
+    margin: 0.25rem 0 0;
+    color: var(--nt-text);
+}
+
 /* ---------- Map editor ---------- */
 
 .neoterra-map-editor,

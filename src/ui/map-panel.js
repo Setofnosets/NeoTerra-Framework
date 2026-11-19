@@ -55,6 +55,14 @@ import {
 import { mountCityMap, mountFallbackMap } from './map.js';
 import { mountNewspaperReader } from './newspaper.js';
 import { createPacingFlow } from '../flows/pacing.js';
+import {
+    buildArrivalCard,
+    buildArrivalSummary,
+    dismissArrival,
+    readArrivalDismissedKey,
+    readArrivalSnapshot,
+    renderArrivalCardMarkup,
+} from './arrival-summary.js';
 
 const logger = createLogger('map-panel');
 
@@ -380,6 +388,9 @@ export async function mountMapPanel(options = {}) {
         onClose: typeof onClose === 'function' ? onClose : null,
         onMapStateChange: options.onMapStateChange ?? null,
         getSettings: typeof options.getSettings === 'function' ? options.getSettings : null,
+        // Live context accessor: metadata written by the shell must be visible
+        // to a panel that mounted earlier (the intro prose, dismissals).
+        getContext: typeof options.getContext === 'function' ? options.getContext : null,
         onFogChange: typeof options.onFogChange === 'function' ? options.onFogChange : null,
         season: options.season ?? null,
         flow: null,
@@ -535,8 +546,14 @@ export async function mountMapPanel(options = {}) {
             state.cityMap?.fitBounds?.();
         }
         if (event.target.closest?.('[data-neoterra-intro-dismiss]')) {
-            state.lastIntro = null;
-            paintSide();
+            // Hide only this arrival, and only if the dismissal persisted. The
+            // legacy prose block (no durable summary) simply clears.
+            const worldNow = readState(state);
+            const dismissed = dismissArrival(state.getContext?.() ?? state.ctx, worldNow);
+            if (dismissed || !buildArrivalSummary({ state: worldNow })) {
+                state.lastIntro = null;
+                paintSide();
+            }
             return;
         }
         if (event.target.closest?.('[data-neoterra-overlay-toggle]')) {
@@ -1544,7 +1561,21 @@ function paintSide() {
             })}`
         : '';
     const addNode = editorEnabled ? renderVirtualNodeForm() : '';
-    const intro = state.lastIntro?.text
+    // Structured arrival card, derived from WorldState so it survives the panel
+    // being disposed and remounted. `lastIntro` (a fresh result) supplies the
+    // prose; after a remount the durable summary still renders.
+    const arrivalSummary = worldState ? buildArrivalSummary({ state: worldState }) : null;
+    const liveCtx = state.getContext?.() ?? state.ctx;
+    const arrivalCard = state.settings?.arrivalFeedback === false
+        ? null
+        : buildArrivalCard({
+            summary: arrivalSummary,
+            introText: state.lastIntro?.text ?? null,
+            snapshot: readArrivalSnapshot(liveCtx, arrivalSummary?.key),
+            dismissedKey: readArrivalDismissedKey(liveCtx),
+        });
+    const intro = arrivalCard ? renderArrivalCardMarkup(arrivalCard) : '';
+    const legacyIntro = !intro && state.settings?.arrivalFeedback !== false && state.lastIntro?.text
         ? `<section class="neoterra-map-intro" data-neoterra-map-intro>
                 <header>
                     <h5>Arrival</h5>
@@ -1567,7 +1598,7 @@ function paintSide() {
                 <span class="neoterra-map-threat-progress">${Number.isFinite(activeThreat.progress) ? activeThreat.progress : 0}%</span>
            </div>`
         : '';
-    side.innerHTML = `${error}${threatBadge}${intro}${state.pacingError ? `<p class="neoterra-error" role="alert">${escapeHtml(state.pacingError)}</p>` : ''}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
+    side.innerHTML = `${error}${threatBadge}${intro}${legacyIntro}${state.pacingError ? `<p class="neoterra-error" role="alert">${escapeHtml(state.pacingError)}</p>` : ''}${overlay}${renderSubmenuMarkup(state.submenu)}${editor}${addNode}${counts}`;
 }
 
 async function loadAndMount(state) {
