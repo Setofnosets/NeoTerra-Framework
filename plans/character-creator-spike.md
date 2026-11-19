@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `character-creator-spike`
-- Status: **approved (2026-11-18)** — amber override granted for the best-effort, preview-gated scope
+- Status: **approved (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; in progress (step 1 done: `f38dac8`)
 - Date: 2026-11-18
 - Evidence: `plans/character-creator-spike-report.md` (6 live generations, scores, failure taxonomy)
 - Upstream: `plans/neoterra-experience-audit.md` (proposal B.11, spike A, decision 6)
@@ -58,6 +58,7 @@
 - **Risk:** low–medium
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(creator): validate and assemble generated character cards`
+- **Status:** done — `f38dac8` (2026-11-18)
 
 ### 2. Agent, settings entry, and the add-character reducer event
 - **Files:** `src/core/constants.js`, `src/core/defaults.js`, `src/agents/prompts.js`, `src/agents/character-creator.js`, `src/state/reducer.js`, `src/state/world-state.js`, `src/agents/cast-director.js` (read-only check), `tests/character-creator-agent.test.js`, `tests/world-state.test.js`
