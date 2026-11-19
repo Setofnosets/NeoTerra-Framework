@@ -156,6 +156,18 @@ function normalizeAgent(agent, defaults) {
         }),
         cadence: asString(agent.cadence, defaults.cadence),
     };
+    // A stored value from an older build can be below the documented safe
+    // floor (the creator needs room for a full card). Raise only to the floor.
+    if (Number.isFinite(defaults.minMaxTokens)) {
+        out.maxTokens = Math.max(out.maxTokens, defaults.minMaxTokens);
+    }
+    if (Object.hasOwn(defaults, 'timeoutMs') || Object.hasOwn(agent, 'timeoutMs')) {
+        out.timeoutMs = asNumber(agent.timeoutMs, defaults.timeoutMs ?? 60000, {
+            min: 1000,
+            max: 600000,
+            integer: true,
+        });
+    }
     if (Object.hasOwn(defaults, 'everyNTurns')) {
         out.everyNTurns = asNumber(agent.everyNTurns, defaults.everyNTurns, {
             min: 1,

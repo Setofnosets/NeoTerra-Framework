@@ -28,7 +28,7 @@ import {
 } from './settings.js';
 import { disposeMapPanel, disposeNewspaperReader, mountMapPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
-import { loadCodexData, resolveCodexRegistry } from './codex-data.js';
+import { loadCodexData, loadCardExemplars, resolveCodexRegistry } from './codex-data.js';
 import { mountRelationships } from './relationships.js';
 import { resolveSceneAvatar } from './avatar.js';
 import { mountSensorium } from './sensorium.js';
@@ -51,6 +51,7 @@ import { createNewsroomFlow } from '../flows/newsroom.js';
 import { createNewspaperAgent } from '../agents/newspaper.js';
 import { createStorylineTracker } from '../agents/storyline.js';
 import { createFormArchitect } from '../agents/form-architect.js';
+import { createCharacterCreator } from '../agents/character-creator.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
 import { createAgentClient } from '../agents/client.js';
@@ -1100,7 +1101,7 @@ async function mountCodexPanelComponent(context) {
     try {
         // Form rules are a global document; loading them without the chat slice
         // keeps every season's ids unresolved only where they belong.
-        const { season, registry, formGroups, formRules, profiles } = await loadCodexData({ metadata });
+        const { season, registry, formGroups, formRules, profiles, factions, locations, districts } = await loadCodexData({ metadata });
         let codexRunner = null;
         try {
             codexRunner = createAgentRunner({ client: createAgentClient({ ctx: context }) });
@@ -1108,6 +1109,11 @@ async function mountCodexPanelComponent(context) {
             logger.debug('Form Architect runner unavailable; missing forms fall back', error);
         }
         const formArchitect = createFormArchitect({
+            runner: codexRunner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        });
+        const characterCreator = createCharacterCreator({
             runner: codexRunner,
             getSettings: () => getSettings(context),
             log: (message, error) => logger.warn(message, error),
@@ -1129,6 +1135,12 @@ async function mountCodexPanelComponent(context) {
             profiles,
             ctx: context,
             formArchitect,
+            characterCreator,
+            creatorData: { factions, locations, districts },
+            loadExemplars: () => loadCardExemplars({
+                registry,
+                seasonId: season?.id ?? null,
+            }),
             getSettings: () => getSettings(context),
             onIdentityChange: ({ identity }) => {
                 const root = metadata.neoterra ?? (metadata.neoterra = {});

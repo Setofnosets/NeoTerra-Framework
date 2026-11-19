@@ -1011,6 +1011,7 @@ export function createCharacterCreator({ runner = null, getSettings = null, log 
         const maxTokens = Number.isFinite(agentSettings.maxTokens)
             ? Math.max(500, Math.round(agentSettings.maxTokens))
             : 4000;
+        const modelOverride = typeof request.model === 'string' ? request.model.trim() : '';
         let calls = 0;
         let lastError = null;
         let lastValidation = null;
@@ -1028,8 +1029,14 @@ export function createCharacterCreator({ runner = null, getSettings = null, log 
                 const response = await runner.runAgent({
                     agentId: 'characterCreator',
                     prompt,
-                    schema: CHARACTER_CREATOR_SCHEMA,
-                    overrides: { maxTokens: tokenBudget },
+                    // The prompt already carries the schema. Skipping the client
+                    // schema avoids its same-budget repair pass, which cannot
+                    // help a truncated reasoning-model response; our validator
+                    // retries once with a larger budget instead.
+                    overrides: {
+                        maxTokens: tokenBudget,
+                        ...(modelOverride ? { model: modelOverride } : {}),
+                    },
                     signal: request.signal,
                 });
                 const validation = validate(responseValue(response));

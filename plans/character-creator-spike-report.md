@@ -97,6 +97,7 @@ Scores are from one reviewer using the rubric below. The plan's acceptance crite
 ## Failure taxonomy
 
 1. **Token truncation (fatal, 1/6 runs).** A 2,400-token card needs `max_tokens ≥ 3,500` here. At 2,600 the model was cut mid-JSON. The client retries once on *invalid JSON* (`src/agents/client.js:354-425`) but resends the same `maxTokens`; a creator needs a larger-budget retry.
+   *Production note (live integration):* reasoning models consume the output budget with hidden tokens. On the current connections, 6000 was sometimes enough and sometimes not; 9000 succeeded. The shipping agent uses **9000 tokens / 180s timeout**, omits the client schema (the prompt carries it) so a rejection costs one larger retry rather than two full generations, and maps a `:thinking` connection model to its base variant when no model is pinned. Users who pin a fast non-thinking model in the agent settings can lower the budget.
 2. **Reasoning-model starvation (fatal, first attempt).** The connection default is the `:thinking` variant. With small `max_tokens` all output went to `reasoning` and `content` was empty → `generateRaw` throws “No message generated”. Target a non-thinking model or budget ≥ 6k tokens (`include_reasoning: true` is on the main path).
 3. **Structural leak into `firstMes` (1/5 valid runs).** Detectable: the field contains `Setting/World:` / `Appearance:` labels or starts with `[{{char}} is`.
 4. **Canon drift (1/5 valid runs).** Invented district, cross-season faction id. Fixed by a closed district list and id-restricted `canonLinks`.

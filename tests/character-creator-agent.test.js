@@ -110,15 +110,17 @@ test('the character creator is a registered agent with defaults and a prompt', (
     assert.ok(AGENT_IDS.includes('characterCreator'));
     assert.ok(DEFAULT_SETTINGS.agents.characterCreator);
     assert.equal(DEFAULT_SETTINGS.agents.characterCreator.enabled, true);
-    assert.equal(DEFAULT_SETTINGS.agents.characterCreator.maxTokens, 4000);
+    assert.equal(DEFAULT_SETTINGS.agents.characterCreator.maxTokens, 9000);
+    assert.equal(DEFAULT_SETTINGS.agents.characterCreator.timeoutMs, 180000);
     assert.match(DEFAULT_AGENT_PROMPTS.characterCreator, /non-canon supporting character/);
 
     // Bare resolver fallback (no per-agent settings) stays generic; the
-    // migrated settings carry the real 4000 budget.
+    // migrated settings carry the real budget.
     const bare = resolveAgentConfig({ agents: {} }, 'characterCreator', {}, {});
     assert.equal(bare.maxTokens, 1200);
     const normalized = normalizeSettings({ schemaVersion: 1, agents: {} });
-    assert.equal(normalized.agents.characterCreator.maxTokens, 4000);
+    assert.equal(normalized.agents.characterCreator.maxTokens, 9000);
+    assert.equal(normalized.agents.characterCreator.timeoutMs, 180000);
     assert.equal(normalized.agents.characterCreator.enabled, true);
     assert.match(bare.systemPrompt, /Neo Terra Card Architect/);
 });

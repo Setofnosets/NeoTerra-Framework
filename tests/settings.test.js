@@ -276,6 +276,27 @@ test('invalid values are normalized without throwing', () => {
     assert.equal(migrated.tokenBudget.total, 0);
 });
 
+test('a stored characterCreator token budget below the safe floor is raised', () => {
+    const migrated = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        agents: { characterCreator: { enabled: true, maxTokens: 4000 } },
+    });
+    assert.equal(migrated.agents.characterCreator.maxTokens, 6000);
+    assert.equal(migrated.agents.characterCreator.timeoutMs, 180000);
+
+    const higher = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        agents: { characterCreator: { maxTokens: 12000 } },
+    });
+    assert.equal(higher.agents.characterCreator.maxTokens, 12000);
+
+    const other = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        agents: { stateTracker: { maxTokens: 900 } },
+    });
+    assert.equal(other.agents.stateTracker.maxTokens, 900);
+});
+
 test('the clock settings normalizer fills defaults, clamps, and keeps unknown keys', () => {
     const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
     assert.equal(defaults.clock.enabled, true);

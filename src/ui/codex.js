@@ -16,7 +16,8 @@ import { findFormSection, splitListText } from '../data/card-profile.js';
 import { applyContentGate } from '../core/content-gate.js';
 import { createLogger } from '../core/logger.js';
 import { applyFormProfileOverlay } from '../state/form-profiles.js';
-import { avatarMarkup, initAvatars } from './avatar.js';
+import { buildGeneratedCharacterEvent } from '../agents/character-creator.js';
+import { avatarMarkup, initAvatars, initialsFor } from './avatar.js';
 import { downloadJson } from './download.js';
 
 const logger = createLogger('codex-ui');
@@ -40,6 +41,94 @@ const TRANSFORM_EVENT = 'TRANSFORM';
 
 function hasDom() {
     return typeof document !== 'undefined' && typeof window !== 'undefined';
+}
+
+const MAX_PORTRAIT_INPUT_BYTES = 4 * 1024 * 1024;
+const MAX_PORTRAIT_OUTPUT_CHARS = 175000;
+
+/**
+ * Read and downscale a user portrait. Returns `{ dataUrl }` or `{ error }`.
+ * Stored as a data URL because a generated card has no installed ST card.
+ */
+export async function downscalePortrait(file, { max = 256 } = {}) {
+    if (!file || typeof file !== 'object' || typeof file.type !== 'string') {
+        return { error: 'Choose an image file first.' };
+    }
+    if (!/^image\/(?:png|jpeg|webp)$/.test(file.type)) {
+        return { error: 'Use a PNG, JPEG, or WebP image.' };
+    }
+    if (Number(file.size) > MAX_PORTRAIT_INPUT_BYTES) {
+        return { error: 'The image must be 4 MB or smaller.' };
+    }
+    if (typeof FileReader === 'undefined') {
+        return { error: 'This browser cannot read image files.' };
+    }
+    const read = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ dataUrl: String(reader.result ?? '') });
+        reader.onerror = () => resolve({ error: 'Could not read the image.' });
+        reader.readAsDataURL(file);
+    });
+    if (read.error) {
+        return read;
+    }
+    if (!hasDom() || typeof Image === 'undefined') {
+        return read;
+    }
+    const image = await new Promise((resolve) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () => resolve(null);
+        element.src = read.dataUrl;
+    });
+    if (!image) {
+        return { error: 'That file is not a readable image.' };
+    }
+    const width = Number(image.width) || max;
+    const height = Number(image.height) || max;
+
+    // Step down until the encoded data URL fits the storage cap. PNG is kept
+    // for transparent images when it fits; otherwise JPEG (much smaller at
+    // portrait sizes) is used. A photo never needs to be re-picked.
+    const canvasAt = (size) => {
+        const scale = Math.min(1, size / Math.max(width, height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const context = canvas.getContext?.('2d');
+        if (!context) {
+            return null;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas;
+    };
+
+    const tryPng = (size) => {
+        const canvas = canvasAt(size);
+        return canvas ? canvas.toDataURL('image/png') : '';
+    };
+    const tryJpeg = (size) => {
+        const canvas = canvasAt(size);
+        return canvas ? canvas.toDataURL('image/jpeg', 0.82) : '';
+    };
+
+    if (file.type === 'image/png') {
+        const png = tryPng(max);
+        if (png && png.length <= MAX_PORTRAIT_OUTPUT_CHARS) {
+            return { dataUrl: png };
+        }
+    }
+
+    let size = max;
+    let dataUrl = tryJpeg(size) || read.dataUrl;
+    while (dataUrl.length > MAX_PORTRAIT_OUTPUT_CHARS && size > 64) {
+        size = Math.max(64, Math.round(size * 0.7));
+        dataUrl = tryJpeg(size) || dataUrl;
+    }
+    if (dataUrl.length > MAX_PORTRAIT_OUTPUT_CHARS) {
+        return { error: 'That portrait is too detailed to store. Try a simpler image.' };
+    }
+    return { dataUrl };
 }
 
 export function escapeCodexHtml(value) {
@@ -122,6 +211,7 @@ function buildItem({ id, state, entry, formIndex, roster }) {
         : null;
     const formName = formLabel(formIndex, formId, entry?.displayName ?? id);
     const aliases = asArray(entry?.aliases);
+    const generatedRecord = state?.flags?.generatedCards?.[id] ?? null;
     return {
         characterId: id,
         displayName,
@@ -140,6 +230,8 @@ function buildItem({ id, state, entry, formIndex, roster }) {
         isPlayer: state?.player?.identity === 'canon'
             && state?.player?.characterId === id,
         nonCanon: inRoster !== true,
+        generated: Boolean(generatedRecord),
+        portraitUrl: typeof generatedRecord?.portrait === 'string' ? generatedRecord.portrait : null,
         hasState: Boolean(character),
         badEndType: record?.type ?? character?.badEndType ?? null,
         badEnd: record
@@ -717,8 +809,10 @@ function buildDetail({
     const willpowerMax = Number.isFinite(willpower.max) && willpower.max > 0 ? willpower.max : 100;
     const isPlayer = state?.player?.identity === 'canon'
         && state?.player?.characterId === selectedId;
+    const generatedRecord = state?.flags?.generatedCards?.[selectedId] ?? null;
     const card = gateCardProfile(profiles?.[character?.formId ?? selectedId]
         ?? profiles?.[selectedId]
+        ?? generatedRecord?.profile
         ?? null, {
         settings,
         characterId: selectedId,
@@ -735,6 +829,9 @@ function buildDetail({
         alive: character ? character.alive !== false && character.status !== 'dead' : true,
         isPlayer,
         nonCanon: !roster.has(selectedId),
+        generated: Boolean(generatedRecord),
+        portraitUrl: typeof generatedRecord?.portrait === 'string' ? generatedRecord.portrait : null,
+        generatedWarnings: asArray(generatedRecord?.warnings),
         locationId: character?.locationId ?? null,
         locationName: character?.locationId
             ? state?.locations?.[character.locationId]?.name ?? character.locationId
@@ -1091,10 +1188,28 @@ function badge(text, tone = 'default') {
     return `<span class="neoterra-badge neoterra-badge-${escapeCodexHtml(tone)}">${escapeCodexHtml(text)}</span>`;
 }
 
+const GENERATED_PORTRAIT_SRC = /^data:image\/(?:png|jpe?g|webp);base64,/;
+
+/**
+ * Portrait markup that prefers a stored generated-card data URL. A generated
+ * card has no registry entry, so the initials fallback is the default.
+ */
+export function generatedPortraitMarkup({ portraitUrl = null, id = null, name = '', size = 'sm' } = {}) {
+    if (typeof portraitUrl === 'string' && GENERATED_PORTRAIT_SRC.test(portraitUrl)) {
+        return `<span class="neoterra-avatar neoterra-avatar-${escapeCodexHtml(size)}" data-neoterra-avatar data-avatar-source="generated">
+            <img class="neoterra-avatar-image" data-neoterra-avatar-img
+                src="${escapeCodexHtml(portraitUrl)}" alt="${escapeCodexHtml(name)}" loading="lazy">
+            <span class="neoterra-avatar-fallback" aria-hidden="true" style="display:none">${escapeCodexHtml(initialsFor(name))}</span>
+        </span>`;
+    }
+    return avatarMarkup(id, { size, name });
+}
+
 function renderItem(item, view) {
     const active = item.characterId === view.selectedId;
     const badges = [
         item.isPlayer ? badge('Playing as', 'accent') : '',
+        item.generated ? badge('Generated', 'warning') : '',
         item.nonCanon ? badge('Non-canon', 'warning') : '',
         item.badEnd ? badge(item.badEnd.type, 'danger') : '',
         item.controlledBy === 'player' && !item.isPlayer ? badge('Player-controlled', 'accent') : '',
@@ -1102,7 +1217,12 @@ function renderItem(item, view) {
     return `<button type="button" class="neoterra-codex-card${active ? ' is-active' : ''}"
         data-neoterra-codex-select="${escapeCodexHtml(item.characterId)}"
         aria-current="${active ? 'true' : 'false'}">
-        <span class="neoterra-codex-card-portrait">${avatarMarkup(item.formId ?? item.characterId, { size: 'sm', name: item.displayName })}</span>
+        <span class="neoterra-codex-card-portrait">${generatedPortraitMarkup({
+            portraitUrl: item.portraitUrl,
+            id: item.formId ?? item.characterId,
+            name: item.displayName,
+            size: 'sm',
+        })}</span>
         <span class="neoterra-codex-card-name">${escapeCodexHtml(item.displayName)}</span>
         <span class="neoterra-codex-card-meta">${escapeCodexHtml(item.side)} · ${escapeCodexHtml(item.formName)}</span>
         <span class="neoterra-codex-card-meta">${escapeCodexHtml(item.statusLabel)}${item.locationName ? ` · ${escapeCodexHtml(item.locationName)}` : ''}</span>
@@ -1251,6 +1371,7 @@ function renderDetail(detail, state) {
         badge(detail.side, detail.side === 'villain' ? 'danger' : 'accent'),
         badge(detail.status),
         detail.isPlayer ? badge('Playing as', 'accent') : '',
+        detail.generated ? badge('Generated', 'warning') : '',
         detail.nonCanon ? badge('Non-canon', 'warning') : '',
         detail.badEnd ? badge(`Bad end: ${detail.badEnd.type}`, 'danger') : '',
     ].join('');
@@ -1284,7 +1405,12 @@ function renderDetail(detail, state) {
 
     return `<article class="neoterra-codex-detail" data-neoterra-codex-detail="${escapeCodexHtml(detail.characterId)}">
         <header class="neoterra-codex-detail-head">
-            <div class="neoterra-codex-detail-portrait">${avatarMarkup(detail.form?.id ?? detail.characterId, { size: 'lg', name: detail.displayName })}</div>
+            <div class="neoterra-codex-detail-portrait">${generatedPortraitMarkup({
+                portraitUrl: detail.portraitUrl,
+                id: detail.form?.id ?? detail.characterId,
+                name: detail.displayName,
+                size: 'lg',
+            })}</div>
             <div>
                 <h4>${escapeCodexHtml(detail.displayName)}</h4>
                 <p class="neoterra-hint">${escapeCodexHtml(detail.form.label)}${identityLine ? ` · ${escapeCodexHtml(identityLine)}` : ''}${detail.locationName ? ` · ${escapeCodexHtml(detail.locationName)}` : ''}${detail.threatLevel ? ` · threat ${escapeCodexHtml(detail.threatLevel)}` : ''}</p>
@@ -1316,6 +1442,8 @@ function renderDetail(detail, state) {
                 <p>${escapeCodexHtml(detail.isPlayer ? 'Playing as this character' : (detail.playAs?.eligible ? 'Eligible to play as' : 'NPC'))}</p>
                 ${playAsButton}
                 ${detail.isPlayer ? '<button type="button" class="menu_button" data-neoterra-play-as-custom>Return to custom persona</button>' : ''}
+                ${detail.generated ? `<button type="button" class="menu_button" data-neoterra-export-generated-card="${escapeCodexHtml(detail.characterId)}">Export card JSON</button>` : ''}
+                ${detail.generated ? '<p class="neoterra-hint">Generated in this chat; non-canon and never written to the character library.</p>' : ''}
             </section>
         </div>
 
@@ -1412,6 +1540,124 @@ export function renderPlayAsDialog({ detail, mode = 'canon' }) {
         </section>`;
 }
 
+export function renderCreatorPreview({ draft = null, warnings = [], portraitUrl = null } = {}) {
+    if (!draft) {
+        return '';
+    }
+    const sections = [
+        ['Identity', draft.identity],
+        ['Appearance', draft.appearance],
+        ['Attire', draft.attire],
+        ['Abilities', draft.abilities],
+        ['Personality', draft.personality],
+        ['Speech', draft.speech],
+        ['Background', draft.background],
+        ['Weakness', draft.weakness],
+        ['Combat style', draft.combatStyle],
+        ['Gear', draft.gear],
+    ].filter(([, value]) => typeof value === 'string' && value.trim().length > 0);
+    const list = (label, values) => (Array.isArray(values) && values.length > 0
+        ? `<section class="neoterra-codex-profile-block">
+            <h6>${escapeCodexHtml(label)}</h6>
+            <ul class="neoterra-codex-list-inline">${values.map((value) => `<li>${escapeCodexHtml(value)}</li>`).join('')}</ul>
+        </section>`
+        : '');
+    return `<div class="neoterra-creator-preview" data-neoterra-creator-preview>
+        <header class="neoterra-creator-preview-head">
+            ${generatedPortraitMarkup({ portraitUrl, name: draft.name, size: 'lg' })}
+            <div>
+                <h4>${escapeCodexHtml(draft.name)}</h4>
+                <p class="neoterra-hint">${escapeCodexHtml(draft.side)}${draft.identity ? ` · ${escapeCodexHtml(draft.identity)}` : ''}</p>
+                <div class="neoterra-codex-badges">${badge('Generated · non-canon', 'warning')}</div>
+            </div>
+        </header>
+        ${warnings.length > 0 ? `<section class="neoterra-creator-warnings" role="status">
+            <strong>Review before keeping</strong>
+            <ul>${warnings.map((warning) => `<li>${escapeCodexHtml(warning)}</li>`).join('')}</ul>
+        </section>` : ''}
+        <div class="neoterra-codex-profile-grid">
+            ${list('Goals', draft.goals)}
+            ${list('Likes', draft.likes)}
+            ${list('Dislikes', draft.dislikes)}
+            ${list('Tags', draft.tags)}
+        </div>
+        ${sections.map(([label, value]) => `<section class="neoterra-codex-section">
+            <h5>${escapeCodexHtml(label)}</h5>
+            <p>${escapeCodexHtml(value)}</p>
+        </section>`).join('')}
+        <section class="neoterra-codex-section">
+            <h5>Opening scene</h5>
+            <p>${escapeCodexHtml(draft.firstMes)}</p>
+        </section>
+        <section class="neoterra-codex-section">
+            <h5>Example dialogue</h5>
+            <p>${escapeCodexHtml(draft.mesExample)}</p>
+        </section>
+    </div>`;
+}
+
+const CREATOR_SIDES = Object.freeze([
+    ['vigilante', 'Vigilante'],
+    ['hero', 'Hero'],
+    ['villain', 'Villain'],
+    ['civilian', 'Civilian'],
+    ['neutral', 'Neutral'],
+]);
+
+function creatorField(concept, key, label, { multiline = false, placeholder = '', required = false } = {}) {
+    const value = escapeCodexHtml(concept?.[key] ?? '');
+    const control = multiline
+        ? `<textarea rows="3" data-neoterra-creator-field="${key}" placeholder="${escapeCodexHtml(placeholder)}">${value}</textarea>`
+        : `<input type="text" data-neoterra-creator-field="${key}" value="${value}" placeholder="${escapeCodexHtml(placeholder)}">`;
+    return `<label class="neoterra-field"><span>${escapeCodexHtml(label)}${required ? ' *' : ''}</span>${control}</label>`;
+}
+
+export function renderCreatorDialog({
+    concept = {},
+    draft = null,
+    warnings = [],
+    portraitUrl = null,
+    busy = false,
+    error = null,
+} = {}) {
+    const preview = Boolean(draft);
+    const title = preview ? 'Review generated character' : 'Create character';
+    const form = `<fieldset class="neoterra-creator-form" data-neoterra-creator-form${busy ? ' disabled' : ''}>
+        <p class="neoterra-hint">A short concept becomes a non-canon supporting character. Nothing is saved until you keep it.</p>
+        ${creatorField(concept, 'name', 'Name (optional)', { placeholder: 'Leave blank to let the model name them' })}
+        <label class="neoterra-field"><span>Side</span>
+            <select data-neoterra-creator-field="side">
+                ${CREATOR_SIDES.map(([value, label]) => `<option value="${value}"${concept.side === value ? ' selected' : ''}>${label}</option>`).join('')}
+            </select>
+        </label>
+        ${creatorField(concept, 'concept', 'Concept', { multiline: true, required: true, placeholder: 'One or two sentences: who they are and what they want.' })}
+        ${creatorField(concept, 'powers', 'Powers and limits (optional)', { multiline: true, placeholder: 'Specific abilities and their real cost.' })}
+        ${creatorField(concept, 'ties', 'Ties to canon (optional)', { multiline: true, placeholder: 'Relationships, debts, grudges.' })}
+        ${creatorField(concept, 'contentNote', 'Content note (optional)', { placeholder: 'Tone or content limits for this card.' })}
+        <label class="neoterra-field"><span>Portrait (optional)</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" data-neoterra-creator-portrait>
+        </label>
+        ${portraitUrl ? '<p class="neoterra-hint">Portrait attached; it is stored with the card in this chat.</p>' : ''}
+    </fieldset>`;
+    const actions = preview
+        ? `<button type="button" class="menu_button" data-neoterra-creator-regenerate${busy ? ' disabled' : ''}>${busy ? 'Regenerating…' : 'Regenerate'}</button>
+            <button type="button" class="menu_button neoterra-primary" data-neoterra-creator-keep${busy ? ' disabled' : ''}>Keep</button>
+            <button type="button" class="menu_button" data-neoterra-codex-dialog-close>Cancel</button>`
+        : `<button type="button" class="menu_button" data-neoterra-codex-dialog-close>Cancel</button>
+            <button type="button" class="menu_button neoterra-primary" data-neoterra-creator-generate${busy ? ' disabled' : ''}>${busy ? 'Generating…' : 'Generate'}</button>`;
+    return `<div class="neoterra-dialog-backdrop" data-neoterra-codex-dialog-close></div>
+        <section class="neoterra-dialog neoterra-creator-dialog" role="dialog" aria-modal="true" aria-labelledby="neoterra-creator-title"
+            data-neoterra-codex-dialog="creator" data-neoterra-creator-step="${preview ? 'preview' : 'form'}" tabindex="-1">
+            <header class="neoterra-dialog-head">
+                <h4 id="neoterra-creator-title">${escapeCodexHtml(title)}</h4>
+            </header>
+            ${error ? `<p class="neoterra-error" role="alert">${escapeCodexHtml(error)}</p>` : ''}
+            ${busy ? '<p class="neoterra-hint" data-neoterra-creator-busy role="status">The Director is drafting the character…</p>' : ''}
+            ${preview ? renderCreatorPreview({ draft, warnings, portraitUrl }) : form}
+            <div class="neoterra-dialog-actions">${actions}</div>
+        </section>`;
+}
+
 export function renderCodexMarkup(view) {
     if (!view || view.total === 0) {
         return `<section class="neoterra-codex" data-neoterra-codex>
@@ -1428,6 +1674,7 @@ export function renderCodexMarkup(view) {
             <div class="neoterra-codex-head-actions">
                 <p class="neoterra-codex-playing">Playing as <strong>${escapeCodexHtml(view.player.displayName)}</strong>${view.player.nonCanon ? ' (non-canon)' : ''}</p>
                 ${view.hasProfiles ? '<button type="button" class="menu_button" data-neoterra-sync-profiles>Sync card profiles</button>' : ''}
+                <button type="button" class="menu_button neoterra-primary" data-neoterra-create-character>Create character</button>
             </div>
         </header>
         <div class="neoterra-codex-filters">
@@ -1478,6 +1725,11 @@ function trapDialogFocus(event, root) {
     }
     const focusable = focusableWithin(dialog);
     if (focusable.length === 0) {
+        // A busy dialog has no enabled controls: keep focus on the dialog shell.
+        if (document.activeElement !== dialog) {
+            event.preventDefault();
+            dialog.focus?.();
+        }
         return 'trap';
     }
     const first = focusable[0];
@@ -1512,6 +1764,9 @@ export function mountCodex({
     profiles = null,
     ctx = null,
     formArchitect = null,
+    characterCreator = null,
+    creatorData = null,
+    loadExemplars = null,
     getSettings = () => ({}),
     onIdentityChange = null,
     onWorldChange = null,
@@ -1550,6 +1805,7 @@ export function mountCodex({
         },
         selectedId: null,
         dialog: null,
+        creator: null,
         error: null,
         status: null,
     };
@@ -1581,9 +1837,21 @@ export function mountCodex({
             ${state.error ? `<p class="neoterra-error" role="alert">${escapeCodexHtml(state.error)}</p>` : ''}
             ${state.status ? `<p class="neoterra-hint" data-neoterra-codex-status>${escapeCodexHtml(state.status)}</p>` : ''}
             ${renderCodexMarkup(view)}
-            ${state.dialog ? renderPlayAsDialog({ detail: view.selected, mode: state.dialog.mode }) : ''}`;
-        document.body?.classList?.toggle('neoterra-dialog-open', Boolean(state.dialog));
-        if (state.dialog) {
+            ${state.dialog ? renderPlayAsDialog({ detail: view.selected, mode: state.dialog.mode }) : ''}
+            ${state.creator ? renderCreatorDialog({ ...state.creator, portraitUrl: state.creator.portrait }) : ''}`;
+        document.body?.classList?.toggle('neoterra-dialog-open', Boolean(state.dialog || state.creator));
+        if (state.creator) {
+            const previewButton = root.querySelector('[data-neoterra-creator-step="preview"]')
+                ?.querySelector('[data-neoterra-creator-keep]');
+            if (previewButton) {
+                previewButton.focus?.();
+            } else if (!root.contains(document.activeElement)) {
+                // The busy form disables every control; keep focus inside the
+                // dialog so Tab cannot escape it.
+                root.querySelector('[data-neoterra-creator-step="form"]')
+                    ?.querySelector('[data-neoterra-codex-dialog]')?.focus?.();
+            }
+        } else if (state.dialog) {
             root.querySelector('[data-neoterra-codex-dialog]')?.focus?.();
         }
     };
@@ -1592,6 +1860,16 @@ export function mountCodex({
         const returnFocus = state.returnFocus;
         state.returnFocus = null;
         state.dialog = null;
+        if (state.creator) {
+            // Abort an in-flight generation instead of letting it burn tokens.
+            try {
+                state.creator.abort?.abort?.();
+            } catch {
+                // Already aborted or unsupported.
+            }
+            state.creator.token = null;
+            state.creator = null;
+        }
         state.error = null;
         paint();
         if (returnFocus?.isConnected) {
@@ -1599,6 +1877,184 @@ export function mountCodex({
         } else {
             root.querySelector('[data-neoterra-codex-select][aria-current="true"]')?.focus?.();
         }
+    };
+
+    const openCreator = (returnFocus = null) => {
+        state.returnFocus = returnFocus;
+        state.dialog = null;
+        state.error = null;
+        state.status = null;
+        state.creator = {
+            concept: { name: '', side: 'vigilante', concept: '', powers: '', ties: '', contentNote: '' },
+            draft: null,
+            warnings: [],
+            portrait: null,
+            busy: false,
+            error: null,
+            token: null,
+            abort: null,
+            model: '',
+            keeping: false,
+        };
+        paint();
+        root.querySelector('[data-neoterra-creator-field="concept"]')?.focus?.();
+    };
+
+    const runCreator = async () => {
+        const creator = state.creator;
+        if (!creator || creator.busy) {
+            return;
+        }
+        if (!season?.id) {
+            creator.error = 'Start a season before creating a character.';
+            paint();
+            return;
+        }
+        if (!String(creator.concept.concept ?? '').trim()) {
+            creator.error = 'Write a one-line concept first.';
+            paint();
+            return;
+        }
+        if (!characterCreator || typeof characterCreator.run !== 'function') {
+            creator.error = 'The character creator is unavailable. Check the agent settings.';
+            paint();
+            return;
+        }
+        const token = {};
+        const abort = typeof AbortController === 'function' ? new AbortController() : null;
+        creator.token = token;
+        creator.abort = abort;
+        creator.busy = true;
+        creator.error = null;
+        paint();
+        try {
+            const exemplars = typeof loadExemplars === 'function'
+                ? await loadExemplars().catch(() => [])
+                : [];
+            // The dialog may have been cancelled while the exemplars loaded.
+            if (state.creator !== creator || creator.token !== token) {
+                return;
+            }
+            const current = store.get();
+            const concept = { ...creator.concept };
+            if (!String(concept.concept ?? '').trim()) {
+                creator.busy = false;
+                creator.token = null;
+                creator.error = 'Write a one-line concept first.';
+                paint();
+                return;
+            }
+            // Reasoning variants spend the output budget on hidden tokens and
+            // regularly truncate the card. When the user has not pinned a model
+            // for this agent, prefer the base model of the same deployment.
+            const configuredModel = String(getSettings()?.agents?.characterCreator?.model ?? '').trim();
+            const connectionModel = typeof ctx?.getChatCompletionModel === 'function'
+                ? String(ctx.getChatCompletionModel() ?? '')
+                : '';
+            const inferredModel = !configuredModel && /:thinking$/i.test(connectionModel)
+                ? connectionModel.replace(/:thinking$/i, '')
+                : '';
+            creator.model = inferredModel || configuredModel || '';
+            const result = await characterCreator.run({
+                season,
+                registry,
+                factions: creatorData?.factions ?? null,
+                districts: creatorData?.districts ?? null,
+                locations: creatorData?.locations ?? null,
+                exemplars,
+                concept,
+                locationId: current?.scene?.locationId ?? null,
+                turn: current?.meta?.turn ?? 0,
+                reservedIds: Object.keys(current?.characters ?? {}),
+                ...(inferredModel ? { model: inferredModel } : {}),
+                signal: abort?.signal,
+            });
+            if (state.creator !== creator || creator.token !== token) {
+                return;
+            }
+            creator.busy = false;
+            creator.token = null;
+            creator.abort = null;
+            if (result?.ok) {
+                creator.draft = result.value;
+                creator.warnings = asArray(result.warnings);
+                creator.error = null;
+            } else {
+                creator.error = result?.blockedReason ?? result?.error ?? 'Generation failed. Regenerate to try again.';
+            }
+        } catch (error) {
+            if (state.creator !== creator) {
+                return;
+            }
+            creator.busy = false;
+            creator.token = null;
+            creator.abort = null;
+            creator.error = error?.message ?? String(error);
+            logger.warn('Character creation failed', error);
+        }
+        paint();
+    };
+
+    const keepCreator = () => {
+        const creator = state.creator;
+        if (!creator?.draft || creator.keeping === true) {
+            return;
+        }
+        const current = store.get();
+        const locationId = current?.scene?.locationId ?? null;
+        if (!locationId) {
+            creator.error = 'Open a scene location before keeping a character.';
+            paint();
+            return;
+        }
+        creator.keeping = true;
+        try {
+            const event = buildGeneratedCharacterEvent({
+                draft: creator.draft,
+                season,
+                locationId,
+                turn: current?.meta?.turn ?? 0,
+                now: Date.now(),
+                portrait: creator.portrait,
+                model: creator.model || getSettings()?.agents?.characterCreator?.model || '',
+                warnings: creator.warnings,
+            });
+            const next = store.dispatch(event);
+            state.selectedId = event.character.charId;
+            // A filter can hide the new card; show it instead of silently
+            // selecting someone else in the detail pane.
+            state.filters = { query: '', side: 'all', form: 'all', location: 'all', status: 'all' };
+            state.status = `${event.character.displayName} joined the cast at ${current?.locations?.[locationId]?.name ?? locationId}.`;
+            state.error = null;
+            state.creator = null;
+            onWorldChange?.({ state: next, characterId: event.character.charId, reason: 'generated-card' });
+            paint();
+        } catch (error) {
+            creator.keeping = false;
+            creator.error = error?.message ?? String(error);
+            logger.warn('Keeping a generated character failed', error);
+            paint();
+        }
+    };
+
+    let portraitRequestId = 0;
+    const setCreatorPortrait = async (file) => {
+        const creator = state.creator;
+        if (!creator || creator.busy) {
+            return;
+        }
+        const requestId = (portraitRequestId += 1);
+        const result = await downscalePortrait(file);
+        if (state.creator !== creator || requestId !== portraitRequestId) {
+            return;
+        }
+        if (result.error) {
+            creator.error = result.error;
+        } else {
+            creator.portrait = result.dataUrl;
+            creator.error = null;
+        }
+        paint();
     };
 
     const applyIdentity = (characterId) => {
@@ -1781,6 +2237,13 @@ export function mountCodex({
     };
 
     root.addEventListener('input', (event) => {
+        const creatorField = event.target.closest?.('[data-neoterra-creator-field]');
+        if (creatorField) {
+            if (state.creator) {
+                state.creator.concept[creatorField.dataset.neoterraCreatorField] = creatorField.value;
+            }
+            return;
+        }
         const input = event.target.closest?.('[data-neoterra-codex-search]');
         if (!input) {
             return;
@@ -1798,6 +2261,21 @@ export function mountCodex({
     }, { signal: controller.signal });
 
     root.addEventListener('change', (event) => {
+        const creatorSelect = event.target.closest?.('select[data-neoterra-creator-field]');
+        if (creatorSelect) {
+            if (state.creator) {
+                state.creator.concept[creatorSelect.dataset.neoterraCreatorField] = creatorSelect.value;
+            }
+            return;
+        }
+        const portraitInput = event.target.closest?.('[data-neoterra-creator-portrait]');
+        if (portraitInput) {
+            const file = portraitInput.files?.[0] ?? null;
+            if (file) {
+                void setCreatorPortrait(file);
+            }
+            return;
+        }
         const select = event.target.closest?.('[data-neoterra-codex-filter]');
         if (!select) {
             return;
@@ -1807,6 +2285,38 @@ export function mountCodex({
     }, { signal: controller.signal });
 
     root.addEventListener('click', (event) => {
+        const createButton = event.target.closest?.('[data-neoterra-create-character]');
+        if (createButton) {
+            openCreator(createButton);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-creator-generate]')) {
+            void runCreator();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-creator-regenerate]')) {
+            void runCreator();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-creator-keep]')) {
+            keepCreator();
+            return;
+        }
+        const exportCard = event.target.closest?.('[data-neoterra-export-generated-card]');
+        if (exportCard) {
+            const characterId = exportCard.dataset.neoterraExportGeneratedCard;
+            const record = store.get()?.flags?.generatedCards?.[characterId] ?? null;
+            if (record?.card) {
+                const wrote = downloadJson(`neoterra-card-${characterId.replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`, record.card);
+                state.status = wrote === false
+                    ? 'This browser cannot download files.'
+                    : `Exported ${record.profile?.name ?? characterId}.`;
+            } else {
+                state.error = 'No stored card to export.';
+            }
+            paint();
+            return;
+        }
         if (event.target.closest?.('[data-neoterra-sync-profiles]')) {
             state.status = null;
             state.error = null;
@@ -1989,7 +2499,7 @@ export function mountCodex({
     }, { signal: controller.signal });
 
     window.addEventListener('keydown', (event) => {
-        if (!state.dialog) {
+        if (!state.dialog && !state.creator) {
             return;
         }
         const outcome = trapDialogFocus(event, root);

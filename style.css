@@ -1770,6 +1770,68 @@
     margin-top: 0.9rem;
 }
 
+/* ---------- Character creator ---------- */
+
+.neoterra-creator-dialog {
+    width: min(720px, 94vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    overflow: hidden;
+}
+
+.neoterra-creator-form {
+    display: grid;
+    gap: 0.6rem;
+    max-height: 62vh;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.neoterra-creator-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    max-height: 62vh;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.neoterra-creator-preview-head {
+    display: flex;
+    gap: 0.9rem;
+    align-items: center;
+}
+
+.neoterra-creator-preview-head h4 {
+    margin: 0 0 0.2rem;
+}
+
+.neoterra-creator-warnings {
+    border: 1px solid rgba(255, 190, 80, 0.4);
+    background: rgba(255, 190, 80, 0.08);
+    border-radius: var(--nt-radius-sm, 8px);
+    padding: 0.5rem 0.7rem;
+}
+
+.neoterra-creator-warnings ul {
+    margin: 0.3rem 0 0;
+    padding-left: 1.1rem;
+}
+
+.neoterra-creator-warnings li {
+    color: var(--nt-text-muted);
+    font-size: 0.8rem;
+}
+
+.neoterra-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
 /* ---------- Player sheet ---------- */
 
 /* Session Home ------------------------------------------------------- */

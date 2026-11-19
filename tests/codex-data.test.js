@@ -86,6 +86,23 @@ test('a chat slice loads the global form rules without id cross-validation', asy
     clearFormsCache();
 });
 
+test('loadCodexData degrades optional documents when a loader fails', async () => {
+    const data = await loadCodexData({
+        loadFormGroups: okGroups,
+        loadFormRules: () => loadFormRules({ fetchImpl: jsonFetch(formRules) }),
+        loadProfiles: async () => { throw new Error('profiles offline'); },
+        loadFactions: async () => { throw new Error('factions offline'); },
+        loadLocations: async () => 'not an object',
+        loadDistricts: async () => null,
+        loadFullRegistry: async () => registry,
+    });
+    assert.deepEqual(data.profiles, {});
+    assert.deepEqual(data.factions, {});
+    assert.deepEqual(data.locations, {});
+    assert.deepEqual(data.districts, {});
+    clearFormsCache();
+});
+
 test('registry id validation is opt-in and rejects a chat slice', async () => {
     clearFormsCache();
     await assert.rejects(

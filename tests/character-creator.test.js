@@ -598,6 +598,23 @@ test('a canon rejection is final and is not retried', async () => {
     assert.match(result.blockedReason, /collides/);
 });
 
+test('the agent forwards a model override (reasoning-model fallback) to the runner', async () => {
+    let captured = null;
+    const agent = createCharacterCreator({
+        runner: {
+            async runAgent(request) {
+                captured = request;
+                return { value: validCard() };
+            },
+        },
+        getSettings: () => ({ agents: { characterCreator: { enabled: true, maxTokens: 4000 } } }),
+    });
+    const result = await agent.run({ season: SEASON, model: 'deepseek/fast-base' });
+    assert.equal(result.ok, true, result.blockedReason ?? '');
+    assert.equal(captured.overrides.model, 'deepseek/fast-base');
+    assert.equal(captured.overrides.maxTokens, 4000);
+});
+
 test('the generated CharacterState validates against the world-state contract', () => {
     const state = createWorldState({
         season: REAL_S1,

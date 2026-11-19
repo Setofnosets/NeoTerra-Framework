@@ -203,7 +203,10 @@ WorldState {
 `CharacterState` carries identity, side, control, status, location, threat
 level, stamina/willpower, agenda, appearance, abilities, corruption, and the
 last updated turn. Player-controlled characters are mirrored in `player` and
-remain in `characters` with `controlledBy: 'player'`.
+remain in `characters` with `controlledBy: 'player'`. Characters created by the
+character creator also carry optional `personality` and `speech` strings (capped
+at 1000 and 700 characters, and rendered in the prompt as two lines of at most
+180 characters each, label included).
 
 Writes go through `applyWorldEvent(state, event)`. Agents emit events, never
 state diffs, so merges are deterministic and replayable. Unknown events are
@@ -222,6 +225,8 @@ world bundle and old chats keep validating:
 | `flags.pacing` | scene director | `{ level, reasons, codes, score, suggestion, canCut, lastAnalyzedTurn, lastCutTurn, snoozedUntilTurn, suggestedSlots, sceneTurns, sceneStartedTurn, sceneLocationId, held }` |
 | `flags.newsroom` | newspaper | `{ lastEditionDate, lastEditionTurn, editions[] }` |
 | `flags.map.exploration` | fog of war | `{ regions, keyLocations, updatedAt }` |
+| `flags.generatedCards` | character creator | `{ [charId]: { card, profile, portrait, model, generatedAt, approved, warnings } }` |
+| `flags.manualCharacters` | cast/manual adds | `string[]` of character ids that are not in the season roster |
 
 `meta.storyTurn` is the only structural addition: it tracks in-game elapsed
 turns and is migrated from `meta.turn` for old worlds.

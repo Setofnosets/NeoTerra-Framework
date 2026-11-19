@@ -14,6 +14,9 @@
 import { loadFormGroups, loadFormRules } from '../data/forms.js';
 import { loadProfiles } from '../data/profiles.js';
 import { loadRegistry } from '../data/registry.js';
+import { loadFactions } from '../data/factions.js';
+import { loadLocations } from '../data/locations.js';
+import { loadDistricts } from '../data/map.js';
 
 /**
  * Fetch the character profiles artifact when a loader is supplied.
@@ -29,6 +32,22 @@ async function loadOptionalProfiles(loadProfiles) {
     try {
         const profiles = await loadProfiles();
         return profiles && typeof profiles === 'object' ? profiles : {};
+    } catch {
+        return {};
+    }
+}
+
+/**
+ * Optional world documents for the character creator. A stale or partial
+ * install must still mount the codex, so a failed load degrades to `{}`.
+ */
+async function loadOptionalDocument(loader) {
+    if (typeof loader !== 'function') {
+        return {};
+    }
+    try {
+        const document = await loader();
+        return document && typeof document === 'object' ? document : {};
     } catch {
         return {};
     }
@@ -69,6 +88,9 @@ export function resolveCodexRegistry(metadata, loadFullRegistry = loadRegistry) 
  *   loadFormGroups?: () => Promise<object>,
  *   loadFormRules?: () => Promise<object>,
  *   loadProfiles?: (() => Promise<object>) | null,
+ *   loadFactions?: () => Promise<object>,
+ *   loadLocations?: () => Promise<object>,
+ *   loadDistricts?: () => Promise<object>,
  * }} [options]
  * @returns {Promise<{
  *   season: object|null,
@@ -76,6 +98,9 @@ export function resolveCodexRegistry(metadata, loadFullRegistry = loadRegistry) 
  *   formGroups: object,
  *   formRules: object,
  *   profiles: object,
+ *   factions: object,
+ *   locations: object,
+ *   districts: object,
  * }>}
  */
 export async function loadCodexData({
@@ -84,14 +109,20 @@ export async function loadCodexData({
     loadFormGroups: loadGroups = loadFormGroups,
     loadFormRules: loadRules = loadFormRules,
     loadProfiles: loadProfileData = loadProfiles,
+    loadFactions: loadFactionData = loadFactions,
+    loadLocations: loadLocationData = loadLocations,
+    loadDistricts: loadDistrictData = loadDistricts,
 } = {}) {
     const resolved = resolveCodexRegistry(metadata, loadFullRegistry);
     const registry = await resolved.registry;
 
-    const [formGroups, formRules, profiles] = await Promise.all([
+    const [formGroups, formRules, profiles, factions, locations, districts] = await Promise.all([
         loadGroups(),
         loadRules(),
         loadOptionalProfiles(loadProfileData),
+        loadOptionalDocument(loadFactionData),
+        loadOptionalDocument(loadLocationData),
+        loadOptionalDocument(loadDistrictData),
     ]);
 
     return {
@@ -100,5 +131,78 @@ export async function loadCodexData({
         formGroups,
         formRules,
         profiles,
+        factions,
+        locations,
+        districts,
     };
+}
+
+/* ------------------------------------------------------------------ */
+/* Character creator exemplars                                         */
+/* ------------------------------------------------------------------ */
+
+const EXEMPLAR_CACHE = new Map();
+const MAX_EXEMPLAR_CHARS = 8000;
+const DEFAULT_EXEMPLAR_COUNT = 3;
+
+/**
+ * Load the full card descriptions used as house-style exemplars.
+ *
+ * The registry entry drives the file path; a failed fetch is skipped, so the
+ * creator degrades to "fewer exemplars" rather than failing to open.
+ *
+ * @param {{ registry?: object|null, seasonId?: string|null, max?: number, fetchImpl?: typeof fetch }} [options]
+ * @returns {Promise<Array<{ name: string, description: string }>>}
+ */
+export async function loadCardExemplars({
+    registry = null,
+    seasonId = null,
+    max = DEFAULT_EXEMPLAR_COUNT,
+    fetchImpl = globalThis.fetch,
+} = {}) {
+    if (!registry || typeof seasonId !== 'string' || seasonId.length === 0) {
+        return [];
+    }
+    if (typeof fetchImpl !== 'function') {
+        return [];
+    }
+    const entries = (registry.entries ?? [])
+        .filter((entry) => entry
+            && entry.seasonId === seasonId
+            && entry.formKind === 'base'
+            && entry.bundle !== true
+            && typeof entry.cardPath === 'string')
+        .slice(0, Math.max(0, max));
+    const key = `${seasonId}:${max}:${entries.map((entry) => entry.id).join(',')}`;
+    if (EXEMPLAR_CACHE.has(key)) {
+        return EXEMPLAR_CACHE.get(key);
+    }
+    const exemplars = (await Promise.all(entries.map(async (entry) => {
+        try {
+            const url = new URL(`../../${entry.cardPath}`, import.meta.url);
+            const response = await fetchImpl(url.href);
+            if (!response || response.ok === false) {
+                return null;
+            }
+            const card = await response.json();
+            const description = card?.data?.description;
+            if (typeof description !== 'string' || description.trim().length === 0) {
+                return null;
+            }
+            return {
+                name: card.data.name ?? entry.displayName ?? entry.id,
+                description: description.slice(0, MAX_EXEMPLAR_CHARS),
+            };
+        } catch {
+            // A missing PNG/JSON twin must not block the creator.
+            return null;
+        }
+    }))).filter(Boolean);
+    EXEMPLAR_CACHE.set(key, exemplars);
+    return exemplars;
+}
+
+/** Clear the exemplar cache (tests and after regenerating characters). */
+export function clearCardExemplarCache() {
+    EXEMPLAR_CACHE.clear();
 }

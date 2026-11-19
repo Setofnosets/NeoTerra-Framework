@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: `character-creator-spike`
-- Status: **approved (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; in progress (steps 1–2 done: `f38dac8`, `c1927ed`)
+- Status: **implemented (2026-11-18)** — amber override granted for the best-effort, preview-gated scope; all three steps done: `f38dac8`, `c1927ed`, `<step3-hash>`
 - Date: 2026-11-18
 - Evidence: `plans/character-creator-spike-report.md` (6 live generations, scores, failure taxonomy)
 - Upstream: `plans/neoterra-experience-audit.md` (proposal B.11, spike A, decision 6)
@@ -32,7 +32,7 @@
 1. The creator is available only when a world exists (it needs the season bible and a location).
 2. The card is stored per chat and survives reload, including the optional portrait.
 3. Portraits are optional and user-supplied; no image generation.
-4. Agent model overrides are available per agent, so the creator can use a non-thinking model or a larger budget (`maxTokens: 4000`).
+4. Agent model overrides are available per agent, so the creator can use a non-thinking model or a larger budget (`maxTokens: 9000`, `timeoutMs: 180000`). Live QA on the current reasoning-model connections showed smaller budgets are consumed by hidden reasoning; when no model is pinned, the creator strips a trailing `:thinking` and uses the base model of the same deployment.
 5. A generated character does not need to reach SillyTavern's world book to be useful; the prompt cast block is enough.
 6. The user is the second reviewer and has final say on any generated card; there is no separate review step before Keep.
 
@@ -64,7 +64,7 @@
 - **Files:** `src/core/constants.js`, `src/core/defaults.js`, `src/agents/prompts.js`, `src/agents/character-creator.js`, `src/state/reducer.js`, `src/state/world-state.js`, `src/agents/cast-director.js` (read-only check), `tests/character-creator-agent.test.js`, `tests/world-state.test.js`
 - **Depends on:** 1
 - **Parallelizable:** no
-- **Expected behavior:** Add `characterCreator` to `AGENT_IDS` (`constants.js:37`) and a default config beside `formArchitect` (`defaults.js:235`) with `maxTokens: 4000`, `enabled: true`, and a short default prompt. `createCharacterCreator({ runner, getSettings })` builds the prompt from the live season + registry + profiles, runs one request with the schema, validates, and returns `{ ok, value, character, profile, card, warnings, blockedReason, prompt }`. It never mutates state. Add reducer event `ADD_GENERATED_CHARACTER`: requires a pre-validated `character` with `charId` matching the map key, a resolvable `locationId` (the current scene location), unique id, and a `profile`; inserts into `state.characters`, appends the id to `flags.manualCharacters`, writes `flags.generatedCards[charId] = { card, profile, portrait: null | dataUrl, model, generatedAt, approved: false, warnings }`, calls `syncPresence`, and never overwrites an existing id. Generated characters also carry `personality` and `speech` (each ≤ 180 chars when rendered), which `buildProfileLines` renders as two short lines so the voice reaches the prompt without budget growth.
+- **Expected behavior:** Add `characterCreator` to `AGENT_IDS` (`constants.js:37`) and a default config beside `formArchitect` (`defaults.js:235`) with `maxTokens: 9000`, `timeoutMs: 180000`, `enabled: true`, and a short default prompt. `createCharacterCreator({ runner, getSettings })` builds the prompt from the live season + registry + profiles, runs one request (no client schema; the prompt carries it, and the agent retries once at 1.5× on a structural failure), validates, and returns `{ ok, value, character, profile, card, warnings, blockedReason, prompt }`. When no model is pinned in settings it maps a `:thinking` connection model to its base variant. It never mutates state. Add reducer event `ADD_GENERATED_CHARACTER`: requires a pre-validated `character` with a `gen.` id, a resolvable non-null `locationId` (the current scene location), unique id, and a `profile`; inserts into `state.characters`, appends the id to `flags.manualCharacters`, writes `flags.generatedCards[charId] = { card, profile, portrait: null | dataUrl, model, generatedAt, approved: false, warnings }`, calls `syncPresence`, and never overwrites an existing id. Generated characters also carry `personality` and `speech` (each rendered at ≤ 180 chars including the label), which `buildProfileLines` renders as two short lines so the voice reaches the prompt without budget growth.
 - **Acceptance criteria:**
   - A fake runner returning a valid card produces an `ADD_GENERATED_CHARACTER` event that `applyWorldEvent` accepts; the character appears in `selectPresentCast` when placed at the scene location.
   - Duplicate ids, unknown locations, and malformed payloads are rejected without partial writes.
@@ -93,6 +93,7 @@
 - **Risk:** medium
 - **Model / Effort:** standard implementer #medium
 - **Commit:** `feat(codex): preview, keep, and export generated character cards`
+- **Status:** done — pending hash (2026-11-18)
 
 ## Verification & Testing
 - **Automated (after every step):**
