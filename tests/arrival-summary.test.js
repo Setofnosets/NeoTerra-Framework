@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { buildArrivalSummary } from '../src/ui/arrival-summary.js';
 import { buildArrivalToast, renderToastMarkup, toastLifetime } from '../src/ui/toasts.js';
-import { shouldAnnounceArrival } from '../src/ui/shell.js';
+import { shouldAnnounceArrival, shouldPulseReturn } from '../src/ui/shell.js';
+import { pulseReturnButton } from '../src/ui/map-panel.js';
 
 function makeState({
     flags = {},
@@ -259,4 +261,86 @@ test('toastLifetime prefers the per-push ttl and falls back to the stack default
     assert.equal(toastLifetime(null, 6500), 6500);
     assert.equal(toastLifetime({ ttlMs: 0 }, 6500), 6500);
     assert.equal(toastLifetime({ ttlMs: 'soon' }, 6500), 6500);
+});
+
+test('shouldPulseReturn pulses only when the cues are on and the map stays open', () => {
+    const posted = { posted: true, index: 3 };
+    assert.equal(shouldPulseReturn({ settings: { map: { closeOnTravel: false } }, posted }), true);
+    assert.equal(shouldPulseReturn({ settings: { map: { closeOnTravel: false, arrivalFeedback: false } }, posted }), false);
+    // Close-on-travel (the default) closes the map: nothing to pulse at.
+    assert.equal(shouldPulseReturn({ settings: { map: {} }, posted }), false);
+    assert.equal(shouldPulseReturn({ settings: { map: { closeOnTravel: false } }, posted: null }), true);
+});
+
+test('the map panel exposes pulseArrival and the CSS ships the pulse plus a reduced-motion opt-out', () => {
+    const panel = readFileSync(new URL('../src/ui/map-panel.js', import.meta.url), 'utf8');
+    const shell = readFileSync(new URL('../src/ui/shell.js', import.meta.url), 'utf8');
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    assert.match(panel, /pulseArrival: \(payload\) => pulseArrival\(state, payload \?\? \{\}\)/);
+    assert.match(shell, /panelRef\?\.pulseArrival\?\.\(\{ key: summary\?\.key \?\? null \}\)/);
+    assert.match(css, /\[data-neoterra-map-return\]\.is-pulsing\s*\{[^}]*animation:/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\[data-neoterra-map-return\]\.is-pulsing\s*\{[^}]*animation:\s*none/);
+    assert.match(css, /\[data-neoterra-map-return\]\[data-neoterra-arrival-cue\]::after/);
+});
+
+function fakeButton() {
+    const classes = new Set();
+    const listeners = new Map();
+    return {
+        dataset: {},
+        classList: {
+            add: (name) => classes.add(name),
+            remove: (name) => classes.delete(name),
+            contains: (name) => classes.has(name),
+        },
+        addEventListener: (type, handler) => listeners.set(type, handler),
+        removeEventListener: (type) => listeners.delete(type),
+        fire: (type) => listeners.get(type)?.(),
+        listenerCount: () => listeners.size,
+    };
+}
+
+test('pulseReturnButton fires once per arrival key and never on a repeat', () => {
+    const button = fakeButton();
+    const first = pulseReturnButton(button, { key: 'travel:a:b:1', now: 1 });
+    assert.equal(first.pulsed, true);
+    assert.equal(first.state.key, 'travel:a:b:1');
+    assert.equal(button.classList.contains('is-pulsing'), true);
+    // The same arrival (double refresh) must not pulse again.
+    const repeat = pulseReturnButton(button, { key: 'travel:a:b:1', previous: first.state, now: 2 });
+    assert.equal(repeat.pulsed, false);
+    assert.equal(repeat.state.key, 'travel:a:b:1');
+    // A new arrival pulses and replaces the key.
+    const next = pulseReturnButton(button, { key: 'travel:b:c:2', previous: first.state, now: 3 });
+    assert.equal(next.pulsed, true);
+    assert.equal(next.state.key, 'travel:b:c:2');
+});
+
+test('pulseReturnButton clears on animationend or the timeout fallback', () => {
+    const button = fakeButton();
+    const first = pulseReturnButton(button, { key: 'k1', now: 1 });
+    assert.equal(button.classList.contains('is-pulsing'), true);
+    button.fire('animationend');
+    assert.equal(button.classList.contains('is-pulsing'), false);
+    assert.equal(button.listenerCount(), 0);
+
+    // The dispose path calls `clear` directly; it is idempotent.
+    const second = fakeButton();
+    const result = pulseReturnButton(second, { key: 'k2', now: 2 });
+    result.clear();
+    assert.equal(second.classList.contains('is-pulsing'), false);
+    result.clear();
+    // A missing button never consumes the key.
+    const missing = pulseReturnButton(null, { key: 'k3' });
+    assert.equal(missing.pulsed, false);
+    assert.equal(missing.state, null);
+});
+
+test('pulseReturnButton shows the static badge instead of animating under reduced motion', () => {
+    const button = fakeButton();
+    const result = pulseReturnButton(button, { key: 'k1', reducedMotion: true, now: 1 });
+    assert.equal(result.pulsed, true);
+    assert.equal(button.dataset.neoterraArrivalCue, 'New arrival');
+    assert.equal(button.classList.contains('is-pulsing'), false);
+    assert.equal(button.listenerCount(), 0);
 });

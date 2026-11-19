@@ -520,6 +520,50 @@
     gap: 0.35rem;
 }
 
+/* Arrival cue: one short ring on the Return button, then a static badge. */
+.neoterra-map-buttons [data-neoterra-map-return] {
+    position: relative;
+}
+
+.neoterra-map-buttons [data-neoterra-map-return].is-pulsing {
+    animation: neoterra-arrival-pulse 1.6s ease-out 1;
+}
+
+/* The badge is the reduced-motion fallback: it is the whole cue there. */
+.neoterra-map-buttons [data-neoterra-map-return][data-neoterra-arrival-cue]::after {
+    content: attr(data-neoterra-arrival-cue);
+    position: absolute;
+    right: 0.1rem;
+    top: 0.02rem;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.58rem;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nt-bg-panel);
+    background: var(--nt-accent);
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+@keyframes neoterra-arrival-pulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--nt-accent) 65%, transparent);
+    }
+    60% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--nt-accent) 0%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .neoterra-map-buttons [data-neoterra-map-return].is-pulsing {
+        animation: none;
+    }
+}
+
 .neoterra-map-body {
     display: flex;
     flex: 1 1 auto;

@@ -390,6 +390,10 @@ export async function mountMapPanel(options = {}) {
         pacing: options.pacing ?? null,
         pacingError: null,
         newspaperReader: null,
+        // Arrival cue state: `arrivalPulse.key` dedupes repeats of the same
+        // arrival, and the badge survives until the map is closed.
+        arrivalPulse: null,
+        arrivalPulseClear: null,
         // Hosted: the panel fills a floating window whose chrome owns drag and
         // resize. Its own geometry, drag handle, and resize grip are disabled.
         hosted: options.hosted === true,
@@ -639,7 +643,74 @@ export async function mountMapPanel(options = {}) {
         getSources: () => state.sources,
         getOverlay: () => state.overlay,
         select: (selection) => selectFeature(state, selection),
+        pulseArrival: (payload) => pulseArrival(state, payload ?? {}),
     };
+}
+
+/**
+ * Pulse the Return-to-chat button once per arrival.
+ *
+ * The same arrival key never pulses twice (the shell also repaints on every
+ * `MAP_UPDATED`). The animation class is removed on `animationend` with a
+ * timeout fallback. Users who ask for reduced motion skip the animation and
+ * get a static "New arrival" badge instead. Returns whether it pulsed.
+ */
+export function pulseReturnButton(button, { key = null, previous = null, reducedMotion = false, now = Date.now() } = {}) {
+    if (!button) {
+        // Nothing to point at yet: do not consume the key, so a later call can.
+        return { pulsed: false, state: previous };
+    }
+    if (key && previous?.key === key) {
+        return { pulsed: false, state: previous };
+    }
+    const next = { key: key ?? `pulse:${now}`, at: now };
+    if (reducedMotion) {
+        // The CSS declines the animation; the badge carries the cue instead.
+        button.dataset.neoterraArrivalCue = 'New arrival';
+        button.classList?.remove?.('is-pulsing');
+        return { pulsed: true, state: next };
+    }
+    let timer = null;
+    const clear = () => {
+        if (timer !== null) {
+            clearTimeout(timer);
+            timer = null;
+        }
+        button.classList?.remove?.('is-pulsing');
+        button.removeEventListener?.('animationend', clear);
+    };
+    // Restart the keyframes even when the arrival comes shortly after the last.
+    button.classList?.remove?.('is-pulsing');
+    const start = () => button.classList?.add?.('is-pulsing');
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(start);
+    } else {
+        start();
+    }
+    button.addEventListener?.('animationend', clear, { once: true });
+    timer = setTimeout(clear, 2000);
+    // The fallback timer must not hold a process open (node tests, teardown).
+    timer?.unref?.();
+    return { pulsed: true, state: next, clear };
+}
+
+function pulseArrival(state, { key = null } = {}) {
+    if (mounted !== state) {
+        return false;
+    }
+    const button = state.root?.querySelector?.('[data-neoterra-map-return]');
+    const reducedMotion = typeof globalThis.matchMedia === 'function'
+        && globalThis.matchMedia('(prefers-reduced-motion: reduce)')?.matches === true;
+    const result = pulseReturnButton(button, {
+        key,
+        previous: state.arrivalPulse,
+        reducedMotion,
+    });
+    if (result.state) {
+        state.arrivalPulse = result.state;
+    }
+    state.arrivalPulseClear = result.clear ?? state.arrivalPulseClear;
+    return result.pulsed;
 }
 
 /**
@@ -1682,6 +1753,12 @@ export function disposeMapPanel() {
     const state = mounted;
     mounted = null;
     state.controller?.abort();
+    try {
+        state.arrivalPulseClear?.();
+    } catch (error) {
+        logger.debug('Could not clear the arrival cue', error);
+    }
+    state.arrivalPulseClear = null;
     state.newspaperReader?.dispose?.();
     state.newspaperReader = null;
     state.cityMap?.destroy?.();

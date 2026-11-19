@@ -1467,6 +1467,18 @@ export function shouldAnnounceArrival({ result, settings, liveChatId = null, cha
     return !liveChatId;
 }
 
+/**
+ * Should the map toolbar's Return-to-chat button pulse? Only when the arrival
+ * cues are on and the map is staying open (a closing map has nothing to
+ * point at). Pure; exported for tests.
+ */
+export function shouldPulseReturn({ settings, posted } = {}) {
+    if (settings?.map?.arrivalFeedback === false) {
+        return false;
+    }
+    return !shouldCloseAfterTravel(posted, settings);
+}
+
 function buildMapTravelHandler(context, runtime, panelRef) {
     const travel = runtime?.travel ?? null;
     if (!travel) {
@@ -1538,6 +1550,15 @@ function buildMapTravelHandler(context, runtime, panelRef) {
                     logger.debug('Could not show the arrival toast', error);
                 }
             }
+            // Only a real arrival that leaves the map open pulses the Return
+            // button; a closing map has nothing to point at.
+            if (announceArrival && shouldPulseReturn({ settings: settingsNow, posted })) {
+                try {
+                    panelRef?.pulseArrival?.({ key: summary?.key ?? null });
+                } catch (error) {
+                    logger.debug('Could not pulse the Return button', error);
+                }
+            }
             if (shouldClose) {
                 closeMapSurface();
             }
@@ -1606,6 +1627,7 @@ async function mountMapPanelComponent(context, host = document.querySelector('[d
         const onTravel = buildMapTravelHandler(context, runtime, {
             getSources: () => ref.panel?.getSources?.() ?? null,
             refresh: () => ref.panel?.refresh?.(),
+            pulseArrival: (payload) => ref.panel?.pulseArrival?.(payload),
         });
         // The overlay gates off-screen text at render time; contentGate and
         // contentLimits are top-level settings, not map settings. The panel
