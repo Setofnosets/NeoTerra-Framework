@@ -24,9 +24,11 @@ export const SCENE_KINDS = Object.freeze({
     OPENING: 'opening',
     TRAVEL: 'travel',
     ENCOUNTER: 'encounter',
+    NOTICE: 'notice',
     COMBAT: 'combat',
     RESOLUTION: 'resolution',
     CUT: 'cut',
+    SCENE: 'scene',
 });
 
 /** Avatar shown next to a scene frame (bundled with the extension). */
@@ -322,10 +324,15 @@ export async function postSceneMessage(ctx, message, { dedupeKey = null, avatarU
     const key = typeof dedupeKey === 'string' && dedupeKey.length > 0
         ? dedupeKey
         : sceneKeyOf(payload);
-    const previous = messages[lastIndex(messages)] ?? null;
-    const previousKey = sceneKeyOf(previous);
-    if (key && previousKey && key === previousKey) {
-        return { posted: false, index: lastIndex(messages), reason: 'duplicate', deduped: true };
+    // Scan the whole chat, not only the last message: a travel frame is often
+    // followed by its notice/description frames, and a remount must still
+    // recognise the original key instead of posting a second copy.
+    if (key) {
+        for (let index = messages.length - 1; index >= 0; index -= 1) {
+            if (sceneKeyOf(messages[index]) === key) {
+                return { posted: false, index, reason: 'duplicate', deduped: true };
+            }
+        }
     }
 
     try {

@@ -14,13 +14,24 @@ import { AgentAbortedError } from './client.js';
 import { applyContentGate, applyContentGateToPrompt, resolveContentLevel } from '../core/content-gate.js';
 import { renderPromptTemplate } from './prompts.js';
 import { isEndingScreenActive } from '../flows/ending.js';
+import { isSurprisedCombat, SURPRISED_COMBAT_ACTIONS } from '../flows/encounter.js';
 import { COMBAT_ACTIONS, COMBAT_RISK_TIERS } from '../combat/resolver.js';
+import { isPlayerCharacter } from '../state/selectors.js';
 
 export const CHOICES_SCHEMA_VERSION = 1;
 export const DEFAULT_CHOICE_COUNT = 4;
 export const MAX_CHOICE_COUNT = 6;
 export const MIN_CHOICE_COUNT = 2;
 export const DEFAULT_MAX_LABEL_LENGTH = 100;
+export const MAX_CONNECTED_CHOICES = 8;
+
+/**
+ * Routable chip kinds. `prose` (the default) sends the label as ordinary player
+ * text; `travel` moves the player to `target` through the travel flow; `combat`
+ * engages the current encounter. A chip without a routable payload always stays
+ * `prose`, so a malformed model can never trigger an engine action.
+ */
+export const CHOICE_KINDS = Object.freeze(['prose', 'travel', 'combat']);
 
 /** The resolver owns the combat vocabulary; choices re-export it. */
 export { COMBAT_ACTIONS, COMBAT_RISK_TIERS } from '../combat/resolver.js';
@@ -67,6 +78,8 @@ export const CHOICES_SCHEMA = Object.freeze({
                     intent: { type: 'string', maxLength: 40 },
                     tone: { type: 'string', maxLength: 40 },
                     risk: { type: 'string', maxLength: 40 },
+                    kind: { type: 'string', enum: [...CHOICE_KINDS] },
+                    target: { type: 'string', maxLength: 120 },
                 },
             },
         },
@@ -229,6 +242,108 @@ function presentCast(state) {
         }));
 }
 
+/**
+ * Connection lists may come from the live travel graph (which knows bridge
+ * overrides and virtual nodes) or from a WorldState location record. Accept
+ * both `string[]` and `{ id, name }[]` entries so the prompt always names the
+ * destination instead of only an id.
+ */
+function normalizeConnectionEntry(entry, state) {
+    const id = typeof entry === 'string' ? entry : entry?.id;
+    if (typeof id !== 'string' || id.length === 0) {
+        return null;
+    }
+    // A live graph entry may carry the overridden/virtual name; prefer it.
+    const name = typeof entry?.name === 'string' && entry.name.trim().length > 0
+        ? entry.name.trim()
+        : state?.locations?.[id]?.name ?? id;
+    return { id, name };
+}
+
+/**
+ * The current location's directly connected destinations, capped for the
+ * prompt. A travel chip may only target one of these ids (Decision 4).
+ */
+export function connectedLocations({ state = null, connections = null, max = MAX_CONNECTED_CHOICES } = {}) {
+    const current = state?.scene?.locationId ?? null;
+    if (typeof current !== 'string' || current.length === 0) {
+        return [];
+    }
+    // A supplied graph map is authoritative: a missing key means "no known
+    // connections", never a silent fallback to authored edges.
+    const raw = isObject(connections)
+        ? (Array.isArray(connections[current]) ? connections[current] : [])
+        : Array.isArray(state?.locations?.[current]?.connections)
+            ? state.locations[current].connections
+            : [];
+    const seen = new Set([current]);
+    const locations = [];
+    for (const entry of raw) {
+        const resolved = normalizeConnectionEntry(entry, state);
+        if (!resolved || seen.has(resolved.id)) {
+            continue;
+        }
+        seen.add(resolved.id);
+        locations.push(resolved);
+        if (locations.length >= (Number.isInteger(max) && max > 0 ? max : MAX_CONNECTED_CHOICES)) {
+            break;
+        }
+    }
+    return locations;
+}
+
+/**
+ * Hostiles the player could engage right now: the persisted encounter's
+ * characters first, then the active combat's participants (minus the player).
+ */
+export function choiceHostiles({ state = null } = {}) {
+    const encounter = isObject(state?.scene?.encounter) ? state.scene.encounter : null;
+    const combat = isObject(state?.scene?.combat) ? state.scene.combat : null;
+    const ids = [
+        ...asArray(encounter?.characterIds),
+        ...asArray(combat?.participants),
+    ];
+    const playerSide = combat && isObject(combat.sides)
+        ? (isPlayerCharacter(state, state?.player?.characterId)
+            ? combat.sides[state.player.characterId] ?? 'a'
+            : combat.sides.player ?? 'a')
+        : null;
+    const seen = new Set();
+    const hostiles = [];
+    for (const id of ids) {
+        if (typeof id !== 'string' || id.length === 0 || seen.has(id)) {
+            continue;
+        }
+        if (id === 'player' || isPlayerCharacter(state, id)) {
+            continue;
+        }
+        const character = state?.characters?.[id] ?? null;
+        if (!character || character.alive === false) {
+            continue;
+        }
+        // Active combat lists both sides: only the opposing side is hostile.
+        if (combat && playerSide && isObject(combat.sides) && combat.sides[id] === playerSide) {
+            continue;
+        }
+        seen.add(id);
+        hostiles.push({
+            id,
+            name: character.displayName ?? character.charId ?? id,
+        });
+    }
+    // A threat-only encounter has no character ids, but the prompt still names
+    // the threat so an engage chip is never silently invented or dropped.
+    for (const name of asArray(encounter?.threatNames)) {
+        const threatName = typeof name === 'string' ? name.trim() : '';
+        if (threatName.length === 0 || seen.has(`threat:${threatName}`)) {
+            continue;
+        }
+        seen.add(`threat:${threatName}`);
+        hostiles.push({ id: `threat:${threatName}`, name: threatName, threat: true });
+    }
+    return hostiles;
+}
+
 function contentMixLine(mix) {
     const entries = Object.entries(isObject(mix) ? mix : {})
         .filter(([, weight]) => Number(weight) > 0)
@@ -249,6 +364,7 @@ export function buildChoicesPrompt({
     count,
     theme,
     maxLabelLength,
+    connections = null,
 } = {}) {
     const config = settingsForMode(settings, mode);
     const resolvedTheme = theme ?? resolveChoiceTheme({
@@ -296,11 +412,33 @@ export function buildChoicesPrompt({
     }
     lines.push('');
 
+    const destinations = combat ? [] : connectedLocations({ state, connections });
+    const hostiles = choiceHostiles({ state });
+    if (destinations.length > 0) {
+        lines.push('## Connected locations');
+        lines.push('Travel chips may only target one of these directly connected ids:');
+        for (const location of destinations) {
+            lines.push(`- ${location.id} — ${location.name}`);
+        }
+        lines.push('');
+    }
+    if (hostiles.length > 0) {
+        lines.push('## Hostiles here');
+        for (const hostile of hostiles) {
+            lines.push(`- ${hostile.id} — ${hostile.name}`);
+        }
+        lines.push('');
+    }
+
+    const surprised = combat && isSurprisedCombat(state);
     if (combat) {
         lines.push('## Combat');
         lines.push(`Active: yes`);
         lines.push(`Participants: ${asArray(state?.scene?.combat?.participants).join(', ') || '(unknown)'}`);
         lines.push('Combat choices must be concrete actions, not narration.');
+        if (surprised) {
+            lines.push('Surprised: this is the opening beat of an ambush. Only defensive/escape actions are allowed this round.');
+        }
         lines.push('');
     }
 
@@ -326,13 +464,30 @@ export function buildChoicesPrompt({
     lines.push('Every choice must be plausible in this scene and distinct from the others.');
     lines.push(`Content mix weights: ${contentMixLine(config.contentMix)}.`);
     if (combat) {
-        lines.push(`Allowed actions: ${COMBAT_ACTIONS.join(', ')}.`);
+        const allowedActions = surprised ? SURPRISED_COMBAT_ACTIONS : COMBAT_ACTIONS;
+        lines.push(`Allowed actions: ${allowedActions.join(', ')}.`);
         lines.push(`Risk tiers: ${COMBAT_RISK_TIERS.join(', ')}.`);
+        if (surprised) {
+            lines.push('The ambush restricts this round: do not offer strike, grapple, feint, or skill.');
+        }
         lines.push('Every choice requires an action from the allowed list and a risk tier.');
         lines.push('Prefer actions the resolver can settle: strike, defend, grapple, feint, skill, retreat, surrender, talk down.');
+        lines.push('Combat choices are already inside the fight: use kind "combat" with target "engage" and never omit the action.');
     } else {
         lines.push(`Allowed intents: ${CHOICE_INTENTS.join(', ')}.`);
         lines.push('Exploration choices may include dialogue, investigation, travel, romance, or lewd content when the mix allows it.');
+        lines.push('Choice kind: "prose" (default), "travel", or "combat".');
+        if (destinations.length > 0) {
+            lines.push('A travel chip must set kind "travel" and target to one of the connected location ids above.');
+        } else {
+            lines.push('Do not emit travel chips: no connected destinations are known.');
+        }
+        if (hostiles.length > 0) {
+            lines.push('A chip that starts a fight must set kind "combat" and target "engage".');
+        } else {
+            lines.push('Do not emit combat chips: no hostiles are recorded here.');
+        }
+        lines.push('Any other choice must use kind "prose" (or omit kind) and no target.');
     }
     lines.push('Return JSON only. No prose.');
 
@@ -394,9 +549,14 @@ export function normalizeChoicesResult({
     state = null,
     count = null,
     maxLabelLength = null,
+    connections = null,
 } = {}) {
     const config = settingsForMode(settings, mode);
     const combat = mode === 'combat' || isCombatScene(state);
+    const surprised = combat && isSurprisedCombat(state);
+    const travelLocations = connectedLocations({ state, connections });
+    const allowedTravelIds = new Set(travelLocations.map((location) => location.id));
+    const hostiles = choiceHostiles({ state });
     const limit = clamp(
         Number.isInteger(maxLabelLength) ? maxLabelLength : config.maxLabelLength,
         1,
@@ -412,6 +572,7 @@ export function normalizeChoicesResult({
     const rejected = [];
     const seen = new Set();
     let truncated = false;
+    let downgraded = 0;
 
     for (const raw of asArray(output.choices)) {
         if (choices.length >= desired) {
@@ -444,7 +605,8 @@ export function normalizeChoicesResult({
             ? raw.action.trim().toLowerCase()
             : '';
         if (combat) {
-            if (!COMBAT_ACTIONS.includes(action)) {
+            const allowedActions = surprised ? SURPRISED_COMBAT_ACTIONS : COMBAT_ACTIONS;
+            if (!allowedActions.includes(action)) {
                 rejected.push({ reason: `unknown-combat-action:${action || 'none'}`, label });
                 continue;
             }
@@ -461,9 +623,50 @@ export function normalizeChoicesResult({
             ? raw.tone.trim().slice(0, 40)
             : null;
 
+        // Routable payload. A chip is only allowed to carry a kind the engine
+        // can execute for this exact scene; everything else is a plain prose
+        // chip so a stale or inventive model can never start a fight or a trip.
+        let kind = 'prose';
+        let target = null;
+        let targetName = null;
+        if (combat) {
+            kind = 'combat';
+            target = 'engage';
+            targetName = hostiles.length > 0
+                ? hostiles.map((hostile) => hostile.name).join(', ')
+                : null;
+        } else {
+            const rawKind = typeof raw.kind === 'string' ? raw.kind.trim().toLowerCase() : 'prose';
+            const rawTarget = typeof raw.target === 'string' ? raw.target.trim() : '';
+            if (rawKind === 'travel') {
+                if (rawTarget.length > 0 && allowedTravelIds.has(rawTarget)) {
+                    kind = 'travel';
+                    target = rawTarget;
+                    targetName = travelLocations.find((location) => location.id === rawTarget)?.name ?? null;
+                } else {
+                    downgraded += 1;
+                }
+            } else if (rawKind === 'combat') {
+                const validTarget = rawTarget === 'engage'
+                    || hostiles.some((hostile) => hostile.id === rawTarget);
+                if (hostiles.length > 0 && validTarget) {
+                    kind = 'combat';
+                    target = 'engage';
+                    targetName = hostiles.map((hostile) => hostile.name).join(', ');
+                } else {
+                    downgraded += 1;
+                }
+            } else if (rawKind !== 'prose' && rawKind.length > 0) {
+                downgraded += 1;
+            }
+        }
+
         seen.add(key);
         choices.push({
             label,
+            kind,
+            ...(target ? { target } : {}),
+            ...(targetName ? { targetName } : {}),
             ...(combat ? { action } : {}),
             intent,
             ...(tone ? { tone } : {}),
@@ -481,6 +684,7 @@ export function normalizeChoicesResult({
         rationale: typeof output.rationale === 'string' ? output.rationale.slice(0, 500) : '',
         rejected,
         truncated,
+        downgraded,
         mode: combat ? 'combat' : 'exploration',
         // A row with fewer than two usable choices is not worth rendering.
         visible: choices.length >= MIN_CHOICE_COUNT,
@@ -495,6 +699,7 @@ export function choicesCacheKey({
     theme = 'auto',
     count = DEFAULT_CHOICE_COUNT,
     regenerate = 0,
+    connectionsKey = '',
 } = {}) {
     return [
         String(chatId ?? ''),
@@ -504,6 +709,7 @@ export function choicesCacheKey({
         theme,
         String(count),
         String(Number.isInteger(regenerate) ? regenerate : 0),
+        String(connectionsKey ?? ''),
     ].join(':');
 }
 
@@ -533,6 +739,7 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
             count: request.count,
             theme,
             maxLabelLength: request.maxLabelLength,
+            connections: request.connections ?? null,
         });
         if (typeof request.propose !== 'function') {
             return {
@@ -543,6 +750,7 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
                     state,
                     count: request.count,
                     maxLabelLength: request.maxLabelLength,
+                    connections: request.connections ?? null,
                 }),
                 prompt,
                 calls: 0,
@@ -557,6 +765,7 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
                 state,
                 count: request.count,
                 maxLabelLength: request.maxLabelLength,
+                connections: request.connections ?? null,
             }),
             prompt,
             calls: 1,
@@ -616,6 +825,7 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
             count: request.count,
             theme,
             maxLabelLength: request.maxLabelLength,
+            connections: request.connections ?? null,
         });
 
         if (typeof runner?.runAgent !== 'function') {
@@ -627,6 +837,7 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
                     state,
                     count: request.count,
                     maxLabelLength: request.maxLabelLength,
+                    connections: request.connections ?? null,
                 }),
                 enabled: true,
                 calls: 0,
@@ -651,6 +862,7 @@ export function createChoicesAgent({ runner = null, getSettings = null, log = nu
                     state,
                     count: request.count,
                     maxLabelLength: request.maxLabelLength,
+                    connections: request.connections ?? null,
                 }),
                 enabled: true,
                 calls: 1,

@@ -127,6 +127,15 @@ export const DEFAULT_SETTINGS = freezeDeep({
         },
     },
 
+    // Arrival perception. A hostile can notice the player (prose + encounter
+    // frame, player still acts first) or spring a deterministic ambush in a
+    // hostile/contested location. Both are kill switches; off means the
+    // deterministic arrival summary only.
+    travel: {
+        noticeFirst: true,
+        ambush: true,
+    },
+
     ending: {
         // Default villain-victory epilogue length. Clamped to 3-8 by the flow.
         paragraphs: 5,
@@ -273,6 +282,17 @@ export const DEFAULT_SETTINGS = freezeDeep({
             maxTokens: 500,
             timeoutMs: 20000,
             cadence: 'onIdentityChange',
+        },
+        // One short atmospheric frame after a travel arrival. Never required:
+        // the deterministic arrival frame always stands on its own.
+        sceneDescriber: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.85,
+            maxTokens: 320,
+            timeoutMs: 12000,
+            cadence: 'onTravel',
         },
     },
 

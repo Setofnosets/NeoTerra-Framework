@@ -14,6 +14,8 @@ import {
 } from '../core/constants.js';
 import { bus, EVENTS } from '../core/events.js';
 import { createLogger } from '../core/logger.js';
+import { applyContentGate } from '../core/content-gate.js';
+import { buildNoticeFrameText, detectNotice } from '../flows/encounter.js';
 import { getSettings, resetSettings, setSetting } from '../core/settings.js';
 import { mountSeasonMenu, disposeSeasonMenu, refreshSeasonMenu, getSeasonMenuState } from './season-menu.js';
 import { mountSessionHome } from './session-home.js';
@@ -26,7 +28,7 @@ import {
     refreshSettingsPanel,
     revealSettingsPanel,
 } from './settings.js';
-import { disposeMapPanel, disposeNewspaperReader, mountMapPanel, openNewspaperFromPanel } from './map-panel.js';
+import { disposeMapPanel, disposeNewspaperReader, loadMapSources, mountMapPanel, openNewspaperFromPanel } from './map-panel.js';
 import { disposeCodex, mountCodex } from './codex.js';
 import { loadCodexData, loadCardExemplars, resolveCodexRegistry } from './codex-data.js';
 import { mountRelationships } from './relationships.js';
@@ -70,6 +72,7 @@ import { createBadEndDetector } from '../agents/bad-end.js';
 import { createFormArchitect } from '../agents/form-architect.js';
 import { createCharacterCreator } from '../agents/character-creator.js';
 import { createGoalInference, ensurePlayerGoals } from '../agents/goal-inference.js';
+import { createSceneDescriber } from '../agents/scene-describer.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
 import { createAgentClient } from '../agents/client.js';
@@ -85,7 +88,7 @@ import { createBadEndFlow } from '../flows/bad-end.js';
 import { mountEndingPanel, disposeEndingPanel } from './ending.js';
 import { mountBadEndPanel, disposeBadEndPanel } from './bad-end.js';
 import { mountAgentLog } from './agent-log.js';
-import { createChoicesController, mountChoicesBar, disposeChoicesBar } from './choices.js';
+import { createChoicesController, dispatchChoiceRoute, mountChoicesBar, disposeChoicesBar } from './choices.js';
 import {
     avoidEncounter,
     buildCombatResolutionFrameText,
@@ -94,7 +97,9 @@ import {
     encounterFromCombat,
     endEncounterCombat,
     engageEncounter,
+    markAmbushOpening,
     mountEncounterBar,
+    startEncounterCombat,
     surrenderEncounterCombat,
 } from './encounter-bar.js';
 import {
@@ -634,11 +639,15 @@ async function requestChoicesFor(live, messageIndex, { mode = null } = {}) {
         return null;
     }
     const messages = Array.isArray(live?.chat) ? live.chat : [];
+    // Travel chips may only name directly connected ids; the map graph is the
+    // one source of truth (it knows bridge overrides and virtual nodes).
+    const connections = await buildChoiceConnections(runtime, runtime.store.get());
     const view = await runtime.controller.request({
         messages,
         messageIndex,
         swipeId: 0,
         mode,
+        connections,
     });
     if (view?.visible) {
         choicesBar?.refresh?.();
@@ -1337,8 +1346,15 @@ function buildMapRuntime(context, panelRef) {
         initiative,
         getSettings: () => getSettings(context),
         // Read through the live runtime so a panel remount (same chat) still
-        // supplies the current overrides.
-        loadSources: () => mapRuntime?.panelRef?.getSources?.() ?? panelRef?.getSources?.() ?? null,
+        // supplies the current overrides. A chip-driven travel may run before
+        // the map has ever been opened, so fall back to the same loaders the
+        // panel uses instead of failing with "no sources".
+        loadSources: async () => {
+            const fromPanel = mapRuntime?.panelRef?.getSources?.()
+                ?? panelRef?.getSources?.()
+                ?? null;
+            return fromPanel ?? loadMapSources();
+        },
         now: Date.now,
         log: (message, error) => logger.warn(message, error),
     });
@@ -1383,6 +1399,11 @@ export async function postTravelOutcome(context, runtime, result, {
     requestChoices = requestChoicesFor,
     resolveContext = refreshContext,
     getChatId = currentChatId,
+    getSettings: readSettings = (live) => getSettings(live),
+    noticeDetector = detectNotice,
+    combatFlow = null,
+    describer = null,
+    now = Date.now,
 } = {}) {
     const live = resolveContext() ?? context;
     const chatId = runtime?.chatId ?? null;
@@ -1443,10 +1464,180 @@ export async function postTravelOutcome(context, runtime, result, {
         logger.warn('Chat changed after the travel frame; skipping CYOA');
         return posted;
     }
+
+    // Perception is a second, deterministic frame. A hostile may notice the
+    // player (no state change) or, in a hostile/contested place on a strong
+    // roll, spring an ambush: one combat start with a restricted first round.
+    let choicesIndex = posted.index;
+    let choicesMode = null;
+    let settingsNow = {};
     try {
-        await requestChoices(afterSave, posted.index);
+        settingsNow = (typeof readSettings === 'function' ? readSettings(afterSave) : null) ?? {};
+    } catch (error) {
+        logger.debug('Could not read the travel settings', error);
+    }
+    const encounter = result?.state?.scene?.encounter ?? null;
+    let notice = null;
+    try {
+        notice = typeof noticeDetector === 'function'
+            ? noticeDetector({
+                state: result?.state ?? null,
+                encounter,
+                noticeFirst: settingsNow?.travel?.noticeFirst !== false,
+                ambush: settingsNow?.travel?.ambush !== false,
+            })
+            : null;
+    } catch (error) {
+        logger.debug('Could not run the arrival perception check', error);
+    }
+    if (notice?.noticedFirst) {
+        const noticeKey = buildSceneKey(
+            'encounter',
+            chatId,
+            result?.from,
+            result?.to,
+            turn,
+            notice.ambush ? 'ambush' : 'notice',
+        );
+        const rawText = buildNoticeFrameText({ state: result.state, notice });
+        const text = applyContentGate(
+            rawText,
+            settingsNow?.contentGate ?? 'full',
+            settingsNow?.contentLimits ?? {},
+            { isPlayer: true },
+        ).trim();
+        if (text.length > 0) {
+            const message = buildSceneChatMessage({
+                kind: SCENE_KINDS.ENCOUNTER,
+                text,
+                key: noticeKey,
+                extra: {
+                    actorId: notice.actorId ?? null,
+                    ambush: notice.ambush === true,
+                    locationId: result?.to ?? null,
+                },
+            });
+            const postedNotice = await postSceneMessage(afterSave, message, {
+                dedupeKey: noticeKey,
+                avatarUrl: resolveSceneAvatar(afterSave),
+            }).catch((error) => {
+                logger.warn('Could not post the arrival notice; the travel frame stands', error);
+                return null;
+            });
+            if (postedNotice) {
+                decorateSceneAt(afterSave, postedNotice.index);
+                if (postedNotice.posted || postedNotice.deduped) {
+                    choicesIndex = postedNotice.index;
+                }
+            }
+        }
+        if (notice.ambush) {
+            const flow = combatFlow
+                ?? (() => {
+                    try {
+                        return buildInteractionRuntime(afterSave)?.combat ?? null;
+                    } catch (error) {
+                        logger.debug('Could not build the combat flow for an ambush', error);
+                        return null;
+                    }
+                })();
+            const started = startEncounterCombat({
+                flow,
+                state: result?.state ?? null,
+                encounter,
+            });
+            if (started.ok) {
+                markAmbushOpening(runtime?.store ?? null, {
+                    actorId: notice.actorId ?? null,
+                    actorName: notice.actorName ?? null,
+                    now: typeof now === 'function' ? now : Date.now,
+                });
+                bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-start', ambush: true });
+                choicesMode = 'combat';
+            } else {
+                logger.warn('The ambush could not start combat; the notice frame stands', started.message);
+            }
+        }
+    }
+
+    try {
+        await requestChoices(afterSave, choicesIndex, choicesMode ? { mode: choicesMode } : undefined);
     } catch (error) {
         logger.warn('Could not request choices after travel; the frame stands', error);
+    }
+
+    // Optional atmospheric description. It never blocks the arrival (the map
+    // already closed through onPosted) and never posts on failure, timeout, or
+    // a chat switch. The deterministic frame above is the canonical one.
+    const activeDescriber = describer;
+    if (activeDescriber && typeof activeDescriber.run === 'function') {
+        try {
+            const description = await activeDescriber.run({
+                state: result?.state ?? null,
+                season: afterSave?.chatMetadata?.neoterra?.seasonDefinition ?? null,
+                encounter,
+                notice,
+                settings: settingsNow,
+            });
+            if (description?.ok && typeof description.description === 'string') {
+                const stillLive = resolveContext() ?? afterSave;
+                if (getChatId(stillLive) === chatId) {
+                    const text = applyContentGate(
+                        description.description,
+                        settingsNow?.contentGate ?? 'full',
+                        settingsNow?.contentLimits ?? {},
+                        { isPlayer: true },
+                    ).trim();
+                    if (text.length > 0) {
+                        const descKey = buildSceneKey('scene-desc', chatId, key);
+                        const message = buildSceneChatMessage({
+                            kind: SCENE_KINDS.SCENE,
+                            text,
+                            key: descKey,
+                            extra: { travelKey: key, locationId: result?.to ?? null },
+                        });
+                        const postedDescription = await postSceneMessage(stillLive, message, {
+                            dedupeKey: descKey,
+                            avatarUrl: resolveSceneAvatar(stillLive),
+                        }).catch((error) => {
+                            logger.debug('Could not post the travel description', error);
+                            return null;
+                        });
+                        if (postedDescription) {
+                            decorateSceneAt(stillLive, postedDescription.index);
+                            try {
+                                const store = runtime?.store ?? null;
+                                const current = store?.get?.();
+                                if (current && (postedDescription.posted || postedDescription.deduped)) {
+                                    const cloned = snapshotWorldState(current);
+                                    if (cloned) {
+                                        const existing = Array.isArray(cloned.flags?.travelDescriptions)
+                                            ? cloned.flags.travelDescriptions
+                                            : [];
+                                        cloned.flags = {
+                                            ...(cloned.flags ?? {}),
+                                            travelDescriptions: [
+                                                ...existing,
+                                                {
+                                                    key,
+                                                    text,
+                                                    at: typeof now === 'function' ? now() : Date.now(),
+                                                },
+                                            ].slice(-10),
+                                        };
+                                        store.replace(cloned);
+                                    }
+                                }
+                            } catch (error) {
+                                logger.debug('Could not record the travel description', error);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            logger.debug('The travel description failed; the arrival frame stands', error);
+        }
     }
     return posted;
 }
@@ -1496,33 +1687,61 @@ export function shouldPulseReturn({ settings, posted } = {}) {
     return !shouldCloseAfterTravel(posted, settings);
 }
 
-function buildMapTravelHandler(context, runtime, panelRef) {
-    const travel = runtime?.travel ?? null;
-    if (!travel) {
+/** Is the map currently visible (hosted window or the legacy tab)? */
+function isMapSurfaceOpen() {
+    try {
+        if (windowManager?.isOpen?.('map')) {
+            return true;
+        }
+    } catch {
+        // A missing window manager means the legacy tab layout.
+    }
+    return isShellOpen() && getActiveTab() === 'map';
+}
+
+/**
+ * One travel execution shared by the map and by routed travel chips. Returns
+ * `{ ok, result, posted }` instead of throwing; the caller decides whether to
+ * show a status line (a chip) or keep the map open (the map handler).
+ */
+/** The describer may live on the map runtime or on the interaction runtime. */
+function resolveSceneDescriber(runtime, live) {
+    if (runtime?.sceneDescriber) {
+        return runtime.sceneDescriber;
+    }
+    try {
+        return buildInteractionRuntime(live)?.sceneDescriber ?? null;
+    } catch (error) {
+        logger.debug('Could not build the scene describer', error);
         return null;
     }
-    return async (request) => {
-        if (!request?.to) {
-            return false;
-        }
-        // The user may have switched chats with the map open. Never write into
-        // the previous chat's timeline (or onto the new chat's message).
-        const live = refreshContext();
-        const liveChatId = currentChatId(live ?? context);
-        if (liveChatId && liveChatId !== runtime.chatId) {
+}
+
+async function runTravelTo(context, runtime, panelRef, to, { remountOnChatSwitch = false } = {}) {
+    const travel = runtime?.travel ?? null;
+    if (!travel || typeof to !== 'string' || to.length === 0) {
+        return { ok: false, reason: travel ? 'no-destination' : 'no-travel' };
+    }
+    // The user may have switched chats with the map open. Never write into
+    // the previous chat's timeline (or onto the new chat's message).
+    const live = refreshContext();
+    const liveChatId = currentChatId(live ?? context);
+    if (liveChatId && liveChatId !== runtime.chatId) {
+        if (remountOnChatSwitch) {
             logger.info('Chat changed; remounting the map before travel');
             disposeMapPanel();
             mountedMapChatId = null;
             await mountMapPanelForActiveChat();
-            return false;
         }
-        const beforeTravel = snapshotWorldState(runtime.store.get());
-        const result = await travel.travel({ to: request.to });
-        if (!result.ok) {
-            logger.info('Travel rejected', { reason: result.reason, message: result.message });
-            bus.emit(EVENTS.MAP_UPDATED, { travel: result });
-            return false;
-        }
+        return { ok: false, reason: 'chat-changed' };
+    }
+    const beforeTravel = snapshotWorldState(runtime.store.get());
+    const result = await travel.travel({ to });
+    if (!result.ok) {
+        logger.info('Travel rejected', { reason: result.reason, message: result.message });
+        bus.emit(EVENTS.MAP_UPDATED, { travel: result });
+        return { ok: false, reason: result.reason ?? 'rejected', result };
+    }
         // Arrivals/departures from the Cast Director are surfaced once per
         // travel; the toast stack dedupes ids across later repaints.
         try {
@@ -1587,15 +1806,20 @@ function buildMapTravelHandler(context, runtime, panelRef) {
                     logger.debug('Could not pulse the Return button', error);
                 }
             }
-            if (shouldClose) {
+            // A chip-driven trip runs while the chat is visible: only close a
+            // surface that is actually open, never the shell on another tab.
+            if (shouldClose && isMapSurfaceOpen()) {
                 closeMapSurface();
             }
         };
         if (result.alreadyThere === true) {
             announce();
-            return true;
+            return { ok: true, result, posted: null, alreadyThere: true };
         }
-        const posted = await postTravelOutcome(context, runtime, result, { onPosted: announce })
+        const posted = await postTravelOutcome(context, runtime, result, {
+            onPosted: announce,
+            describer: resolveSceneDescriber(runtime, live),
+        })
             .catch((error) => {
                 // The move is already committed. A save/post failure must not
                 // swallow the arrival cue: announce what happened.
@@ -1605,13 +1829,27 @@ function buildMapTravelHandler(context, runtime, panelRef) {
         if (!posted) {
             // No chat/aborted post: still let the map reflect the committed move.
             announce();
-            return true;
+            return { ok: true, result, posted: null };
         }
         // A partial post (chat array only, no renderer) still needs its choices.
         if (!posted.posted && !posted.deduped) {
             announce(posted);
         }
-        return true;
+        return { ok: true, result, posted };
+}
+
+function buildMapTravelHandler(context, runtime, panelRef) {
+    if (!runtime?.travel) {
+        return null;
+    }
+    return async (request) => {
+        if (!request?.to) {
+            return false;
+        }
+        const outcome = await runTravelTo(context, runtime, panelRef, request.to, {
+            remountOnChatSwitch: true,
+        });
+        return outcome.ok === true;
     };
 }
 
@@ -2243,6 +2481,182 @@ function sendChoiceText(text) {
     return true;
 }
 
+/** One short status line for a routed chip that could not execute. */
+function showChoiceRouteStatus(message, tone = 'warning') {
+    const text = typeof message === 'string' ? message.trim() : '';
+    if (text.length === 0) {
+        return;
+    }
+    try {
+        ensureToasts().push([{
+            id: `choice-route:${text}`,
+            type: 'event',
+            title: 'Choice',
+            message: text,
+            tone,
+        }]);
+    } catch (error) {
+        logger.debug('Could not show the choice status', error);
+    }
+}
+
+/** The map runtime, created on demand for a chip that needs travel sources. */
+function ensureMapRuntimeForChoices(context, runtime) {
+    if (mapRuntime && mapRuntime.chatId === runtime?.chatId) {
+        return mapRuntime;
+    }
+    try {
+        return buildMapRuntime(context);
+    } catch (error) {
+        logger.debug('Could not build a travel runtime for a chip', error);
+        return null;
+    }
+}
+
+/** The connected destinations for the choices prompt, from the live graph. */
+async function buildChoiceConnections(runtime, state) {
+    const map = ensureMapRuntimeForChoices(refreshContext(), runtime);
+    if (!map?.travel || typeof map.travel.getGraph !== 'function') {
+        return null;
+    }
+    const current = state?.scene?.locationId ?? null;
+    if (typeof current !== 'string' || current.length === 0) {
+        return null;
+    }
+    try {
+        const graph = await map.travel.getGraph();
+        const node = graph?.getNode?.(current) ?? null;
+        const ids = Array.isArray(node?.connections) ? node.connections : [];
+        return {
+            [current]: ids.map((id) => ({
+                id,
+                name: graph?.getNode?.(id)?.name ?? state?.locations?.[id]?.name ?? id,
+            })),
+        };
+    } catch (error) {
+        logger.debug('Could not read the travel graph for choices', error);
+        return null;
+    }
+}
+
+/** One travel chip: the same execution path as the map, without a map UI. */
+async function routeTravelChoice(live, runtime, target) {
+    const map = ensureMapRuntimeForChoices(live, runtime);
+    if (!map?.travel) {
+        return { ok: false, reason: 'no-travel', message: 'Travel is unavailable in this chat.' };
+    }
+    const panel = map.panelRef?.panel ?? null;
+    const panelRef = panel
+        ? {
+            refresh: () => panel.refresh?.(),
+            getSources: () => panel.getSources?.(),
+            pulseArrival: (payload) => panel.pulseArrival?.(payload),
+        }
+        : null;
+    const outcome = await runTravelTo(live, map, panelRef, target);
+    if (outcome.ok === false) {
+        return {
+            ok: false,
+            reason: outcome.reason ?? 'rejected',
+            message: outcome.result?.message ?? 'That trip is not possible right now.',
+        };
+    }
+    return outcome;
+}
+
+/** Start a fight through the encounter path; a missing encounter is a notice. */
+async function routeCombatChoice(live, runtime) {
+    const state = runtime.store.get();
+    const model = buildEncounterBarModel({
+        state,
+        settings: getSettings(live),
+    });
+    if (model.visible && model.mode === 'encounter' && model.encounter) {
+        const outcome = await engageEncounterWithRuntime(runtime, live, model.encounter);
+        if (outcome.ok) {
+            await refreshInteractionUi(live);
+        }
+        return outcome;
+    }
+    return {
+        ok: false,
+        reason: 'no-encounter',
+        message: model.reason === 'avoided'
+            ? 'No one here to fight — you already avoided them.'
+            : 'No one here to fight.',
+    };
+}
+
+/** A prose notice frame for a combat chip that had nothing to engage. */
+async function postChoiceNotice(live, runtime, text) {
+    const state = runtime.store.get();
+    const key = buildSceneKey('notice', runtime.chatId, 'no-combat', state?.meta?.turn ?? 0);
+    const message = buildSceneChatMessage({
+        kind: SCENE_KINDS.NOTICE,
+        text,
+        key,
+    });
+    const posted = await postSceneMessage(live, message, {
+        dedupeKey: key,
+        avatarUrl: resolveSceneAvatar(live),
+    });
+    decorateSceneAt(live, posted?.index);
+    return posted;
+}
+
+let choiceRouteInFlight = false;
+
+/**
+ * Route one chip: prose goes through SillyTavern's normal send; travel and
+ * combat call the same engine paths as the map and the encounter bar. The
+ * choices controller has already consumed its exactly-once guard, and the
+ * in-flight flag keeps a second click from starting a second action.
+ */
+async function handleChoiceSend(text, choice) {
+    const kind = typeof choice?.kind === 'string' ? choice.kind : 'prose';
+    if (kind !== 'travel' && kind !== 'combat') {
+        sendChoiceText(text);
+        return;
+    }
+    if (choiceRouteInFlight) {
+        return;
+    }
+    const live = refreshContext();
+    const runtime = buildInteractionRuntime(live);
+    if (!runtime) {
+        sendChoiceText(text);
+        return;
+    }
+    choiceRouteInFlight = true;
+    try {
+        const routed = await dispatchChoiceRoute({
+            choice,
+            state: runtime.store.get(),
+            handlers: {
+                prose: () => sendChoiceText(text),
+                travel: (target) => routeTravelChoice(live, runtime, target),
+                combat: () => routeCombatChoice(live, runtime),
+                notice: (message) => postChoiceNotice(live, runtime, message),
+            },
+        });
+        if (routed.route === 'travel' && routed.result?.ok === false) {
+            showChoiceRouteStatus(routed.result.message ?? 'That trip is not possible right now.');
+        } else if (routed.route === 'combat' && routed.result?.ok === false) {
+            showChoiceRouteStatus(routed.result.message ?? 'The conflict could not start.');
+        } else if (routed.route === 'notice') {
+            // The notice frame is the visible response; the input stays ready
+            // for the player's own words.
+            document.getElementById('send_textarea')?.focus?.();
+        }
+    } catch (error) {
+        logger.warn('Could not route the choice', error);
+        showChoiceRouteStatus('The chosen action could not be executed.');
+    } finally {
+        choiceRouteInFlight = false;
+        choicesBar?.refresh?.();
+    }
+}
+
 /**
  * Wrap a bad-end flow so a canon self-continuation also resolves the new POV's
  * goals. Fire-and-forget: the continuation returns immediately and never waits
@@ -2394,7 +2808,9 @@ function buildInteractionRuntime(context) {
         getState: () => store.get(),
         getSettings: () => getSettings(context),
         getSeason: () => season,
-        onSend: (text) => sendChoiceText(text),
+        onSend: (text, choice) => {
+            void handleChoiceSend(text, choice);
+        },
     });
     const badEndBase = shared?.badEnd ?? createBadEndFlow({
         store,
@@ -2443,6 +2859,11 @@ function buildInteractionRuntime(context) {
         worldTick,
         newsroom,
         controller,
+        sceneDescriber: createSceneDescriber({
+            runner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        }),
         combat: createCombatFlow({
             store,
             getSettings: () => getSettings(context),
@@ -2486,6 +2907,32 @@ function paintEncounterBar(runtime, live) {
 }
 
 /**
+ * Start the encounter through the combat flow, post the one combat frame, and
+ * request combat choices. Shared by the encounter bar and routed combat chips.
+ */
+async function engageEncounterWithRuntime(runtime, live, encounter) {
+    const outcome = await engageEncounter({
+        flow: runtime.combat,
+        state: runtime.store.get(),
+        encounter,
+        chatId: runtime.chatId,
+        post: async (message, key) => {
+            const posted = await postSceneMessage(live, message, {
+                dedupeKey: key,
+                avatarUrl: resolveSceneAvatar(live),
+            });
+            decorateSceneAt(live, posted?.index);
+            return posted;
+        },
+        requestChoices: (index) => requestChoicesFor(live, index, { mode: 'combat' }),
+        onPosted: () => {
+            bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-start' });
+        },
+    });
+    return outcome;
+}
+
+/**
  * One delegated action from the encounter bar. Every branch re-reads the live
  * context and the shared runtime: the bar is UI-only, the frames carry prose.
  */
@@ -2519,24 +2966,7 @@ async function handleEncounterAction(actionId) {
     }
 
     if (actionId === 'engage') {
-        const outcome = await engageEncounter({
-            flow: runtime.combat,
-            state,
-            encounter: model.encounter,
-            chatId: runtime.chatId,
-            post: async (message, key) => {
-                const posted = await postSceneMessage(live, message, {
-                    dedupeKey: key,
-                    avatarUrl: resolveSceneAvatar(live),
-                });
-                decorateSceneAt(live, posted?.index);
-                return posted;
-            },
-            requestChoices: (index) => requestChoicesFor(live, index, { mode: 'combat' }),
-            onPosted: () => {
-                bus.emit(EVENTS.MAP_UPDATED, { reason: 'combat-start' });
-            },
-        });
+        const outcome = await engageEncounterWithRuntime(runtime, live, model.encounter);
         if (!outcome.ok) {
             encounterBar?.setStatus(outcome.message, 'error');
             return;

@@ -15,6 +15,7 @@ import { createSceneFlow } from '../src/flows/scene.js';
 import { createTravelFlow } from '../src/flows/travel.js';
 import { createBadEndFlow } from '../src/flows/bad-end.js';
 import { createWorldStateStore } from '../src/state/store.js';
+import { AGENT_IDS } from '../src/core/constants.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NOW = 1700000000000;
@@ -454,6 +455,17 @@ test('the turn pipeline runs Lore and Auditor stages and reports them', async ()
 test('the Architect season-start pass is opt-in', async () => {
     const { DEFAULT_SETTINGS } = await import('../src/core/defaults.js');
     assert.equal(DEFAULT_SETTINGS.agents.architect.seasonStart, false);
+});
+
+test('the scene describer is a registered, enabled, travel-cadenced agent', async () => {
+    const { DEFAULT_SETTINGS } = await import('../src/core/defaults.js');
+    assert.ok(AGENT_IDS.includes('sceneDescriber'));
+    const agent = DEFAULT_SETTINGS.agents.sceneDescriber;
+    assert.equal(agent.enabled, true);
+    assert.equal(agent.cadence, 'onTravel');
+    assert.equal(agent.timeoutMs, 12000);
+    assert.equal(agent.maxTokens, 320);
+    assert.equal(agent.temperature, 0.85);
 });
 
 

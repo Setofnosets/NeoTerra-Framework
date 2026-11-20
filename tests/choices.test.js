@@ -10,6 +10,8 @@ import {
     COMBAT_RISK_TIERS,
     buildChoicesPrompt,
     choicesCacheKey,
+    choiceHostiles,
+    connectedLocations,
     createChoicesAgent,
     normalizeChoicesResult,
     resolveChoiceTheme,
@@ -18,7 +20,9 @@ import {
 import { validateJsonSchema } from '../src/agents/client.js';
 import {
     createChoicesController,
+    dispatchChoiceRoute,
     renderChoicesMarkup,
+    resolveChoiceRoute,
 } from '../src/ui/choices.js';
 import { cloneDefaults } from '../src/core/defaults.js';
 import { normalizeStateTrackerResult, runTurnPipeline } from '../src/agents/state-tracker.js';
@@ -517,4 +521,374 @@ test('choices see the state a turn pipeline just applied', async () => {
     assert.equal(view.visible, true);
     assert.equal(view.choices.length, 4);
     assert.equal(observed.player.stamina.current, 33);
+});
+
+/* ------------------------------------------------------------------ *
+ * Step 6: routable kind/target payloads
+ * ------------------------------------------------------------------ */
+
+function travelState(extra = {}) {
+    return {
+        chatId: 'chat-routing',
+        ending: { status: 'none' },
+        meta: { turn: 3 },
+        playerRole: 'hero',
+        player: { identity: 'custom', locationId: 'loc.a' },
+        scene: { locationId: 'loc.a', present: [], encounter: null, combat: null },
+        locations: {
+            'loc.a': { id: 'loc.a', name: 'Arcade', connections: ['loc.b', 'loc.c'] },
+            'loc.b': { id: 'loc.b', name: 'Docks', connections: ['loc.a'] },
+            'loc.c': { id: 'loc.c', name: 'Market', connections: ['loc.a'] },
+            'loc.z': { id: 'loc.z', name: 'Nowhere', connections: [] },
+        },
+        characters: {},
+        ...extra,
+    };
+}
+
+test('the prompt lists only the current location connections, capped at eight', () => {
+    const state = travelState();
+    const prompt = buildChoicesPrompt({ state, settings: settingsFor() });
+    assert.match(prompt, /loc\.b — Docks/);
+    assert.match(prompt, /loc\.c — Market/);
+    assert.doesNotMatch(prompt, /loc\.z — Nowhere/);
+
+    const many = travelState();
+    many.locations['loc.a'].connections = Array.from({ length: 12 }, (_, index) => `loc.n${index}`);
+    for (let index = 0; index < 12; index += 1) {
+        many.locations[`loc.n${index}`] = { id: `loc.n${index}`, name: `N${index}`, connections: ['loc.a'] };
+    }
+    const capped = connectedLocations({ state: many });
+    assert.equal(capped.length, 8);
+
+    // Live travel-graph connections (virtual nodes included) take precedence.
+    const fromGraph = connectedLocations({
+        state,
+        connections: { 'loc.a': [{ id: 'loc.z', name: 'Hidden Bunker' }] },
+    });
+    assert.deepEqual(fromGraph, [{ id: 'loc.z', name: 'Hidden Bunker' }]);
+});
+
+test('a travel choice with a connected target round-trips kind and target', () => {
+    const state = travelState();
+    const normalized = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Walk to the docks', kind: 'travel', target: 'loc.b' },
+                { label: 'Ask around', kind: 'prose' },
+                { label: 'Wait', kind: 'prose' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        state,
+    });
+    const travel = normalized.choices.find((choice) => choice.kind === 'travel');
+    assert.deepEqual(
+        { kind: travel.kind, target: travel.target, targetName: travel.targetName },
+        { kind: 'travel', target: 'loc.b', targetName: 'Docks' },
+    );
+    assert.equal(normalized.downgraded, 0);
+    const markup = renderChoicesMarkup(normalized);
+    assert.match(markup, /data-neoterra-choice-kind="travel"/);
+    assert.match(markup, /data-neoterra-choice-target="loc\.b"/);
+    assert.match(markup, /Travel to Docks/);
+});
+
+test('a travel choice with an unknown target downgrades to prose', () => {
+    const state = travelState();
+    const normalized = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Teleport elsewhere', kind: 'travel', target: 'loc.nowhere' },
+                { label: 'Ask around' },
+                { label: 'Wait' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        state,
+    });
+    assert.equal(normalized.choices[0].kind, 'prose');
+    assert.equal(normalized.choices[0].target, undefined);
+    assert.equal(normalized.downgraded, 1);
+});
+
+test('combat chips keep action/risk and gain kind combat with the hostile list', () => {
+    const state = travelState({
+        scene: {
+            locationId: 'loc.a',
+            present: ['c.villain'],
+            combat: { id: 'combat-1', participants: ['player', 'c.villain'] },
+        },
+        characters: { 'c.villain': { charId: 'c.villain', displayName: 'Claire', side: 'villain' } },
+    });
+    const normalized = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Strike', action: 'strike', risk: 'high' },
+                { label: 'Defend', action: 'defend', risk: 'low' },
+                { label: 'Retreat', action: 'retreat', risk: 'moderate' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        mode: 'combat',
+        state,
+    });
+    assert.ok(normalized.choices.every((choice) => choice.kind === 'combat'));
+    assert.ok(normalized.choices.every((choice) => choice.action && choice.risk));
+    assert.equal(normalized.choices[0].target, 'engage');
+    assert.equal(normalized.choices[0].targetName, 'Claire');
+    assert.deepEqual(choiceHostiles({ state }).map((entry) => entry.id), ['c.villain']);
+});
+
+test('an exploration engage chip is routable only when a hostile is here', () => {
+    const withHostile = travelState({
+        scene: { locationId: 'loc.a', present: ['c.villain'], encounter: { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] } },
+        characters: { 'c.villain': { charId: 'c.villain', displayName: 'Claire', side: 'villain' } },
+    });
+    const routable = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Engage Claire', kind: 'combat', target: 'engage' },
+                { label: 'Talk', kind: 'prose' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        state: withHostile,
+    });
+    assert.equal(routable.choices[0].kind, 'combat');
+    assert.equal(routable.choices[0].target, 'engage');
+
+    const peaceful = travelState();
+    const downgraded = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Engage the shadows', kind: 'combat', target: 'engage' },
+                { label: 'Talk', kind: 'prose' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        state: peaceful,
+    });
+    assert.equal(downgraded.choices[0].kind, 'prose');
+    assert.equal(downgraded.downgraded, 1);
+});
+
+test('normalization trusts the supplied live graph, including virtual targets', () => {
+    const state = travelState();
+    const connections = { 'loc.a': [{ id: 'loc.v', name: 'Hidden Bunker' }] };
+    const normalized = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Enter the bunker', kind: 'travel', target: 'loc.v' },
+                { label: 'Walk to the docks', kind: 'travel', target: 'loc.b' },
+                { label: 'Wait', kind: 'prose' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        state,
+        connections,
+    });
+    assert.equal(normalized.choices[0].kind, 'travel');
+    assert.equal(normalized.choices[0].target, 'loc.v');
+    assert.equal(normalized.choices[0].targetName, 'Hidden Bunker');
+    // Graph truth wins: the authored loc.b edge is not reachable right now.
+    assert.equal(normalized.choices[1].kind, 'prose');
+    assert.equal(normalized.downgraded, 1);
+});
+
+test('a threat-only encounter still names its threat and allows an engage chip', () => {
+    const state = travelState({
+        scene: {
+            locationId: 'loc.a',
+            present: [],
+            encounter: { locationId: 'loc.a', characterIds: [], threatNames: ['The Beast'] },
+        },
+    });
+    assert.deepEqual(choiceHostiles({ state }).map((entry) => entry.name), ['The Beast']);
+    const normalized = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Face the Beast', kind: 'combat', target: 'engage' },
+                { label: 'Run', kind: 'prose' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        state,
+    });
+    assert.equal(normalized.choices[0].kind, 'combat');
+    assert.equal(normalized.choices[0].targetName, 'The Beast');
+});
+
+test('the choices cache key separates different connection sets', () => {
+    assert.notEqual(
+        choicesCacheKey({ messageIndex: 1, connectionsKey: 'loc.b,loc.c' }),
+        choicesCacheKey({ messageIndex: 1, connectionsKey: 'loc.b' }),
+    );
+});
+
+/* ------------------------------------------------------------------ *
+ * Step 7: routed chips execute the engine action
+ * ------------------------------------------------------------------ */
+
+test('resolveChoiceRoute sends prose by default and only routes tagged chips', () => {
+    assert.equal(resolveChoiceRoute({ label: 'Look around' }, null).route, 'prose');
+    assert.deepEqual(
+        resolveChoiceRoute({ kind: 'travel', target: 'loc.b' }, travelState()),
+        { route: 'travel', target: 'loc.b' },
+    );
+    assert.deepEqual(
+        resolveChoiceRoute({ kind: 'combat', target: 'engage' }, travelState()),
+        { route: 'combat', target: 'engage' },
+    );
+    // A battle action clicked during an active fight is resolved as prose.
+    const inCombat = travelState({ scene: { locationId: 'loc.a', present: [], combat: { participants: [] } } });
+    assert.deepEqual(
+        resolveChoiceRoute({ kind: 'combat', target: 'engage' }, inCombat),
+        { route: 'prose', reason: 'combat-active' },
+    );
+});
+
+test('a travel chip calls travel exactly once with its target and never posts a second frame', async () => {
+    const calls = [];
+    const posted = [{ index: 3 }];
+    const result = await dispatchChoiceRoute({
+        choice: { label: 'Walk to the docks', kind: 'travel', target: 'loc.b' },
+        state: travelState(),
+        handlers: {
+            prose: () => calls.push('prose'),
+            travel: async (target) => {
+                calls.push(`travel:${target}`);
+                return { ok: true, posted: posted[0] };
+            },
+        },
+    });
+    assert.equal(result.route, 'travel');
+    assert.deepEqual(calls, ['travel:loc.b']);
+    assert.equal(posted.length, 1);
+
+    // A second click is a no-op at the controller level: the first consumed
+    // the messageKey guard before the async action finished.
+    let sends = 0;
+    const controllerController = createChoicesController({
+        agent: {
+            run: async () => normalizeChoicesResult({
+                result: {
+                    choices: [
+                        { label: 'Walk to the docks', kind: 'travel', target: 'loc.b' },
+                        { label: 'Wait', kind: 'prose' },
+                    ],
+                    rationale: '',
+                },
+                settings: settingsFor(),
+                state: travelState(),
+                connections: { 'loc.a': ['loc.b'] },
+            }),
+        },
+        getState: () => travelState(),
+        getSettings: () => settingsFor(),
+        onSend: () => { sends += 1; },
+    });
+    await controllerController.request({ messages: [assistantMessage()], messageIndex: 1 });
+    assert.equal(controllerController.choose(0), true);
+    assert.equal(controllerController.choose(0), false);
+    assert.equal(sends, 1);
+});
+
+test('a rejected travel reports a message and does not start anything', async () => {
+    const result = await dispatchChoiceRoute({
+        choice: { kind: 'travel', target: 'loc.b' },
+        state: travelState(),
+        handlers: {
+            travel: async () => ({ ok: false, reason: 'blocked', message: 'Every route is blocked.' }),
+        },
+    });
+    assert.equal(result.route, 'travel');
+    assert.equal(result.result.ok, false);
+    assert.equal(result.result.message, 'Every route is blocked.');
+});
+
+test('an ambush opening round only offers defensive/escape actions', () => {
+    const state = travelState({
+        scene: {
+            locationId: 'loc.a',
+            present: ['c.villain'],
+            combat: {
+                id: 'combat-1',
+                participants: ['player', 'c.villain'],
+                sides: { player: 'a', 'c.villain': 'b' },
+                opening: 'hostile',
+                round: 0,
+            },
+        },
+        characters: { 'c.villain': { charId: 'c.villain', displayName: 'Claire', side: 'villain' } },
+    });
+    const normalized = normalizeChoicesResult({
+        result: {
+            choices: [
+                { label: 'Strike Claire', action: 'strike', risk: 'high' },
+                { label: 'Guard up', action: 'defend', risk: 'low' },
+                { label: 'Break away', action: 'retreat', risk: 'moderate' },
+                { label: 'Talk her down', action: 'talk-down', risk: 'low' },
+            ],
+            rationale: '',
+        },
+        settings: settingsFor(),
+        mode: 'combat',
+        state,
+    });
+    assert.deepEqual(
+        normalized.choices.map((choice) => choice.action).sort(),
+        ['defend', 'retreat', 'talk-down'],
+    );
+    assert.ok(normalized.rejected.some((entry) => entry.reason === 'unknown-combat-action:strike'));
+    const prompt = buildChoicesPrompt({ state, settings: settingsFor(), mode: 'combat' });
+    assert.match(prompt, /Surprised/);
+    assert.match(prompt, /defend, retreat, talk-down, surrender/);
+});
+
+test('a combat chip engages once; without an encounter it posts a notice', async () => {
+    const withEncounter = travelState({
+        scene: {
+            locationId: 'loc.a',
+            present: ['c.villain'],
+            encounter: { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] },
+        },
+        characters: { 'c.villain': { charId: 'c.villain', displayName: 'Claire', side: 'villain' } },
+    });
+    let starts = 0;
+    const engaged = await dispatchChoiceRoute({
+        choice: { kind: 'combat', target: 'engage' },
+        state: withEncounter,
+        handlers: {
+            combat: async () => {
+                starts += 1;
+                return { ok: true, key: 'combat:1', posted: { posted: true, index: 2 } };
+            },
+        },
+    });
+    assert.equal(engaged.route, 'combat');
+    assert.equal(starts, 1);
+
+    let notices = 0;
+    const peaceful = await dispatchChoiceRoute({
+        choice: { kind: 'combat', target: 'engage' },
+        state: travelState(),
+        handlers: {
+            combat: async () => ({ ok: false, reason: 'no-encounter', message: 'No one here to fight.' }),
+            notice: async (text) => {
+                notices += 1;
+                return { posted: true, text };
+            },
+        },
+    });
+    assert.equal(peaceful.route, 'notice');
+    assert.equal(peaceful.reason, 'no-encounter');
+    assert.equal(notices, 1);
 });

@@ -28,6 +28,24 @@ function asArray(value) {
     return Array.isArray(value) ? value : [];
 }
 
+/**
+ * A short, stable signature of the current location's connected ids. Travel
+ * targets in a cached chip row must not survive a graph change (a bridge
+ * destroyed or a virtual node removed), so the signature is part of the key.
+ */
+function connectionsSignature(connections, state) {
+    if (!connections || typeof connections !== 'object') {
+        return '';
+    }
+    const current = state?.scene?.locationId ?? '';
+    const list = Array.isArray(connections[current]) ? connections[current] : [];
+    return list
+        .map((entry) => (typeof entry === 'string' ? entry : entry?.id))
+        .filter((id) => typeof id === 'string' && id.length > 0)
+        .sort()
+        .join(',');
+}
+
 function modeFor(settings, state, requested = null) {
     if (requested === 'combat' || requested === 'exploration') {
         return requested;
@@ -91,6 +109,7 @@ export function createChoicesController({
                 mode: result?.mode ?? request.mode,
                 theme: result?.theme ?? 'auto',
                 count: result?.desired ?? 0,
+                connectionsKey: connectionsSignature(request.connections, state),
             })
             : null;
         const alreadySent = messageKey ? sent.has(messageKey) : false;
@@ -116,6 +135,7 @@ export function createChoicesController({
         generationActive = false,
         regenerate = false,
         force = false,
+        connections = null,
     } = {}) {
         const state = stateSnapshot();
         const settings = settingsSnapshot();
@@ -160,6 +180,7 @@ export function createChoicesController({
         const count = resolvedMode === 'combat'
             ? settings?.cyoa?.combatChoices?.count ?? 4
             : settings?.cyoa?.count ?? 4;
+        const connectionsKey = connectionsSignature(connections, state);
         const key = choicesCacheKey({
             chatId: chatIdOf(state),
             messageIndex,
@@ -168,6 +189,7 @@ export function createChoicesController({
             theme,
             count,
             regenerate: regenerateCounter,
+            connectionsKey,
         });
 
         const requestContext = {
@@ -178,6 +200,7 @@ export function createChoicesController({
             regenerate: regenerateCounter,
             theme,
             count,
+            connections,
         };
 
         if (!regenerate && cache.has(key)) {
@@ -199,6 +222,7 @@ export function createChoicesController({
                 theme,
                 count,
                 force: force === true,
+                connections,
             });
         }
         lastGeneratedAt = now();
@@ -213,6 +237,7 @@ export function createChoicesController({
             mode: resolvedMode,
             theme,
             count,
+            connectionsKey,
         }), result);
         current = { result, request: requestContext };
         return buildView(result, requestContext);
@@ -301,11 +326,25 @@ export function renderChoicesMarkup(view) {
         const action = choice.action
             ? `<span class="neoterra-choice-action">${escapeHtml(choice.action)}</span>`
             : '';
+        const kind = typeof choice.kind === 'string' ? choice.kind : 'prose';
+        // A routable chip shows what it will do (destination or opponent) so the
+        // label alone is never the only clue that a click changes the scene.
+        const routingHint = kind === 'travel' && choice.targetName
+            ? `Travel to ${choice.targetName}`
+            : kind === 'combat' && choice.targetName
+                ? `Fight: ${choice.targetName}`
+                : '';
+        const title = routingHint
+            || choice.tone
+            || choice.intent
+            || '';
         return `<button type="button" class="neoterra-choice-chip menu_button"
             data-neoterra-choice-index="${index}"
+            data-neoterra-choice-kind="${escapeHtml(kind)}"
+            data-neoterra-choice-target="${escapeHtml(choice.target ?? '')}"
             data-neoterra-choice-action="${escapeHtml(choice.action ?? '')}"
             data-neoterra-choice-risk="${escapeHtml(choice.risk ?? '')}"
-            title="${escapeHtml(choice.tone ?? choice.intent ?? '')}">
+            title="${escapeHtml(title)}">
             ${escapeHtml(choice.label)}
             ${risk}${action}
         </button>`;
@@ -318,6 +357,64 @@ export function renderChoicesMarkup(view) {
             <button type="button" class="menu_button" data-neoterra-choice-write>Write my own</button>
         </div>
     </div>`;
+}
+
+/**
+ * Decide what a clicked chip does. Pure: the shell owns the engine actions.
+ *
+ * `prose` is the default and covers every chip that was not tagged with a
+ * routable payload. A `combat` chip clicked while a fight is already running is
+ * a normal battle action, so it stays prose (the narrator resolves it) instead
+ * of trying to start a second fight.
+ */
+export function resolveChoiceRoute(choice, state = null) {
+    const kind = typeof choice?.kind === 'string' ? choice.kind : 'prose';
+    if (kind === 'travel') {
+        const target = typeof choice?.target === 'string' ? choice.target.trim() : '';
+        return target.length > 0
+            ? { route: 'travel', target }
+            : { route: 'prose', reason: 'missing-target' };
+    }
+    if (kind === 'combat') {
+        if (isCombatScene(state)) {
+            return { route: 'prose', reason: 'combat-active' };
+        }
+        return { route: 'combat', target: typeof choice?.target === 'string' ? choice.target : 'engage' };
+    }
+    return { route: 'prose' };
+}
+
+/**
+ * Execute one routed chip through injected handlers. The shell supplies the
+ * travel/combat/notice seams; tests supply fakes. A rejected combat start with
+ * no encounter becomes a notice frame instead of a silent no-op.
+ */
+export async function dispatchChoiceRoute({
+    choice,
+    state = null,
+    handlers = {},
+} = {}) {
+    const route = resolveChoiceRoute(choice, state);
+    if (route.route === 'prose') {
+        const result = typeof handlers.prose === 'function' ? await handlers.prose(choice) : null;
+        return { ...route, result };
+    }
+    if (route.route === 'travel') {
+        const result = typeof handlers.travel === 'function'
+            ? await handlers.travel(route.target, choice)
+            : { ok: false, reason: 'no-travel' };
+        return { ...route, result };
+    }
+    const result = typeof handlers.combat === 'function'
+        ? await handlers.combat(choice)
+        : { ok: false, reason: 'no-combat' };
+    if (result?.ok === false && result?.reason === 'no-encounter') {
+        const notice = typeof handlers.notice === 'function'
+            ? await handlers.notice(result.message ?? 'No one here to fight.')
+            : null;
+        return { route: 'notice', reason: 'no-encounter', result, notice };
+    }
+    return { ...route, result };
 }
 
 /**

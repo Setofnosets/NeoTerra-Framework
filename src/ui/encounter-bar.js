@@ -11,7 +11,7 @@
  */
 
 import { createLogger } from '../core/logger.js';
-import { encounterKey, isCombatActive } from '../flows/encounter.js';
+import { encounterKey, isCombatActive, isSurprisedCombat } from '../flows/encounter.js';
 import { SCENE_KINDS, buildSceneChatMessage, buildSceneKey } from './chat-output.js';
 
 const logger = createLogger('encounter-bar');
@@ -124,12 +124,15 @@ export function buildEncounterBarModel(options = {}) {
         }
         const combat = isObject(state.scene?.combat) ? state.scene.combat : null;
         if (isCombatActive(state) || combat) {
+            const surprised = isSurprisedCombat(state);
             return {
                 visible: true,
                 mode: 'combat',
                 encounter: null,
                 combat,
                 key: null,
+                surprised,
+                title: surprised ? 'Surprised — fight back or break away' : 'Combat',
                 actions: [
                     { id: 'surrender', label: 'Surrender', enabled: true },
                     { id: 'end', label: 'End combat', enabled: true },
@@ -344,6 +347,50 @@ export async function engageEncounter({
     return { ...started, key, message, posted };
 }
 
+/**
+ * Persist the ambush facts after a combat start: `scene.combat.opening` gates
+ * the restricted first round, and `flags.lastCombat.ambush` records the cause.
+ * Pure state update; returns the next state (or null). Never starts combat.
+ */
+export function markAmbushOpening(store, { actorId = null, actorName = null, now = Date.now } = {}) {
+    try {
+        const state = store?.get?.();
+        if (!isObject(state) || !isObject(state.scene?.combat)) {
+            return null;
+        }
+        const next = {
+            ...state,
+            scene: {
+                ...state.scene,
+                combat: {
+                    ...state.scene.combat,
+                    opening: 'hostile',
+                },
+                // The next prompt must know who opened the fight; the frame
+                // already told the reader.
+                ambush: {
+                    actorId: typeof actorId === 'string' ? actorId : null,
+                    actorName: typeof actorName === 'string' ? actorName : null,
+                    at: now(),
+                },
+            },
+            flags: {
+                ...(isObject(state.flags) ? state.flags : {}),
+                lastCombat: {
+                    ...(isObject(state.flags?.lastCombat) ? state.flags.lastCombat : {}),
+                    ambush: true,
+                    ambushAt: now(),
+                },
+            },
+        };
+        store.replace(next);
+        return next;
+    } catch (error) {
+        logger.warn('Could not mark the ambush opening', error);
+        return null;
+    }
+}
+
 /** Yield the active conflict through the flow. Never throws. */
 export function surrenderEncounterCombat(flow) {
     if (!flow || typeof flow.surrender !== 'function') {
@@ -456,7 +503,8 @@ export function mountEncounterBar({ root, onAction } = {}) {
             bar.hidden = false;
         }
         if (title) {
-            title.textContent = model.mode === 'combat' ? 'Combat' : 'Encounter';
+            title.textContent = model.title
+                ?? (model.mode === 'combat' ? 'Combat' : 'Encounter');
         }
         const actions = Array.isArray(model.actions) ? model.actions : [];
         let disabledReason = '';

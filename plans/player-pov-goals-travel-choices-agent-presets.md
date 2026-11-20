@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: player-pov-goals-travel-choices-agent-presets
-- Status: M1 complete (steps 1–5). M2 next (steps 6–9).
+- Status: M2 complete (steps 6–9). M3 next (steps 10–13).
 - Date: 2026-11-19
 - Upstream: `plans/fix-identity-settings-map-travel-chat.md`, `plans/travel-feedback-followup.md`, `plans/character-card-fidelity.md`
 - Requested by: user report (7 items) — see Summary
@@ -17,10 +17,10 @@
 - [x] 5. Player card instruction + downloadable card
 
 **M2 — Actor feedback (steps 6â€“9)**
-- [ ] 6. Choices carry a routable kind/target
-- [ ] 7. Route travel/combat chips to real actions with frames
-- [ ] 8. Notice-first + deterministic ambush
-- [ ] 9. Generated scene description on travel
+- [x] 6. Choices carry a routable kind/target
+- [x] 7. Route travel/combat chips to real actions with frames
+- [x] 8. Notice-first + deterministic ambush
+- [x] 9. Generated scene description on travel
 
 **M3 — Agent control (steps 10â€“13)**
 - [ ] 10. Saved agent presets

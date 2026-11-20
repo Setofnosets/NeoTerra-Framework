@@ -227,6 +227,18 @@ export function buildLocationIntro({ state, season = null, from = null, travel =
     if (encounterLine.length > 0) {
         lines.push(encounterLine);
     }
+    // A recorded perception fact is neutral prose: who saw the player first.
+    const ambush = state.scene?.ambush;
+    if (ambush && typeof ambush === 'object') {
+        const actor = ambush.actorName ?? ambush.actorId ?? 'A hostile';
+        lines.push(`${actor} sprang the ambush before you could move.`);
+    } else if (state.scene?.noticed) {
+        const noticed = state.scene.noticed;
+        const actor = typeof noticed === 'object'
+            ? noticed.actorName ?? noticed.actorId ?? 'A hostile'
+            : String(noticed);
+        lines.push(`${actor} noticed you first.`);
+    }
     const framing = state.scene?.framing;
     if (typeof framing === 'string' && framing.trim().length > 0) {
         lines.push('');

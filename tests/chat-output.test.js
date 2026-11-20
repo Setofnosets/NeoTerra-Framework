@@ -525,3 +525,166 @@ test('a duplicate travel frame dedupes and still requests choices for its index'
     assert.equal(ctx.chat.length, 1);
     assert.deepEqual(requests, [0]);
 });
+
+/* ------------------------------------------------------------------ *
+ * Step 8: noticed arrival and ambush
+ * ------------------------------------------------------------------ */
+
+function encounterTravelResult(overrides = {}) {
+    const state = {
+        chatId: 'c1',
+        meta: { turn: 2 },
+        player: { identity: 'custom', characterId: null },
+        characters: {
+            'c.villain': { charId: 'c.villain', displayName: 'Claire', side: 'villain', alive: true },
+        },
+        locations: {
+            'maple-heights': { id: 'maple-heights', name: 'Maple Heights', status: 'hostile' },
+        },
+        scene: {
+            locationId: 'maple-heights',
+            present: ['c.villain'],
+            encounter: { locationId: 'maple-heights', characterIds: ['c.villain'], threatNames: [] },
+        },
+        flags: {},
+    };
+    return travelResult({ state, ...overrides });
+}
+
+test('a noticed arrival posts the travel frame then exactly one encounter frame', async () => {
+    const ctx = travelCtx('c1', []);
+    const requests = [];
+    await postTravelOutcome(ctx, { chatId: 'c1' }, encounterTravelResult(), {
+        noticeDetector: () => ({
+            noticedFirst: true,
+            ambush: false,
+            actorId: 'c.villain',
+            actorName: 'Claire',
+            locationStatus: 'hostile',
+        }),
+        getSettings: () => ({ travel: { noticeFirst: true, ambush: true } }),
+        requestChoices: async (_live, index, options) => { requests.push({ index, options }); },
+    });
+    assert.equal(ctx.chat.length, 2);
+    assert.equal(ctx.chat[0].extra.neoterra.scene.kind, 'travel');
+    assert.equal(ctx.chat[1].extra.neoterra.scene.kind, 'encounter');
+    assert.match(ctx.chat[1].mes, /Claire spots you before you can act/);
+    assert.deepEqual(requests, [{ index: 1, options: undefined }]);
+});
+
+test('an ambush posts one encounter frame and starts combat exactly once', async () => {
+    const ctx = travelCtx('c1', []);
+    const result = encounterTravelResult();
+    const storeState = { ...result.state };
+    const store = {
+        get: () => storeState,
+        replace: (next) => { Object.assign(storeState, next); },
+    };
+    let starts = 0;
+    const requests = [];
+    const combatFlow = {
+        start({ participants }) {
+            starts += 1;
+            storeState.scene = {
+                ...storeState.scene,
+                combat: { id: 'combat-1', participants, sides: { player: 'a', 'c.villain': 'b' }, round: 0 },
+            };
+            return { ok: true, combat: storeState.scene.combat };
+        },
+    };
+    await postTravelOutcome(ctx, { chatId: 'c1', store }, result, {
+        noticeDetector: () => ({
+            noticedFirst: true,
+            ambush: true,
+            actorId: 'c.villain',
+            actorName: 'Claire',
+            locationStatus: 'hostile',
+        }),
+        getSettings: () => ({ travel: { noticeFirst: true, ambush: true } }),
+        combatFlow,
+        requestChoices: async (_live, index, options) => { requests.push({ index, options }); },
+    });
+    assert.equal(starts, 1, 'combat starts exactly once');
+    assert.equal(ctx.chat.length, 2, 'travel frame plus one encounter frame');
+    assert.equal(ctx.chat[1].extra.neoterra.scene.kind, 'encounter');
+    assert.equal(ctx.chat[1].extra.neoterra.scene.ambush, true);
+    assert.equal(storeState.scene.combat.opening, 'hostile');
+    assert.equal(storeState.flags.lastCombat.ambush, true);
+    assert.deepEqual(requests, [{ index: 1, options: { mode: 'combat' } }]);
+});
+
+test('a peaceful arrival posts no encounter frame', async () => {
+    const ctx = travelCtx('c1', []);
+    await postTravelOutcome(ctx, { chatId: 'c1' }, travelResult(), {
+        noticeDetector: () => null,
+        getSettings: () => ({ travel: { noticeFirst: true, ambush: true } }),
+    });
+    assert.equal(ctx.chat.length, 1);
+    assert.equal(ctx.chat[0].extra.neoterra.scene.kind, 'travel');
+});
+
+/* ------------------------------------------------------------------ *
+ * Step 9: generated scene description after travel
+ * ------------------------------------------------------------------ */
+
+function descriptionStore(state = { flags: {} }) {
+    const current = state;
+    return {
+        get: () => current,
+        replace: (next) => { Object.assign(current, next); },
+    };
+}
+
+test('travel posts the deterministic frame, then exactly one scene description', async () => {
+    const ctx = travelCtx('c1', []);
+    const store = descriptionStore();
+    let calls = 0;
+    const describer = {
+        run: async () => {
+            calls += 1;
+            return { ok: true, description: 'You step into the neon rain.', sensory: ['rain'] };
+        },
+    };
+    const requests = [];
+    await postTravelOutcome(ctx, { chatId: 'c1', store }, travelResult(), {
+        noticeDetector: () => null,
+        getSettings: () => ({ travel: { noticeFirst: true, ambush: true } }),
+        describer,
+        now: () => 1234,
+        requestChoices: async (_live, index) => { requests.push(index); },
+    });
+    assert.equal(ctx.chat.length, 2);
+    assert.equal(ctx.chat[0].extra.neoterra.scene.kind, 'travel');
+    assert.equal(ctx.chat[1].extra.neoterra.scene.kind, 'scene');
+    assert.match(ctx.chat[1].mes, /neon rain/);
+    assert.deepEqual(requests, [0], 'choices are requested for the deterministic frame');
+    assert.equal(calls, 1);
+    assert.equal(store.get().flags.travelDescriptions.length, 1);
+    assert.equal(store.get().flags.travelDescriptions[0].text, 'You step into the neon rain.');
+
+    // A re-render runs the describer again but the key dedupes the frame.
+    await postTravelOutcome(ctx, { chatId: 'c1', store }, travelResult(), {
+        noticeDetector: () => null,
+        getSettings: () => ({ travel: { noticeFirst: true, ambush: true } }),
+        describer,
+        requestChoices: async () => {},
+    });
+    assert.equal(ctx.chat.length, 2);
+});
+
+test('a disabled or failing describer posts nothing extra', async () => {
+    for (const describer of [
+        { run: async () => ({ ok: false, skipped: true, description: null }) },
+        { run: async () => { throw new Error('timeout'); } },
+    ]) {
+        const ctx = travelCtx('c1', []);
+        await postTravelOutcome(ctx, { chatId: 'c1', store: descriptionStore() }, travelResult(), {
+            noticeDetector: () => null,
+            getSettings: () => ({ travel: { noticeFirst: true, ambush: true } }),
+            describer,
+            requestChoices: async () => {},
+        });
+        assert.equal(ctx.chat.length, 1);
+        assert.equal(ctx.chat[0].extra.neoterra.scene.kind, 'travel');
+    }
+});

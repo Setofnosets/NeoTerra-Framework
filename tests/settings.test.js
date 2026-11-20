@@ -163,6 +163,30 @@ test('map.arrivalFeedback normalizes with the default and round-trips', () => {
     assert.match(html, /data-neoterra-path="map\.arrivalFeedback"/);
 });
 
+test('travel.noticeFirst and travel.ambush normalize with the defaults and round-trip', () => {
+    const defaults = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.equal(defaults.travel.noticeFirst, true);
+    assert.equal(defaults.travel.ambush, true);
+
+    const off = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        travel: { noticeFirst: false, ambush: false },
+    });
+    assert.equal(off.travel.noticeFirst, false);
+    assert.equal(off.travel.ambush, false);
+
+    const malformed = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        travel: { noticeFirst: 'false', ambush: 0 },
+    });
+    assert.equal(malformed.travel.noticeFirst, true);
+    assert.equal(malformed.travel.ambush, true);
+
+    const html = readFileSync(new URL('../src/ui/settings.html', import.meta.url), 'utf8');
+    assert.match(html, /data-neoterra-path="travel\.noticeFirst"/);
+    assert.match(html, /data-neoterra-path="travel\.ambush"/);
+});
+
 test('fresh install writes defaults exactly once', () => {
     const { ctx, calls } = mockContext();
     assert.equal(isFreshInstall(ctx), true);

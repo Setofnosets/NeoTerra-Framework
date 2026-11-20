@@ -258,6 +258,15 @@ function normalizeWorldTick(worldTick, defaults) {
     };
 }
 
+function normalizeTravel(travel, defaults) {
+    const source = isPlainObject(travel) ? travel : {};
+    return {
+        ...source,
+        noticeFirst: asBoolean(source.noticeFirst, defaults.noticeFirst),
+        ambush: asBoolean(source.ambush, defaults.ambush),
+    };
+}
+
 function normalizeNewspaper(newspaper, defaults) {
     const source = isPlainObject(newspaper) ? newspaper : {};
     return {
@@ -333,6 +342,10 @@ export function normalizeSettings(settings) {    const defaults = DEFAULT_SETTIN
         ),
         cyoa: normalizeCyoa(isPlainObject(settings.cyoa) ? settings.cyoa : {}, defaults.cyoa),
         badEnds: normalizeBadEnds(isPlainObject(settings.badEnds) ? settings.badEnds : {}, defaults.badEnds),
+        travel: normalizeTravel(
+            isPlainObject(settings.travel) ? settings.travel : {},
+            defaults.travel,
+        ),
         agents: normalizeAgents(isPlainObject(settings.agents) ? settings.agents : {}, defaults.agents),
         tokenBudget: normalizeTokenBudget(
             isPlainObject(settings.tokenBudget) ? settings.tokenBudget : {},

@@ -6,12 +6,17 @@ import { fileURLToPath } from 'node:url';
 
 import {
     OPPOSITE_SIDE,
+    SURPRISED_COMBAT_ACTIONS,
+    buildNoticeFrameText,
     describeEncounter,
     detectEncounter,
+    detectNotice,
     encounterKey,
     encounterNames,
     isCombatActive,
+    isSurprisedCombat,
     playerSideFor,
+    threatRank,
 } from '../src/flows/encounter.js';
 import {
     avoidEncounter,
@@ -21,6 +26,7 @@ import {
     encounterFromCombat,
     engageEncounter,
     endEncounterCombat,
+    markAmbushOpening,
     startEncounterCombat,
     surrenderEncounterCombat,
 } from '../src/ui/encounter-bar.js';
@@ -701,4 +707,176 @@ test('a villain-POV scene does not treat same-side villains as enemies', async (
     if (encounter) {
         assert.equal(encounter.characterIds.includes(villainId), false, 'allied villains are not hostiles');
     }
+});
+
+/* ------------------------------------------------------------------ *
+ * Step 8: notice-first and deterministic ambush
+ * ------------------------------------------------------------------ */
+
+function noticeState({ status = 'quiet', characterIds = ['c.villain'], threatLevels = null } = {}) {
+    const state = makeState({
+        characters: Object.fromEntries(characterIds.map((id) => [
+            id,
+            {
+                ...character(id, 'villain', { displayName: id === 'c.villain' ? 'Claire' : id }),
+                threatLevel: threatLevels?.[id] ?? null,
+            },
+        ])),
+    });
+    state.locations['loc.a'].status = status;
+    state.scene.encounter = {
+        locationId: 'loc.a',
+        characterIds,
+        threatNames: [],
+        source: 'travel',
+    };
+    return state;
+}
+
+function strongSeedFor(state, encounter) {
+    for (let index = 0; index < 500; index += 1) {
+        const seed = `seed-${index}`;
+        const notice = detectNotice({ state, encounter, seed });
+        if (notice && notice.margin >= 5) {
+            return seed;
+        }
+    }
+    throw new Error('no strong-success seed found');
+}
+
+test('the same seed and encounter always produce the same notice result', () => {
+    const state = noticeState();
+    const encounter = state.scene.encounter;
+    const seed = strongSeedFor(state, encounter);
+    const first = detectNotice({ state, encounter, seed });
+    const second = detectNotice({ state, encounter, seed });
+    assert.deepEqual(first, second);
+    assert.equal(typeof first?.die, 'number');
+});
+
+test('no encounter, active combat, or noticeFirst:false yields null', () => {
+    const state = noticeState();
+    const encounter = state.scene.encounter;
+    assert.equal(detectNotice({ state, encounter: null, seed: 1 }), null);
+    assert.equal(detectNotice({ state: { ...state, scene: { ...state.scene, encounter: null } }, seed: 1 }), null);
+    assert.equal(detectNotice({ state, encounter, seed: 1, noticeFirst: false }), null);
+    const combatState = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain') },
+        encounter,
+        combat: { id: 'combat-1', participants: ['player', 'c.villain'] },
+    });
+    assert.equal(detectNotice({ state: combatState, encounter, seed: 1 }), null);
+});
+
+test('a strong hostile success is an ambush only in a hostile/contested location', () => {
+    const base = noticeState();
+    const encounter = base.scene.encounter;
+    const seed = strongSeedFor(base, encounter);
+    const hostile = noticeState({ status: 'hostile' });
+    hostile.scene.encounter = encounter;
+    const ambush = detectNotice({ state: hostile, encounter, seed, ambush: true });
+    assert.equal(ambush.noticedFirst, true);
+    assert.equal(ambush.ambush, true);
+    const stable = noticeState({ status: 'stable' });
+    stable.scene.encounter = encounter;
+    const noticed = detectNotice({ state: stable, encounter, seed, ambush: true });
+    assert.equal(noticed.noticedFirst, true);
+    assert.equal(noticed.ambush, false);
+    const demoted = detectNotice({ state: hostile, encounter, seed, ambush: false });
+    assert.equal(demoted.ambush, false);
+    assert.equal(demoted.noticedFirst, true);
+});
+
+test('the most threatening hostile names the notice, ties by id', () => {
+    const state = noticeState({
+        characterIds: ['c.low', 'c.high', 'c.a', 'c.b'],
+        threatLevels: { 'c.low': 'low', 'c.high': 'high', 'c.a': 'medium', 'c.b': 'medium' },
+    });
+    const encounter = state.scene.encounter;
+    const notice = detectNotice({ state, encounter, seed: 'fixed-seed' });
+    assert.equal(notice.actorId, 'c.high');
+    assert.equal(threatRank(state.characters['c.high']), 3);
+    const tieState = noticeState({
+        characterIds: ['c.b', 'c.a'],
+        threatLevels: { 'c.a': 'medium', 'c.b': 'medium' },
+    });
+    const tie = detectNotice({ state: tieState, encounter: tieState.scene.encounter, seed: 'fixed-seed' });
+    assert.equal(tie.actorId, 'c.a');
+});
+
+test('a stealth-coded arrival suppresses the notice entirely', () => {
+    const state = noticeState();
+    state.player.abilities = ['Stealth suit'];
+    assert.equal(detectNotice({ state, encounter: state.scene.encounter, seed: 'fixed-seed' }), null);
+    const clean = noticeState();
+    assert.equal(detectNotice({
+        state: clean,
+        encounter: clean.scene.encounter,
+        seed: 'fixed-seed',
+        stealth: true,
+    }), null);
+});
+
+test('a threat-only encounter never names a notice actor', () => {
+    const state = noticeState();
+    state.scene.encounter = { locationId: 'loc.a', characterIds: [], threatNames: ['The Beast'] };
+    assert.equal(detectNotice({ state, encounter: state.scene.encounter, seed: 'fixed-seed' }), null);
+});
+
+test('notice frames name the actor and carry no numbers or prompt blocks', () => {
+    const state = noticeState({ status: 'hostile' });
+    const encounter = state.scene.encounter;
+    const seed = strongSeedFor(state, encounter);
+    const notice = detectNotice({ state, encounter, seed, ambush: true });
+    const ambushText = buildNoticeFrameText({ state, notice });
+    assert.match(ambushText, /Claire/);
+    assert.match(ambushText, /springs the ambush/);
+    const plain = buildNoticeFrameText({
+        state,
+        notice: { ...notice, ambush: false },
+    });
+    assert.match(plain, /spots you before you can act/);
+    for (const text of [ambushText, plain]) {
+        assert.doesNotMatch(text, /\d/);
+        assert.doesNotMatch(text, /\[NEOTERRA_/);
+    }
+});
+
+test('the scene block and intro carry the recorded ambush actor', () => {
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain', { displayName: 'Claire' }) },
+    });
+    state.scene.ambush = { actorId: 'c.villain', actorName: 'Claire', at: NOW };
+    const rendered = renderContext(state, { settings: cloneDefaults() });
+    assert.match(rendered.text, /Ambushed by: Claire/);
+    const intro = buildLocationIntro({ state });
+    assert.match(intro.text, /Claire sprang the ambush before you could move\./);
+});
+
+test('markAmbushOpening flags the opening round and the bar shows Surprised', () => {
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain') },
+        combat: { id: 'combat-1', participants: ['player', 'c.villain'], round: 0, opening: null },
+    });
+    const writes = [];
+    const store = {
+        get: () => state,
+        replace: (next) => {
+            writes.push(next);
+        },
+    };
+    const next = markAmbushOpening(store, { now: () => NOW });
+    assert.equal(writes.length, 1);
+    assert.equal(next.scene.combat.opening, 'hostile');
+    assert.equal(next.flags.lastCombat.ambush, true);
+    assert.equal(isSurprisedCombat(next), true);
+    assert.deepEqual([...SURPRISED_COMBAT_ACTIONS].sort(), ['defend', 'retreat', 'surrender', 'talk-down']);
+    const model = buildEncounterBarModel({ state: next });
+    assert.equal(model.visible, true);
+    assert.equal(model.surprised, true);
+    assert.match(model.title, /Surprised/);
+    assert.equal(isSurprisedCombat({
+        ...next,
+        scene: { ...next.scene, combat: { ...next.scene.combat, round: 1 } },
+    }), false);
 });

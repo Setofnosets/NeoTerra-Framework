@@ -150,6 +150,20 @@ function renderScene(state, settings) {
         }
     }
 
+    // Perception facts from the arrival: an ambush is a recorded scene fact,
+    // a plain notice is prose-only (no state change).
+    if (isObject(scene.ambush) || typeof scene.ambush === 'string') {
+        const actor = typeof scene.ambush === 'string'
+            ? scene.ambush
+            : scene.ambush.actorName ?? scene.ambush.actorId ?? null;
+        lines.push(`Ambushed by: ${actor ?? 'an unseen hostile'}`);
+    } else if (isObject(scene.noticed) || typeof scene.noticed === 'string') {
+        const actor = typeof scene.noticed === 'string'
+            ? scene.noticed
+            : scene.noticed.actorName ?? scene.noticed.actorId ?? null;
+        lines.push(`Noticed: ${actor ?? 'a hostile'}`);
+    }
+
     if (typeof scene.framing === 'string' && scene.framing.trim().length > 0) {
         lines.push(`Framing: ${scene.framing.trim()}`);
     }
