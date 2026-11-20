@@ -440,6 +440,36 @@ export function createWorldState(options = {}) {
         }
     }
 
+    // A chosen/roster form may override the authored roster form. The override
+    // is advisory: an unknown or unrelated form is ignored so a stale identity
+    // picker can never break a season start. The non-roster (sandbox/guest)
+    // member created above travels through the same rule and falls back to the
+    // base card when the requested form is not a legal alternate.
+    if (identity === 'canon' && playerCharacterId) {
+        const requestedFormId = typeof playerConfig.formId === 'string'
+            && playerConfig.formId.length > 0
+            ? playerConfig.formId
+            : null;
+        const member = requestedFormId ? rosterById.get(playerCharacterId) ?? null : null;
+        const candidate = requestedFormId ? registryIndex.byId[requestedFormId] ?? null : null;
+        const characterEntry = member?.character
+            ?? registryIndex.byId[playerCharacterId]
+            ?? null;
+        const legal = candidate !== null
+            && candidate.bundle !== true
+            && candidate.id !== member?.formId
+            && (
+                candidate.id === playerCharacterId
+                || candidate.altOf === playerCharacterId
+                || (candidate.formGroup != null
+                    && candidate.formGroup === characterEntry?.formGroup)
+            );
+        if (member && legal) {
+            member.formId = candidate.id;
+            member.form = candidate;
+        }
+    }
+
     const characters = {};
     for (const member of roster) {
         characters[member.characterId] = seedCharacter(member, {

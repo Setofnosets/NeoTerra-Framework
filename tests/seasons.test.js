@@ -197,6 +197,25 @@ test('every roster id resolves in the registry and stays inside its season', () 
     );
 });
 
+test('S2 roster seeds Leila in her villain form', () => {
+    const resolved = resolveSeasonRoster(seasons.s2, registry);
+    const leila = resolved.find((member) => member.characterId === 's2.leila.renya');
+    assert.ok(leila);
+    assert.equal(leila.formId, 's2.leila.renya.femme.feral');
+    assert.equal(leila.form.side, 'villain');
+    assert.equal(leila.form.altOf, 's2.leila.renya');
+    assert.equal(leila.form.formGroup, 's2.leila');
+    // The resolved character entry stays the base card.
+    assert.equal(leila.character.id, 's2.leila.renya');
+    assert.equal(leila.character.altOf, null);
+    assert.equal(leila.character.formGroup, 's2.leila');
+    assert.equal(leila.locationId, 'renya-shrine');
+
+    // The villain form is a legal alternate, so the roster still validates.
+    assert.equal(validateSeasonDefinition(seasons.s2, context).ok, true);
+    assert.ok(seasons.s2.altFormsAllowed.includes('s2.leila.renya.femme.feral'));
+});
+
 test('season faction, location, threat, and beat references all resolve', () => {
     for (const id of PLAYABLE_SEASON_IDS) {
         const season = seasons[id];

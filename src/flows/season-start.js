@@ -505,9 +505,10 @@ export function resolveIdentitySelection(season, selection = {}, options = {}) {
         );
     }
 
-    const inRoster = (season.roster ?? []).some(
+    const rosterMember = (season.roster ?? []).find(
         (member) => member.characterId === characterId,
-    );
+    ) ?? null;
+    const inRoster = rosterMember !== null;
     const sandbox = season.allowAnyCharacter === true;
 
     if (!inRoster && !sandbox) {
@@ -529,6 +530,7 @@ export function resolveIdentitySelection(season, selection = {}, options = {}) {
     return {
         identity: 'canon',
         characterId,
+        formId: rosterMember?.formId ?? characterId,
         displayName: requested.displayName ?? entry.displayName ?? characterId,
         personaNotes: requested.personaNotes ?? '',
         nonCanon: !inRoster && sandbox,
@@ -717,6 +719,7 @@ export function startSeason(options = {}) {
         player: {
             identity: selection.identity,
             characterId: selection.characterId,
+            formId: selection.formId ?? null,
             personaNotes: selection.personaNotes,
             displayName: selection.displayName,
         },

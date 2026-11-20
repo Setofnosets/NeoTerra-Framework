@@ -415,6 +415,42 @@ test('resolveIdentitySelection and metadata helpers validate their input', () =>
     );
 });
 
+test('sandbox and guest picks resolve the base form', () => {
+    const sandbox = readJson('data/seasons/sandbox.json');
+    const entry = registry.entries.find(
+        (candidate) => candidate.seasonId === 's1' && candidate.bundle !== true,
+    );
+    const resolved = resolveIdentitySelection(
+        sandbox,
+        { identity: 'canon', characterId: entry.id },
+        { registry, allowAnyCharacter: true },
+    );
+    assert.equal(resolved.formId, entry.id);
+    assert.equal(resolved.nonCanon, true);
+});
+
+test('S2 canon Leila resolves and seeds her villain form', () => {
+    const resolved = resolveIdentitySelection(
+        seasonDocuments.s2,
+        { identity: 'canon', characterId: 's2.leila.renya' },
+        { registry },
+    );
+    assert.equal(resolved.identity, 'canon');
+    assert.equal(resolved.characterId, 's2.leila.renya');
+    assert.equal(resolved.formId, 's2.leila.renya.femme.feral');
+
+    const { state, identity } = start({
+        season: seasonDocuments.s2,
+        identity: { identity: 'canon', characterId: 's2.leila.renya' },
+    });
+    assert.equal(identity.formId, 's2.leila.renya.femme.feral');
+    const leila = state.characters['s2.leila.renya'];
+    assert.equal(leila.formId, 's2.leila.renya.femme.feral');
+    assert.equal(leila.side, 'villain');
+    assert.equal(leila.controlledBy, 'player');
+    assert.equal(validateWorldState(state).ok, true);
+});
+
 test('Sandbox identity choices expose every registry character as non-canon', () => {
     const choices = buildIdentityChoices(seasonDocuments.sandbox, { registry, limit: 5 });
     const canon = choices.options.filter((option) => option.identity === 'canon');

@@ -768,6 +768,92 @@ test('selectors resolve present cast, NPC pool, player view, beats, and bad ends
     assert.equal(badEnds[0].type, 'death');
 });
 
+test('S2 seeds Leila as the villain form with a villain portrait', () => {
+    const state = seed('s2', {
+        player: { identity: 'canon', characterId: 's2.leila.renya' },
+    });
+    assert.equal(validateWorldState(state).ok, true);
+
+    const leila = state.characters['s2.leila.renya'];
+    assert.equal(leila.formId, 's2.leila.renya.femme.feral');
+    assert.equal(leila.side, 'villain');
+    assert.equal(leila.controlledBy, 'player');
+    assert.equal(leila.formGroup, 's2.leila');
+    assert.equal(state.player.formId, 's2.leila.renya.femme.feral');
+
+    // The villain card owns its own portrait, distinct from the fallen base card.
+    // Portraits are resolved from the avatar manifest keyed by form id (the
+    // registry carries no `avatar` field); the seeded player form id above is
+    // the key the map/codex resolver will use.
+    const avatars = readJson('data/characters/avatars.json').avatars;
+    const villainPortrait = avatars['s2.leila.renya.femme.feral'];
+    const basePortrait = avatars['s2.leila.renya'];
+    assert.equal(leila.formId, 's2.leila.renya.femme.feral');
+    assert.ok(villainPortrait);
+    assert.ok(villainPortrait.source);
+    assert.notEqual(villainPortrait.source, basePortrait?.source);
+});
+
+test('a canon player form override swaps the roster form only for a legal alternate', () => {
+    const base = seed('s2', {
+        player: {
+            identity: 'canon',
+            characterId: 's2.leila.renya',
+            formId: 's2.leila.renya',
+        },
+    });
+    assert.equal(base.characters['s2.leila.renya'].formId, 's2.leila.renya');
+    assert.equal(base.characters['s2.leila.renya'].side, 'vigilante');
+    assert.equal(base.characters['s2.leila.renya'].locationId, 'renya-shrine');
+
+    const unrelated = seed('s2', {
+        player: {
+            identity: 'canon',
+            characterId: 's2.leila.renya',
+            formId: 's1.vaiva.colorgarde',
+        },
+    });
+    // An unknown/unrelated form is ignored, never thrown. The override mutates
+    // only the freshly resolved roster member: the authored season document and
+    // the shared registry are untouched.
+    assert.equal(unrelated.characters['s2.leila.renya'].formId, 's2.leila.renya.femme.feral');
+    assert.equal(unrelated.characters['s2.leila.renya'].side, 'villain');
+    assert.equal(
+        seasons.s2.roster.find((member) => member.characterId === 's2.leila.renya').formId,
+        's2.leila.renya.femme.feral',
+    );
+    assert.equal(registry.entries.find((entry) => entry.id === 's2.leila.renya').altOf, null);
+
+    // A bundle form is never a legal player form for a single character.
+    const bundle = seed('s2', {
+        player: {
+            identity: 'canon',
+            characterId: 's2.leila.renya',
+            formId: 's1.atropos.couple',
+        },
+    });
+    assert.equal(bundle.characters['s2.leila.renya'].formId, 's2.leila.renya.femme.feral');
+
+    const missing = seed('s2', {
+        player: {
+            identity: 'canon',
+            characterId: 's2.leila.renya',
+            formId: 's2.does.not.exist',
+        },
+    });
+    assert.equal(missing.characters['s2.leila.renya'].formId, 's2.leila.renya.femme.feral');
+
+    // TRANSFORM back to the fallen base card still works from the villain seed.
+    const transformed = applyWorldEvent(
+        unrelated,
+        { type: 'TRANSFORM', characterId: 's2.leila.renya', formId: 's2.leila.renya' },
+        CONTEXT,
+    );
+    assert.equal(transformed.characters['s2.leila.renya'].formId, 's2.leila.renya');
+    assert.equal(transformed.characters['s2.leila.renya'].side, 'vigilante');
+    assert.equal(validateWorldState(transformed).ok, true);
+});
+
 test('cloneWorldState produces an independent document', () => {
     const state = seed('s1');
     const cloned = cloneWorldState(state);
