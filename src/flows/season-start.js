@@ -14,6 +14,7 @@
 import { buildOpeningScene } from './scene.js';
 import { createLogger } from '../core/logger.js';
 import { loadProfiles } from '../data/profiles.js';
+import { deriveGoalsFromProfile } from '../data/goals.js';
 import { buildRegistryIndex, loadRegistry } from '../data/registry.js';
 import {
     PLAYABLE_SEASON_IDS,
@@ -750,6 +751,33 @@ export function startSeason(options = {}) {
             },
         };
         state = store.replace(state);
+    }
+
+    // Deterministic goal seed. The card is parsed here (never the model): a
+    // labelled list wins, otherwise explicit motive sentences; unusable
+    // truncations are dropped so the Codex can infer later. AI inference is
+    // deliberately deferred to the Codex mount / bad-end continuation.
+    if (selection.identity === 'canon' && selection.characterId && isObject(profiles)) {
+        try {
+            const player = state.characters?.[selection.characterId] ?? null;
+            if (player) {
+                const profile = profiles[player.formId]
+                    ?? profiles[selection.characterId]
+                    ?? null;
+                const derived = deriveGoalsFromProfile(profile);
+                const currentGoals = Array.isArray(player.goals) ? player.goals : [];
+                if (JSON.stringify(derived) !== JSON.stringify(currentGoals)) {
+                    state = store.dispatch({
+                        type: 'SET_CHARACTER_FIELDS',
+                        characterId: selection.characterId,
+                        goals: derived,
+                        goalsSource: 'card',
+                    });
+                }
+            }
+        } catch (error) {
+            logger.warn('Could not seed the player goals from the card; continuing', error);
+        }
     }
 
     const opening = buildOpeningScene({ state, season });

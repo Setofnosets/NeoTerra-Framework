@@ -46,6 +46,7 @@ export const AGENT_LABELS = Object.freeze({
     newspaper: 'Newspaper editor',
     formArchitect: 'Form architect',
     characterCreator: 'Character creator',
+    goalInference: 'Goal inference',
 });
 
 /** Default values restored by the per-prompt reset buttons. */

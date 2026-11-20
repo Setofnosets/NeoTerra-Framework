@@ -260,6 +260,18 @@ export const DEFAULT_SETTINGS = freezeDeep({
             minMaxTokens: 6000,
             cadence: 'onRequest',
         },
+        // Fills a played character's goals when the card yields nothing usable.
+        // `onIdentityChange` is a marker: the Codex mount and the bad-end
+        // self-continuation call it explicitly, never on every turn.
+        goalInference: {
+            enabled: true,
+            connectionProfileId: '',
+            model: '',
+            temperature: 0.3,
+            maxTokens: 500,
+            timeoutMs: 20000,
+            cadence: 'onIdentityChange',
+        },
     },
 
     tokenBudget: {

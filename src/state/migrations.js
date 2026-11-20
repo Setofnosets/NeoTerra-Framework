@@ -9,6 +9,7 @@
 export const CURRENT_WORLD_STATE_VERSION = 2;
 
 import { abilitySummaryLines } from '../data/card-facets.js';
+import { isUsableGoal } from '../data/goals.js';
 import { isPlayerCharacter } from './selectors.js';
 const STATUSES = Object.freeze([
     'active',
@@ -254,7 +255,10 @@ export function backfillCharacterFacets(raw, profiles) {
         fillList('abilities', abilitySummaryLines(profile.abilitySummary));
         fillList('aliases', profile.aliases);
         if (next.goalsSource !== 'live') {
-            fillList('goals', profile.goals);
+            // A stored card can carry a truncated goal fragment. Only usable
+            // goals are backfilled, so the Codex never presents a broken
+            // sentence as a legitimate card goal.
+            fillList('goals', asArray(profile.goals).filter((goal) => isUsableGoal(goal)));
         }
         // An old world has no source marker. A non-empty goal list may be
         // tracker- or player-authored, so it is treated as live and protected;

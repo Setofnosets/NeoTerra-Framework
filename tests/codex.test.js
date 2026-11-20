@@ -26,6 +26,7 @@ import { buildFormIndex } from '../src/data/forms.js';
 import { applyWorldEvent } from '../src/state/reducer.js';
 import { createWorldStateStore } from '../src/state/store.js';
 import { cloneDefaults } from '../src/core/defaults.js';
+import { createGoalInference, ensurePlayerGoals } from '../src/agents/goal-inference.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NOW = 1700000000000;
@@ -651,3 +652,72 @@ test('settings expose agent routing/prompts and character hard limits', () => {
     assert.match(limits, /value="strict" selected/);
     assert.match(limits, /Inherit global gate/);
 });
+
+test('Play-as fills goals exactly once for a card with no usable goals', async () => {
+    const store = makeStore('s1', { identity: 'custom' });
+    const vaiva = 's1.vaiva.colorgarde';
+    const goals = [
+        'Protect Neo Terra from the Atropos threat',
+        'Expose Claire Atropos',
+        'Keep her family safe',
+    ];
+    const runner = {
+        calls: 0,
+        async runAgent() {
+            this.calls += 1;
+            return { value: { goals, rationale: 'Grounded in the card.' } };
+        },
+    };
+    const goalInference = createGoalInference({
+        runner,
+        getSettings: () => ({ agents: { goalInference: { enabled: true, model: 'test-model' } } }),
+    });
+    const first = await ensurePlayerGoals({
+        store,
+        registry,
+        profiles,
+        goalInference,
+        settings: cloneDefaults(),
+        characterId: vaiva,
+        season: seasons.s1,
+    });
+    assert.equal(first.ok, true);
+    assert.equal(first.inferred, true);
+    assert.equal(runner.calls, 1);
+    assert.deepEqual(store.get().characters[vaiva].goals, goals);
+    assert.equal(store.get().characters[vaiva].goalsSource, 'live');
+    assert.equal(store.get().flags.goalInference.characterId, vaiva);
+
+    const second = await ensurePlayerGoals({
+        store,
+        registry,
+        profiles,
+        goalInference,
+        settings: cloneDefaults(),
+        characterId: vaiva,
+        season: seasons.s1,
+    });
+    assert.equal(second.inferred, false);
+    assert.equal(runner.calls, 1);
+});
+
+test('the played character renders an Infer goals button and a goal source hint', () => {
+    const store = makeStore('s1', { identity: 'canon', characterId: 's1.vaiva.colorgarde' });
+    const view = viewFor(store, 's1', {
+        profiles,
+        selectedId: 's1.vaiva.colorgarde',
+        goalInferenceAvailable: true,
+    });
+    const markup = renderCodexMarkup(view);
+    assert.match(markup, /data-neoterra-infer-goals="s1\.vaiva\.colorgarde"/);
+    assert.match(markup, /data-neoterra-goals-source="card"/);
+    assert.match(markup, /Source: card/);
+
+    const noAgent = viewFor(store, 's1', {
+        profiles,
+        selectedId: 's1.vaiva.colorgarde',
+        goalInferenceAvailable: false,
+    });
+    assert.doesNotMatch(renderCodexMarkup(noAgent), /data-neoterra-infer-goals/);
+});
+

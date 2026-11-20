@@ -19,6 +19,8 @@ import { createLogger } from '../core/logger.js';
 import { applyFormProfileOverlay } from '../state/form-profiles.js';
 import { backfillCharacterFacets } from '../state/migrations.js';
 import { buildGeneratedCharacterEvent } from '../agents/character-creator.js';
+import { ensurePlayerGoals } from '../agents/goal-inference.js';
+import { deriveGoalsFromProfile } from '../data/goals.js';
 import { avatarMarkup, initAvatars, initialsFor } from './avatar.js';
 import { buildGeneratedFormsExport } from './codex-data.js';
 import { downloadJson } from './download.js';
@@ -847,6 +849,7 @@ function buildDetail({
     settings,
     selectedId,
     playAs,
+    goalInferenceAvailable = true,
 }) {
     if (!selectedId) {
         return null;
@@ -1008,7 +1011,11 @@ function buildDetail({
                 confirmation: buildPlayAsConfirmation({ option: playAsOption, state }),
             }
             : null,
-    };
+        // Goal ownership: card list, tracker-owned live list, or an AI inference.
+        goalInference: state?.flags?.goalInference?.characterId === selectedId
+            ? state.flags.goalInference
+            : null,
+        canInferGoals: Boolean(goalInferenceAvailable) && isPlayer,    };
 }
 
 /**
@@ -1025,6 +1032,7 @@ export function buildCodexView({
     settings = {},
     filters = {},
     selectedId = null,
+    goalInferenceAvailable = true,
 } = {}) {
     const index = resolveFormIndex({ registry, formGroups, formIndex });
     const byId = registryIndex(registry);
@@ -1115,8 +1123,12 @@ export function buildCodexView({
             settings,
             selectedId: effectiveSelected,
             playAs,
+            goalInferenceAvailable: Boolean(goalInferenceAvailable)
+                && settings?.agents?.goalInference?.enabled !== false,
         }),
         playAs,
+        goalInferenceAvailable: Boolean(goalInferenceAvailable)
+            && settings?.agents?.goalInference?.enabled !== false,
         // Per-chat generated form profiles, keyed by character id then form id.
         generatedForms: state?.flags?.generatedForms ?? {},
     };
@@ -1309,7 +1321,18 @@ function abilityMarkup(values, empty = 'No abilities recorded.') {
     return `<ul class="neoterra-codex-abilities">${visible.map(renderItem).join('')}</ul>${hidden}`;
 }
 
-function goalsMarkup(profile) {
+function goalsSourceLabel(profile, detail) {
+    const live = asArray(profile?.goals);
+    const flag = detail?.goalInference;
+    // Only claim "inferred" while the live list is still the one the agent
+    // wrote; a later tracker rewrite makes it plain "live" again.
+    if (flag?.source === 'ai' && sameList(asArray(flag.goals), live)) {
+        return 'inferred';
+    }
+    return profile?.goalsSource === 'live' ? 'live' : 'card';
+}
+
+function goalsMarkup(profile, detail = null) {
     const live = asArray(profile.goals);
     const card = asArray(profile.cardGoals);
     const fromCard = card.length > 0 && !sameList(card, live);
@@ -1323,7 +1346,9 @@ function goalsMarkup(profile) {
     const extra = (live.length > 0 && fromCard)
         ? `<p class="neoterra-hint">From card: ${escapeCodexHtml(capped)}</p>`
         : '';
-    return `${body}${extra}`;
+    const source = goalsSourceLabel(profile, detail);
+    const sourceLine = `<p class="neoterra-hint" data-neoterra-goals-source="${escapeCodexHtml(source)}">Source: ${escapeCodexHtml(source)}</p>`;
+    return `${body}${extra}${sourceLine}`;
 }
 
 function badge(text, tone = 'default') {
@@ -1603,7 +1628,10 @@ function renderDetail(detail, state) {
             ${profileList('Tags', profile.tags)}
             <section class="neoterra-codex-profile-block">
                 <h6>Goals</h6>
-                ${goalsMarkup(profile)}
+                ${goalsMarkup(profile, detail)}
+                ${detail.canInferGoals
+                    ? `<button type="button" class="menu_button" data-neoterra-infer-goals="${escapeCodexHtml(detail.characterId)}">Infer goals</button>`
+                    : ''}
                 <button type="button" class="menu_button" data-neoterra-reset-goals="${escapeCodexHtml(detail.characterId)}">Reset goals to card</button>
             </section>
             <section class="neoterra-codex-profile-block">
@@ -1919,6 +1947,7 @@ export function mountCodex({
     ctx = null,
     formArchitect = null,
     characterCreator = null,
+    goalInference = null,
     creatorData = null,
     loadExemplars = null,
     getSettings = () => ({}),
@@ -1946,6 +1975,7 @@ export function mountCodex({
         formRules,
         profiles,
         formIndex: resolveFormIndex({ registry, formGroups }),
+        goalInference,
         getSettings,
         onIdentityChange,
         onWorldChange,
@@ -1997,6 +2027,7 @@ export function mountCodex({
         settings: getSettings(),
         filters: state.filters,
         selectedId: state.selectedId,
+        goalInferenceAvailable: Boolean(goalInference),
     });
 
     const paint = () => {
@@ -2261,8 +2292,54 @@ export function mountCodex({
         state.returnFocus = null;
         state.error = null;
         state.selectedId = characterId;
-        onIdentityChange?.({ state: next, previous: before, identity, locationId });
+
+        // Goal resolution: the deterministic card parse runs synchronously (so the
+        // next paint already shows the card's goals); the single AI fallback is
+        // fire-and-forget and repaints when it lands. It never blocks the POV swap.
+        let goalsPending = null;
+        let goalLookupPending = false;
+        try {
+            const character = next.characters?.[characterId] ?? null;
+            const profile = profiles?.[character?.formId ?? characterId] ?? profiles?.[characterId] ?? null;
+            // The pending hint is about needing a *model* lookup: an empty or
+            // unusable card list with no tracker-owned goals. A stored-but-bad
+            // list (Leila's truncation) must show it too.
+            const derived = deriveGoalsFromProfile(profile);
+            goalLookupPending = Boolean(goalInference)
+                && derived.length === 0
+                && !(asArray(character?.goals).length > 0 && character?.goalsSource === 'live');
+            goalsPending = ensurePlayerGoals({
+                store,
+                registry,
+                profiles,
+                goalInference,
+                settings: getSettings(),
+                characterId,
+                state: next,
+                season,
+                recentScene: Array.isArray(next?.recentEvents) ? next.recentEvents.slice(-3) : null,
+            });
+            if (goalLookupPending) {
+                state.status = `Now playing as ${displayName} at ${locationName} (finding goals…)`;
+            }
+        } catch (error) {
+            logger.debug('Goal resolution could not start', error);
+        }
+
+        onIdentityChange?.({ state: store.get(), previous: before, identity, locationId });
         paint();
+        void Promise.resolve(goalsPending).then((result) => {
+            if (mounted !== state) {
+                return;
+            }
+            if (result?.ok && result.inferred) {
+                state.status = `Now playing as ${displayName} at ${locationName} (goals inferred).`;
+                paint();
+            } else if (state.status.endsWith('(finding goals…)')) {
+                state.status = `Now playing as ${displayName} at ${locationName}.`;
+                paint();
+            }
+        }).catch(() => {});
         [...root.querySelectorAll('[data-neoterra-codex-select]')]
             .find((element) => element.dataset.neoterraCodexSelect === characterId)
             ?.focus?.();
@@ -2325,6 +2402,67 @@ export function mountCodex({
             logger.warn('Card facet re-derivation failed', error);
         }
         paint();
+    };
+
+    const applyInferGoals = (characterId) => {
+        if (!state.goalInference || typeof state.goalInference.run !== 'function') {
+            state.error = null;
+            state.status = 'Goal inference is unavailable. Check the agent settings.';
+            paint();
+            return;
+        }
+        state.error = null;
+        state.status = 'Inferring goals…';
+        paint();
+        let pending;
+        try {
+            pending = ensurePlayerGoals({
+                store,
+                registry,
+                profiles,
+                goalInference: state.goalInference,
+                settings: getSettings(),
+                characterId,
+                season,
+                recentScene: store.get()?.recentEvents?.slice(-3) ?? null,
+                force: true,
+            });
+        } catch (error) {
+            state.status = null;
+            state.error = error?.message ?? String(error);
+            paint();
+            return;
+        }
+        void Promise.resolve(pending).then((result) => {
+            if (mounted !== state) {
+                return;
+            }
+            const character = store.get()?.characters?.[characterId] ?? null;
+            const name = character?.displayName ?? characterId;
+            if (result?.ok) {
+                if (result.inferred) {
+                    state.status = `Inferred ${result.goals.length} goal(s) for ${name}.`;
+                    onWorldChange?.({ state: store.get(), reason: 'goals-inferred', updated: [characterId] });
+                } else if (result.source === 'card') {
+                    state.status = `Goals for ${name} come from the card.`;
+                    onWorldChange?.({ state: store.get(), reason: 'goals-card', updated: [characterId] });
+                } else {
+                    state.status = `Goals for ${name} are owned by the tracker.`;
+                }
+            } else {
+                state.status = null;
+                state.error = result?.error ?? 'No goals could be inferred.';
+            }
+            paint();
+        }).catch((error) => {
+            if (mounted !== state) {
+                return;
+            }
+            state.status = null;
+            state.error = error?.message ?? String(error);
+            logger.warn('Goal inference failed', error);
+            paint();
+        });
     };
 
     const applyResetGoals = (characterId) => {
@@ -2597,6 +2735,14 @@ export function mountCodex({
                 state.error = null;
                 applyRederiveFacets(characterId);
             }
+            return;
+        }
+        const inferGoals = event.target.closest?.('[data-neoterra-infer-goals]');
+        if (inferGoals) {
+            const characterId = inferGoals.dataset.neoterraInferGoals;
+            state.status = null;
+            state.error = null;
+            applyInferGoals(characterId);
             return;
         }
         const resetGoals = event.target.closest?.('[data-neoterra-reset-goals]');

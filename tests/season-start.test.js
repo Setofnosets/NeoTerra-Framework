@@ -814,3 +814,32 @@ test('renderSetupStrip reports an installed Director card and hides the download
     assert.doesNotMatch(solo, /data-neoterra-download-director/);
     assert.doesNotMatch(solo, /neoterra-setup-hint/);
 });
+
+test('a canon start seeds deterministic card goals without a runner', () => {
+    const annabelle = 's2.annabelle.verd.iron.maiden';
+    const { store } = start({
+        season: seasonDocuments.s2,
+        identity: { identity: 'canon', characterId: annabelle },
+        startOptions: { profiles: profileArtifact.profiles },
+    });
+    const character = store.get().characters[annabelle];
+    assert.deepEqual(character.goals, [
+        'Annabelle is completely devoted to serving Vaiva AKA Colorgarde',
+        "her savior's heir",
+        "I'll do my best for the Young Master",
+        'I assure you that my best is awesome.',
+    ]);
+    assert.equal(character.goalsSource, 'card');
+});
+
+test('a truncated card goal is not seeded; the Codex infers later', () => {
+    const leila = 's2.leila.renya';
+    const { store } = start({
+        season: seasonDocuments.s2,
+        identity: { identity: 'canon', characterId: leila },
+        startOptions: { profiles: profileArtifact.profiles },
+    });
+    const character = store.get().characters[leila];
+    assert.deepEqual(character.goals, []);
+    assert.equal(character.goalsSource, 'card');
+});

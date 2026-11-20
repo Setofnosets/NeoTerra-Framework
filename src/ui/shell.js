@@ -46,6 +46,7 @@ import { buildArrivalSummary, writeArrivalIntro } from './arrival-summary.js';
 import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
 import { loadRegistry } from '../data/registry.js';
 import { loadLocations } from '../data/locations.js';
+import { loadProfiles } from '../data/profiles.js';
 import { loadDistricts } from '../data/map.js';
 import { createWorldBookAdapter } from '../context/worldbook.js';
 import { getSharedWorldStateStore, releaseSharedWorldStateStore, loadWorldStateFromMetadata, WAL_PREFIX } from '../state/store.js';
@@ -67,6 +68,7 @@ import { createArchitect } from '../agents/architect.js';
 import { createBadEndDetector } from '../agents/bad-end.js';
 import { createFormArchitect } from '../agents/form-architect.js';
 import { createCharacterCreator } from '../agents/character-creator.js';
+import { createGoalInference, ensurePlayerGoals } from '../agents/goal-inference.js';
 import { createEpilogueAgent } from '../agents/epilogue.js';
 import { createChoicesAgent } from '../agents/choices.js';
 import { createAgentClient } from '../agents/client.js';
@@ -1752,6 +1754,11 @@ async function mountCodexPanelComponent(context, host = document.querySelector('
             getSettings: () => getSettings(context),
             log: (message, error) => logger.warn(message, error),
         });
+        const goalInference = createGoalInference({
+            runner: codexRunner,
+            getSettings: () => getSettings(context),
+            log: (message, error) => logger.warn(message, error),
+        });
         const store = getSharedWorldStateStore({
             metadata,
             // Read the live context at save time: the codex may be the first
@@ -1776,6 +1783,7 @@ async function mountCodexPanelComponent(context, host = document.querySelector('
             ctx: context,
             formArchitect,
             characterCreator,
+            goalInference,
             creatorData: { factions, locations, districts },
             loadExemplars: () => loadCardExemplars({
                 registry,
@@ -2224,6 +2232,68 @@ function sendChoiceText(text) {
     return true;
 }
 
+/**
+ * Wrap a bad-end flow so a canon self-continuation also resolves the new POV's
+ * goals. Fire-and-forget: the continuation returns immediately and never waits
+ * for a model pass.
+ */
+function withContinuationGoalInference(flow, { store = null, season = null, context = null, runner = null } = {}) {
+    if (!flow || flow.__neoterraGoalInference === true || typeof flow.continueAsBadEnded !== 'function') {
+        return flow;
+    }
+    const goalInference = createGoalInference({
+        runner,
+        getSettings: () => getSettings(context),
+        log: (message, error) => logger.warn(message, error),
+    });
+    const runGoals = (characterId) => {
+        if (typeof characterId !== 'string' || characterId.length === 0) {
+            return;
+        }
+        void (async () => {
+            try {
+                let profiles = null;
+                try {
+                    profiles = await loadProfiles();
+                } catch (error) {
+                    logger.debug('Card profiles are unavailable; inferring goals without them', error);
+                }
+                await ensurePlayerGoals({
+                    store,
+                    profiles,
+                    goalInference,
+                    settings: getSettings(context),
+                    characterId,
+                    season,
+                    recentScene: store?.get?.()?.recentEvents?.slice?.(-3) ?? null,
+                });
+            } catch (error) {
+                logger.debug('Goal inference after a bad-end continuation failed', error);
+            }
+        })();
+    };
+    // Prototype delegation keeps every other flow method (and its live bindings)
+    // intact; a spread would freeze getter-backed state and leak a marker key.
+    const wrapper = Object.create(flow);
+    Object.defineProperty(wrapper, '__neoterraGoalInference', {
+        value: true,
+        enumerable: false,
+    });
+    wrapper.continueAsBadEnded = (options = {}) => {
+        const result = flow.continueAsBadEnded(options);
+        runGoals(result?.characterId ?? options?.characterId ?? null);
+        return result;
+    };
+    wrapper.continueAsSomeoneElse = (options = {}) => {
+        const result = flow.continueAsSomeoneElse(options);
+        if (result?.identity === 'canon') {
+            runGoals(result?.characterId ?? null);
+        }
+        return result;
+    };
+    return wrapper;
+}
+
 function buildInteractionRuntime(context) {
     const chatId = currentChatId(context);
     const metadata = context?.chatMetadata;
@@ -2315,7 +2385,7 @@ function buildInteractionRuntime(context) {
         getSeason: () => season,
         onSend: (text) => sendChoiceText(text),
     });
-    const badEnd = shared?.badEnd ?? createBadEndFlow({
+    const badEndBase = shared?.badEnd ?? createBadEndFlow({
         store,
         detector: createBadEndDetector({
             runner,
@@ -2327,6 +2397,14 @@ function buildInteractionRuntime(context) {
         season,
         context: { registry: metadata.neoterra?.registry ?? null },
         log: (message, error) => logger.warn(message, error),
+    });
+    // A canon self-continuation is an identity change: resolve the goals in the
+    // background so the continuation never waits on the model.
+    const badEnd = withContinuationGoalInference(badEndBase, {
+        store,
+        season,
+        context,
+        runner,
     });
     const downtime = shared?.downtime ?? createDowntimeFlow({
         store,

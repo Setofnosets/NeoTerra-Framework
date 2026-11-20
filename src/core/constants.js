@@ -47,6 +47,7 @@ export const AGENT_IDS = Object.freeze([
     'newspaper',
     'formArchitect',
     'characterCreator',
+    'goalInference',
 ]);
 
 export const UI_IDS = Object.freeze({
