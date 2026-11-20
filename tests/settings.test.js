@@ -125,6 +125,21 @@ test('map.closeOnTravel round-trips through save and read', () => {
         map: { closeOnTravel: false },
     });
     assert.equal(explicit.map.closeOnTravel, false);
+
+    // The Play-as card instruction defaults on, is a boolean, and the
+    // normalizer preserves unknown identity keys for forward compatibility.
+    assert.equal(migrateSettings({ schemaVersion: SCHEMA_VERSION }).identity.cardInstruction, true);
+    const identityOff = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        identity: { cardInstruction: false, futureKey: 'kept' },
+    });
+    assert.equal(identityOff.identity.cardInstruction, false);
+    assert.equal(identityOff.identity.futureKey, 'kept');
+    const strung = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        identity: { cardInstruction: 'false' },
+    });
+    assert.equal(strung.identity.cardInstruction, true);
 });
 
 test('the Settings map section exposes map.closeOnTravel', () => {

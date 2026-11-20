@@ -181,6 +181,14 @@ function normalizeAgent(agent, defaults) {
     return out;
 }
 
+function normalizeIdentity(identity, defaults) {
+    const source = isPlainObject(identity) ? identity : {};
+    return {
+        ...source,
+        cardInstruction: asBoolean(source.cardInstruction, defaults.cardInstruction),
+    };
+}
+
 function normalizeAgents(agents, defaults) {
     const out = { ...agents };
     for (const id of AGENT_IDS) {
@@ -314,6 +322,10 @@ export function normalizeSettings(settings) {    const defaults = DEFAULT_SETTIN
         ...settings,
         contentGate: asEnum(settings.contentGate, CONTENT_GATE_LEVELS, defaults.contentGate),
         castMode: asEnum(settings.castMode, CAST_MODES, defaults.castMode),
+        identity: normalizeIdentity(
+            isPlainObject(settings.identity) ? settings.identity : {},
+            defaults.identity,
+        ),
         beatDeadlinePressure: asEnum(
             settings.beatDeadlinePressure,
             BEAT_DEADLINE_PRESSURE,

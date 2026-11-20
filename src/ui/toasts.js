@@ -223,6 +223,23 @@ export function buildArrivalToast(summary, { mapStayedOpen = false } = {}) {
     };
 }
 
+/** One identity toast after Play-as: offer the matching character card. */
+export function buildPlayerCardToast({ characterId = null, displayName, instruction, filename }) {
+    const key = characterId ?? filename ?? displayName;
+    return {
+        // Deduped per character (the plan's `player-card:<characterId>` key) so
+        // a rename does not produce a second toast and equal display names
+        // cannot collide.
+        id: `player-card:${key}`,
+        type: 'player-card',
+        title: `Create a card named ${displayName}`,
+        message: instruction,
+        tone: 'info',
+        ttlMs: 12000,
+        action: { id: 'download-player-card', label: 'Download card' },
+    };
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replaceAll('&', '&amp;')

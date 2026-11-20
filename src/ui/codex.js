@@ -24,6 +24,12 @@ import { deriveGoalsFromProfile } from '../data/goals.js';
 import { avatarMarkup, initAvatars, initialsFor } from './avatar.js';
 import { buildGeneratedFormsExport } from './codex-data.js';
 import { downloadJson } from './download.js';
+import {
+    buildPlayerCardDocument,
+    buildPlayerCardInstruction,
+    sanitizeCardFilename,
+} from '../data/player-card.js';
+import { buildPlayerCardToast } from './toasts.js';
 
 const logger = createLogger('codex-ui');
 
@@ -1530,6 +1536,19 @@ function renderCardProfile(card, detail) {
     </section>`;
 }
 
+function renderPlayerCardBlock(detail, view) {
+    const instruction = buildPlayerCardInstruction({
+        displayName: detail.displayName,
+        seasonTitle: view?.seasonTitle ?? null,
+        locationName: detail.locationName ?? null,
+    });
+    return `<div class="neoterra-codex-player-card" data-neoterra-player-card>
+        <button type="button" class="menu_button" data-neoterra-download-player-card>Create card named ${escapeCodexHtml(detail.displayName)}</button>
+        <p class="neoterra-hint" data-neoterra-player-card-instruction>${escapeCodexHtml(instruction)}</p>
+        <button type="button" class="menu_button" data-neoterra-copy-player-card-instruction>Copy</button>
+    </div>`;
+}
+
 function renderDetail(detail, state) {
     if (!detail) {
         return '<p class="neoterra-empty">Select a character to see their codex entry.</p>';
@@ -1611,6 +1630,7 @@ function renderDetail(detail, state) {
                 <p>${escapeCodexHtml(detail.isPlayer ? 'Playing as this character' : (detail.playAs?.eligible ? 'Eligible to play as' : 'NPC'))}</p>
                 ${playAsButton}
                 ${detail.isPlayer ? '<button type="button" class="menu_button" data-neoterra-play-as-custom>Return to custom persona</button>' : ''}
+                ${detail.isPlayer ? renderPlayerCardBlock(detail, state) : ''}
                 ${detail.generated ? `<button type="button" class="menu_button" data-neoterra-export-generated-card="${escapeCodexHtml(detail.characterId)}">Export card JSON</button>` : ''}
                 ${detail.generated ? '<p class="neoterra-hint">Generated in this chat; non-canon and never written to the character library.</p>' : ''}
             </section>
@@ -1953,6 +1973,7 @@ export function mountCodex({
     getSettings = () => ({}),
     onIdentityChange = null,
     onWorldChange = null,
+    pushToast = null,
     ownsStore = true,
 } = {}) {
     if (!hasDom()) {
@@ -2327,6 +2348,53 @@ export function mountCodex({
         }
 
         onIdentityChange?.({ state: store.get(), previous: before, identity, locationId });
+        if (getSettings()?.identity?.cardInstruction !== false && typeof pushToast === 'function') {
+            try {
+                const cardCharacter = store.get()?.characters?.[characterId]
+                    ?? next.characters?.[characterId]
+                    ?? null;
+                const cardProfileRaw = profiles?.[cardCharacter?.formId ?? characterId]
+                    ?? profiles?.[characterId]
+                    ?? null;
+                // Never export text the user has gated out: the card builder
+                // receives the same gated profile the Codex renders.
+                const cardProfile = cardProfileRaw
+                    ? gateCardProfile(cardProfileRaw, {
+                        settings: getSettings(),
+                        characterId,
+                        isPlayer: true,
+                    })
+                    : null;
+                const cardEntry = (registry?.entries ?? [])
+                    .find((candidate) => candidate?.id === characterId) ?? null;
+                const cardLocationId = store.get()?.scene?.locationId ?? null;
+                const cardDoc = cardCharacter
+                    ? buildPlayerCardDocument({
+                        character: cardCharacter,
+                        profile: cardProfile,
+                        registryEntry: cardEntry,
+                        season: { ...(season ?? {}), locationName },
+                        goals: asArray(next.characters?.[characterId]?.goals).length > 0
+                            ? next.characters[characterId].goals
+                            : null,
+                        locationIntro: store.get()?.locations?.[cardLocationId]?.notes ?? null,
+                    })
+                    : null;
+                const filename = `${sanitizeCardFilename(displayName)}.json`;
+                pushToast([buildPlayerCardToast({
+                    characterId,
+                    displayName,
+                    instruction: buildPlayerCardInstruction({
+                        displayName,
+                        seasonTitle: season?.title ?? null,
+                        locationName,
+                    }),
+                    filename,
+                })], cardDoc ? { playerCard: { filename, document: cardDoc } } : null);
+            } catch (error) {
+                logger.debug('Player card toast skipped', error);
+            }
+        }
         paint();
         void Promise.resolve(goalsPending).then((result) => {
             if (mounted !== state) {
@@ -2343,6 +2411,107 @@ export function mountCodex({
         [...root.querySelectorAll('[data-neoterra-codex-select]')]
             .find((element) => element.dataset.neoterraCodexSelect === characterId)
             ?.focus?.();
+    };
+
+    const playerCardBuild = (view = buildView()) => {
+        const detail = view?.selected ?? null;
+        if (!detail?.isPlayer) {
+            return null;
+        }
+        const current = store.get();
+        const character = current?.characters?.[detail.characterId] ?? null;
+        const entry = (registry?.entries ?? [])
+            .find((candidate) => candidate?.id === detail.characterId) ?? null;
+        const profileId = character?.formId ?? detail.characterId;
+        // `detail.profile.card` is already content-gated by buildDetail. A raw
+        // fallback must be gated here too, so the export can never contain text
+        // the user has gated out.
+        const rawProfile = profiles?.[profileId]
+            ?? profiles?.[detail.characterId]
+            ?? null;
+        const profile = detail.profile?.card
+            ?? (rawProfile
+                ? gateCardProfile(rawProfile, {
+                    settings: getSettings(),
+                    characterId: detail.characterId,
+                    isPlayer: true,
+                })
+                : null);
+        const locationId = current?.scene?.locationId ?? null;
+        const locationName = detail.locationName ?? null;
+        // Live LocationState uses `notes` for the authored description.
+        const locationIntro = current?.locations?.[locationId]?.notes ?? null;
+        const goals = asArray(detail.profile?.goals).length > 0 ? detail.profile.goals : null;
+        const seasonSeed = {
+            ...(season ?? {}),
+            title: view?.seasonTitle ?? season?.title ?? null,
+            locationName,
+        };
+        const displayName = character?.displayName ?? detail.displayName;
+        return {
+            doc: buildPlayerCardDocument({
+                character: character ?? {
+                    charId: detail.characterId,
+                    displayName: detail.displayName,
+                    side: detail.side,
+                },
+                profile,
+                registryEntry: entry,
+                season: seasonSeed,
+                goals,
+                locationIntro,
+            }),
+            displayName,
+            instruction: buildPlayerCardInstruction({
+                displayName,
+                seasonTitle: view?.seasonTitle ?? null,
+                locationName,
+            }),
+            filename: `${sanitizeCardFilename(displayName)}.json`,
+        };
+    };
+
+    const downloadPlayerCard = () => {
+        const built = playerCardBuild();
+        if (!built) {
+            state.error = 'Play as this character before creating a player card.';
+            paint();
+            return;
+        }
+        const wrote = downloadJson(built.filename, built.doc);
+        state.error = null;
+        state.status = wrote === false
+            ? 'This browser cannot download files.'
+            : `Downloaded ${built.filename} — import it in SillyTavern.`;
+        paint();
+    };
+
+    const copyPlayerCardInstruction = () => {
+        const built = playerCardBuild();
+        if (!built) {
+            return;
+        }
+        const clipboard = typeof navigator === 'undefined' ? null : navigator.clipboard;
+        const settle = (ok) => {
+            if (mounted !== state) {
+                return;
+            }
+            state.error = null;
+            state.status = ok
+                ? 'Copied the card instruction.'
+                : 'Could not copy; select the instruction text instead.';
+            paint();
+        };
+        if (typeof clipboard?.writeText !== 'function') {
+            settle(false);
+            return;
+        }
+        try {
+            Promise.resolve(clipboard.writeText(built.instruction))
+                .then(() => settle(true), () => settle(false));
+        } catch {
+            settle(false);
+        }
     };
 
     const applyCustom = () => {
@@ -2679,6 +2848,14 @@ export function mountCodex({
     }, { signal: controller.signal });
 
     root.addEventListener('click', (event) => {
+        if (event.target.closest?.('[data-neoterra-download-player-card]')) {
+            downloadPlayerCard();
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-copy-player-card-instruction]')) {
+            copyPlayerCardInstruction();
+            return;
+        }
         const createButton = event.target.closest?.('[data-neoterra-create-character]');
         if (createButton) {
             openCreator(createButton);

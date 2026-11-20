@@ -42,6 +42,7 @@ import { mountJournal } from './journal.js';
 import { mountCommandPalette } from './command-palette.js';
 import { mountTurnStatus } from './turn-status.js';
 import { buildArrivalToast, buildErrorToasts, diffWorldState, mountToasts } from './toasts.js';
+import { downloadJson } from './download.js';
 import { buildArrivalSummary, writeArrivalIntro } from './arrival-summary.js';
 import { isDomainTabVisible, resolveActiveTab, resolveVisibleTabs } from './tab-visibility.js';
 import { loadRegistry } from '../data/registry.js';
@@ -1784,6 +1785,16 @@ async function mountCodexPanelComponent(context, host = document.querySelector('
             formArchitect,
             characterCreator,
             goalInference,
+            pushToast: (toasts, meta) => {
+                if (meta?.playerCard) {
+                    for (const toast of toasts ?? []) {
+                        if (toast?.id) {
+                            pendingPlayerCards.set(toast.id, meta.playerCard);
+                        }
+                    }
+                }
+                ensureToasts().push(toasts);
+            },
             creatorData: { factions, locations, districts },
             loadExemplars: () => loadCardExemplars({
                 registry,
@@ -2654,6 +2665,9 @@ function chatStillCurrent(chatId) {
 
 let turnStatusController = null;
 let toastStack = null;
+// Keyed by toast id so each Play-as toast downloads its own card, even when
+// several are on screen.
+let pendingPlayerCards = new Map();
 
 /** JSON-safe snapshot; WorldState is plain data, so this is cheap and exact. */
 function snapshotWorldState(state) {
@@ -2707,6 +2721,16 @@ function ensureToasts() {
                     document.getElementById('send_textarea')?.focus?.();
                     action.closest?.('.neoterra-toast')?.remove?.();
                 }
+                if (action.dataset.neoterraToastAction === 'download-player-card') {
+                    const toastEl = action.closest?.('.neoterra-toast');
+                    const toastId = toastEl?.dataset?.neoterraToast ?? null;
+                    const card = toastId ? pendingPlayerCards.get(toastId) : null;
+                    if (card) {
+                        downloadJson(card.filename, card.document);
+                        pendingPlayerCards.delete(toastId);
+                        toastEl?.remove?.();
+                    }
+                }
                 return;
             }
             const link = event.target.closest?.('.neoterra-toast-details');
@@ -2727,6 +2751,7 @@ function disposeTurnSurfaces() {
     turnStatusController = null;
     toastStack?.dispose?.();
     toastStack = null;
+    pendingPlayerCards = new Map();
 }
 
 /** Drop a runtime the queued turn created for a chat that is no longer open. */

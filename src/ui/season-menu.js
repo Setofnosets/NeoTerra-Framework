@@ -11,6 +11,7 @@ import { createLogger } from '../core/logger.js';
 import { resolveActiveChatId } from '../core/live-context.js';
 import { loadRegistry } from '../data/registry.js';
 import { directorCardStatus, downloadDirectorCard } from './director-card.js';
+import { buildPlayerCardInstruction } from '../data/player-card.js';
 import { avatarMarkup, initAvatars } from './avatar.js';
 import { applyUiPreset, UI_PRESETS } from '../core/defaults.js';
 import { getSettings, saveSettings } from '../core/settings.js';
@@ -174,6 +175,22 @@ export function renderIdentityStep({
             </label>
         </section>`
         : '';
+    // A canon selection gets the matching card instruction. There is no world
+    // yet, so this is text only: the download/copy actions live in the Codex.
+    const playerCardHint = checkedOption?.identity === 'canon' && checkedOption?.guest !== true
+        ? (() => {
+            const instruction = buildPlayerCardInstruction({
+                displayName: checkedOption.displayName,
+                seasonTitle: entry.title,
+                locationName: null,
+            });
+            return `
+        <div class="neoterra-identity-card-hint" data-neoterra-identity-card-hint>
+            <p data-neoterra-player-card-instruction>${escapeHtml(instruction)}</p>
+            <button type="button" class="menu_button" data-neoterra-copy-player-card-instruction>Copy</button>
+        </div>`;
+        })()
+        : '';
 
     return `
     <section class="neoterra-season-identity" data-neoterra-identity-step
@@ -218,6 +235,7 @@ export function renderIdentityStep({
                     ${checkedOption?.guest && !acknowledged ? 'disabled' : ''}>Begin season</button>
             </div>
         </form>
+        ${playerCardHint}
     </section>`;
 }
 
@@ -586,6 +604,22 @@ export async function mountSeasonMenu(options = {}) {
 
     root.addEventListener('click', (event) => {
         const target = event.target;
+        const copyPlayerCard = target.closest?.('[data-neoterra-copy-player-card-instruction]');
+        if (copyPlayerCard) {
+            const hint = copyPlayerCard.closest?.('[data-neoterra-identity-card-hint]');
+            const instruction = hint
+                ?.querySelector?.('[data-neoterra-player-card-instruction]')
+                ?.textContent?.trim() ?? '';
+            const clipboard = typeof navigator === 'undefined' ? null : navigator.clipboard;
+            if (instruction.length > 0 && typeof clipboard?.writeText === 'function') {
+                try {
+                    Promise.resolve(clipboard.writeText(instruction)).catch(() => {});
+                } catch {
+                    // Clipboard unavailable: the text stays selectable in place.
+                }
+            }
+            return;
+        }
         if (target.closest?.('[data-neoterra-season-refresh]')) {
             load();
             return;

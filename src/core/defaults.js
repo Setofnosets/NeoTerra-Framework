@@ -48,6 +48,8 @@ export const DEFAULT_SETTINGS = freezeDeep({
     identity: {
         allowGuests: true,
         guestCanonBeats: 'adapt',
+        // Offer the "create a player card" instruction after Play-as.
+        cardInstruction: true,
     },
 
     // Soft canon-beat deadlines; `off` disables escalation.

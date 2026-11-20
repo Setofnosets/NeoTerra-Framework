@@ -295,6 +295,7 @@ test('every block is rendered with a stable heading and exact snapshot text', ()
         [
             '[NEOTERRA_PLAYER]',
             'Name: Rook',
+            'Player card: Rook (address the player as Rook)',
             'Identity: custom persona',
             'Role: hero',
             'Status: active',
@@ -322,6 +323,22 @@ test('every block is rendered with a stable heading and exact snapshot text', ()
             '- PATROL VANISHES',
         ].join('\n'),
     );
+});
+
+test('the player block names the player card for a canon character', () => {
+    const base = makeState();
+    const state = makeState({
+        player: {
+            ...base.player,
+            identity: 'canon',
+            characterId: HERO,
+            displayName: undefined,
+            charId: HERO,
+        },
+    });
+    const result = renderContext(state, { settings: settingsWith(), season: SEASON });
+    const player = blockById(result, 'player');
+    assert.match(player.text, /Player card: Vaiva Colorgarde \(address the player as Vaiva Colorgarde\)/);
 });
 
 test('continuity and lore blocks render when their data exists', () => {

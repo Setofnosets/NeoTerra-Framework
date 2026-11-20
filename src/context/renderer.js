@@ -197,8 +197,10 @@ function renderPlayer(state, settings) {
     const character = player.character ?? state.player;
     const lines = [];
 
-    if (player.displayName || character.displayName) {
-        lines.push(`Name: ${player.displayName ?? character.displayName}`);
+    const displayName = player.displayName || character.displayName;
+    if (displayName) {
+        lines.push(`Name: ${displayName}`);
+        lines.push(`Player card: ${displayName} (address the player as ${displayName})`);
     }
     const identity = player.identity === 'canon'
         ? `canon (${player.characterId ?? 'unknown'})`

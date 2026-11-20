@@ -528,6 +528,25 @@ test('the identity step renders canon radios with data-character-id and keeps th
     }
 });
 
+test('the identity step hints at a player card only for a canon selection', () => {
+    const season = seasonDocuments.s1dark;
+    const choices = buildIdentityChoices(season, { registry });
+    const canonMarkup = renderIdentityStep({ entry: season, choices, error: null });
+    assert.match(canonMarkup, /data-neoterra-identity-card-hint/);
+    assert.match(canonMarkup, /data-neoterra-player-card-instruction/);
+    assert.match(canonMarkup, /Create a character card named Carol Fate/);
+    assert.match(canonMarkup, /data-neoterra-copy-player-card-instruction/);
+
+    const customMarkup = renderIdentityStep({
+        entry: season,
+        choices,
+        error: null,
+        selectedCharacterId: 'custom',
+    });
+    assert.doesNotMatch(customMarkup, /data-neoterra-identity-card-hint/);
+    assert.doesNotMatch(customMarkup, /data-neoterra-player-card-instruction/);
+});
+
 test('season start hands the opening frame back to the chat', () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
     const shell = readFileSync(join(root, 'src/ui/shell.js'), 'utf8');

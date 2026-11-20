@@ -370,6 +370,25 @@ test('the played character is always reachable in the codex', () => {
     assert.doesNotMatch(renderCodexMarkup(other), /data-neoterra-codex-player-section/);
 });
 
+test('the played character offers a matching player card, never an NPC', () => {
+    const store = makeStore('s1dark', { identity: 'canon', characterId: CAROL });
+    const playerView = viewFor(store, 's1dark', { selectedId: CAROL });
+    assert.equal(playerView.selected.isPlayer, true);
+    const markup = renderCodexMarkup(playerView);
+    assert.match(markup, /data-neoterra-download-player-card/);
+    assert.match(markup, /data-neoterra-player-card-instruction/);
+    assert.match(markup, /data-neoterra-copy-player-card-instruction/);
+    assert.match(markup, /Create a character card named Carol Fate/);
+    assert.match(markup, /narrator addresses you by name/);
+
+    const npcView = viewFor(store, 's1dark', {
+        selectedId: 's1dark.aurelia.season-dark-version',
+    });
+    const npcMarkup = renderCodexMarkup(npcView);
+    assert.doesNotMatch(npcMarkup, /data-neoterra-download-player-card/);
+    assert.doesNotMatch(npcMarkup, /data-neoterra-player-card-instruction/);
+});
+
 test('codex reads aliases, tags, and abilities from the active form', () => {
     const store = makeStore('s1dark', { identity: 'canon', characterId: CAROL });
     const before = viewFor(store, 's1dark', { profiles, selectedId: CAROL });

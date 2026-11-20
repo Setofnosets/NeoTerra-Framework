@@ -2,7 +2,7 @@
 
 ## Meta
 - Slug: player-pov-goals-travel-choices-agent-presets
-- Status: in progress — M1 steps 1–4 landed (NPC-only presence; identities relocate; S2 Leila in villain form; goals derived/inferred). Next: step 5 (player card).
+- Status: M1 complete (steps 1–5). M2 next (steps 6–9).
 - Date: 2026-11-19
 - Upstream: `plans/fix-identity-settings-map-travel-chat.md`, `plans/travel-feedback-followup.md`, `plans/character-card-fidelity.md`
 - Requested by: user report (7 items) — see Summary
@@ -14,7 +14,7 @@
 - [x] 2. Play-as moves the scene, presence, and the previous player
 - [x] 3. Season 2 Leila defaults to her villain form
 - [x] 4. Parse player goals; infer when the card yields nothing
-- [ ] 5. Player card instruction + downloadable card
+- [x] 5. Player card instruction + downloadable card
 
 **M2 — Actor feedback (steps 6â€“9)**
 - [ ] 6. Choices carry a routable kind/target
