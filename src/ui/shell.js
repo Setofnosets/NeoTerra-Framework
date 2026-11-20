@@ -99,6 +99,7 @@ import {
     engageEncounter,
     markAmbushOpening,
     mountEncounterBar,
+    recordNotice,
     startEncounterCombat,
     surrenderEncounterCombat,
 } from './encounter-bar.js';
@@ -1531,6 +1532,11 @@ export async function postTravelOutcome(context, runtime, result, {
                 }
             }
         }
+        if (!notice.ambush) {
+            recordNotice(runtime?.store ?? null, encounter, notice, {
+                now: typeof now === 'function' ? now : Date.now,
+            });
+        }
         if (notice.ambush) {
             const flow = combatFlow
                 ?? (() => {
@@ -1560,86 +1566,128 @@ export async function postTravelOutcome(context, runtime, result, {
         }
     }
 
+    // Optional atmospheric description. Start it alongside the choices request
+    // so a slow model never holds up the chips; the map already closed through
+    // onPosted. A chat switch before or after the call posts nothing.
+    const descriptionTask = describer && typeof describer.run === 'function'
+        ? runTravelDescription({
+            context: afterSave,
+            runtime,
+            result,
+            describer,
+            settings: settingsNow,
+            notice,
+            key,
+            chatId,
+            getChatId,
+            resolveContext,
+            now,
+        })
+        : Promise.resolve(null);
     try {
         await requestChoices(afterSave, choicesIndex, choicesMode ? { mode: choicesMode } : undefined);
     } catch (error) {
         logger.warn('Could not request choices after travel; the frame stands', error);
     }
+    await descriptionTask;
+    return posted;
+}
 
-    // Optional atmospheric description. It never blocks the arrival (the map
-    // already closed through onPosted) and never posts on failure, timeout, or
-    // a chat switch. The deterministic frame above is the canonical one.
-    const activeDescriber = describer;
-    if (activeDescriber && typeof activeDescriber.run === 'function') {
+async function runTravelDescription({
+    context,
+    runtime,
+    result,
+    describer,
+    settings,
+    notice,
+    key,
+    chatId,
+    getChatId,
+    resolveContext,
+    now,
+}) {
+    // Never spend a model call on a chat that already changed.
+    if (getChatId(resolveContext() ?? context) !== chatId) {
+        return null;
+    }
+    try {
+        const description = await describer.run({
+            state: result?.state ?? null,
+            season: context?.chatMetadata?.neoterra?.seasonDefinition ?? null,
+            encounter: result?.state?.scene?.encounter ?? null,
+            notice,
+            settings,
+        });
+        if (!description?.ok || typeof description.description !== 'string') {
+            return null;
+        }
+        const stillLive = resolveContext() ?? context;
+        if (getChatId(stillLive) !== chatId) {
+            return null;
+        }
+        const text = applyContentGate(
+            description.description,
+            settings?.contentGate ?? 'full',
+            settings?.contentLimits ?? {},
+            { isPlayer: true },
+        ).trim();
+        if (text.length === 0) {
+            return null;
+        }
+        const descKey = buildSceneKey('scene-desc', chatId, key);
+        const message = buildSceneChatMessage({
+            kind: SCENE_KINDS.SCENE,
+            text,
+            key: descKey,
+            extra: { travelKey: key, locationId: result?.to ?? null },
+        });
+        const postedDescription = await postSceneMessage(stillLive, message, {
+            dedupeKey: descKey,
+            avatarUrl: resolveSceneAvatar(stillLive),
+        }).catch((error) => {
+            logger.debug('Could not post the travel description', error);
+            return null;
+        });
+        if (!postedDescription) {
+            return null;
+        }
+        decorateSceneAt(stillLive, postedDescription.index);
+        // Only a genuinely new frame is recorded; a deduped re-render must not
+        // append a second cache entry for the same travel key.
+        if (postedDescription.posted !== true) {
+            return postedDescription;
+        }
         try {
-            const description = await activeDescriber.run({
-                state: result?.state ?? null,
-                season: afterSave?.chatMetadata?.neoterra?.seasonDefinition ?? null,
-                encounter,
-                notice,
-                settings: settingsNow,
-            });
-            if (description?.ok && typeof description.description === 'string') {
-                const stillLive = resolveContext() ?? afterSave;
-                if (getChatId(stillLive) === chatId) {
-                    const text = applyContentGate(
-                        description.description,
-                        settingsNow?.contentGate ?? 'full',
-                        settingsNow?.contentLimits ?? {},
-                        { isPlayer: true },
-                    ).trim();
-                    if (text.length > 0) {
-                        const descKey = buildSceneKey('scene-desc', chatId, key);
-                        const message = buildSceneChatMessage({
-                            kind: SCENE_KINDS.SCENE,
-                            text,
-                            key: descKey,
-                            extra: { travelKey: key, locationId: result?.to ?? null },
-                        });
-                        const postedDescription = await postSceneMessage(stillLive, message, {
-                            dedupeKey: descKey,
-                            avatarUrl: resolveSceneAvatar(stillLive),
-                        }).catch((error) => {
-                            logger.debug('Could not post the travel description', error);
-                            return null;
-                        });
-                        if (postedDescription) {
-                            decorateSceneAt(stillLive, postedDescription.index);
-                            try {
-                                const store = runtime?.store ?? null;
-                                const current = store?.get?.();
-                                if (current && (postedDescription.posted || postedDescription.deduped)) {
-                                    const cloned = snapshotWorldState(current);
-                                    if (cloned) {
-                                        const existing = Array.isArray(cloned.flags?.travelDescriptions)
-                                            ? cloned.flags.travelDescriptions
-                                            : [];
-                                        cloned.flags = {
-                                            ...(cloned.flags ?? {}),
-                                            travelDescriptions: [
-                                                ...existing,
-                                                {
-                                                    key,
-                                                    text,
-                                                    at: typeof now === 'function' ? now() : Date.now(),
-                                                },
-                                            ].slice(-10),
-                                        };
-                                        store.replace(cloned);
-                                    }
-                                }
-                            } catch (error) {
-                                logger.debug('Could not record the travel description', error);
-                            }
-                        }
-                    }
+            const store = runtime?.store ?? null;
+            const current = store?.get?.();
+            if (current) {
+                const cloned = snapshotWorldState(current);
+                if (cloned) {
+                    const existing = Array.isArray(cloned.flags?.travelDescriptions)
+                        ? cloned.flags.travelDescriptions
+                        : [];
+                    cloned.flags = {
+                        ...(cloned.flags ?? {}),
+                        travelDescriptions: [
+                            ...existing,
+                            {
+                                key,
+                                text,
+                                at: typeof now === 'function' ? now() : Date.now(),
+                            },
+                        ].slice(-10),
+                    };
+                    store.replace(cloned);
                 }
             }
         } catch (error) {
-            logger.debug('The travel description failed; the arrival frame stands', error);
+            logger.debug('Could not record the travel description', error);
         }
+        return postedDescription;
+    } catch (error) {
+        logger.debug('The travel description failed; the arrival frame stands', error);
+        return null;
     }
-    return posted;
 }
 
 /**
@@ -2545,13 +2593,11 @@ async function routeTravelChoice(live, runtime, target) {
     if (!map?.travel) {
         return { ok: false, reason: 'no-travel', message: 'Travel is unavailable in this chat.' };
     }
-    const panel = map.panelRef?.panel ?? null;
-    const panelRef = panel
-        ? {
-            refresh: () => panel.refresh?.(),
-            getSources: () => panel.getSources?.(),
-            pulseArrival: (payload) => panel.pulseArrival?.(payload),
-        }
+    // `panelRef` is already the { getSources, refresh, pulseArrival } wrapper
+    // handed to buildMapRuntime by the mounted panel.
+    const panelRef = map.panelRef
+        && (typeof map.panelRef.refresh === 'function' || typeof map.panelRef.getSources === 'function')
+        ? map.panelRef
         : null;
     const outcome = await runTravelTo(live, map, panelRef, target);
     if (outcome.ok === false) {
@@ -2588,12 +2634,25 @@ async function routeCombatChoice(live, runtime) {
 }
 
 /** A prose notice frame for a combat chip that had nothing to engage. */
-async function postChoiceNotice(live, runtime, text) {
+async function postChoiceNotice(live, runtime, text, choice = null) {
     const state = runtime.store.get();
-    const key = buildSceneKey('notice', runtime.chatId, 'no-combat', state?.meta?.turn ?? 0);
+    const settingsNow = getSettings(live) ?? {};
+    const gated = applyContentGate(
+        text,
+        settingsNow?.contentGate ?? 'full',
+        settingsNow?.contentLimits ?? {},
+        { isPlayer: true },
+    ).trim();
+    const key = buildSceneKey(
+        'notice',
+        runtime.chatId,
+        'no-combat',
+        state?.meta?.turn ?? 0,
+        choice?.label ?? '',
+    );
     const message = buildSceneChatMessage({
         kind: SCENE_KINDS.NOTICE,
-        text,
+        text: gated,
         key,
     });
     const posted = await postSceneMessage(live, message, {
@@ -2604,7 +2663,9 @@ async function postChoiceNotice(live, runtime, text) {
     return posted;
 }
 
-let choiceRouteInFlight = false;
+// One routed action per chat at a time; a pending route in another chat must
+// not swallow a legitimate click in the current one.
+const choiceRoutesInFlight = new Set();
 
 /**
  * Route one chip: prose goes through SillyTavern's normal send; travel and
@@ -2618,16 +2679,17 @@ async function handleChoiceSend(text, choice) {
         sendChoiceText(text);
         return;
     }
-    if (choiceRouteInFlight) {
-        return;
-    }
     const live = refreshContext();
     const runtime = buildInteractionRuntime(live);
     if (!runtime) {
         sendChoiceText(text);
         return;
     }
-    choiceRouteInFlight = true;
+    const routeChatId = runtime.chatId ?? '';
+    if (choiceRoutesInFlight.has(routeChatId)) {
+        return;
+    }
+    choiceRoutesInFlight.add(routeChatId);
     try {
         const routed = await dispatchChoiceRoute({
             choice,
@@ -2636,7 +2698,7 @@ async function handleChoiceSend(text, choice) {
                 prose: () => sendChoiceText(text),
                 travel: (target) => routeTravelChoice(live, runtime, target),
                 combat: () => routeCombatChoice(live, runtime),
-                notice: (message) => postChoiceNotice(live, runtime, message),
+                notice: (message, choice) => postChoiceNotice(live, runtime, message, choice),
             },
         });
         if (routed.route === 'travel' && routed.result?.ok === false) {
@@ -2652,7 +2714,7 @@ async function handleChoiceSend(text, choice) {
         logger.warn('Could not route the choice', error);
         showChoiceRouteStatus('The chosen action could not be executed.');
     } finally {
-        choiceRouteInFlight = false;
+        choiceRoutesInFlight.delete(routeChatId);
         choicesBar?.refresh?.();
     }
 }
@@ -3331,10 +3393,12 @@ async function handleAssistantMessage(message, messageIndex, context = null) {
     status?.event({ stage: 'choices', status: 'start' });
     let view = null;
     try {
+        const connections = await buildChoiceConnections(runtime, runtime.store.get());
         view = await runtime.controller.request({
             messages,
             messageIndex,
             swipeId: Number.isInteger(message?.swipe_id) ? message.swipe_id : 0,
+            connections,
         });
         status?.event({ stage: 'choices', status: 'done' });
     } catch (error) {

@@ -157,6 +157,8 @@ export function buildEncounterBarModel(options = {}) {
         if (state.flags?.encounter?.avoidedKey === key) {
             return { visible: false, encounter, key, reason: 'avoided' };
         }
+        const noticed = isObject(state.flags?.encounter?.noticed)
+            && state.flags.encounter.noticed.key === key;
         const actorId = encounterActorId(state);
         const characterIds = asStringList(encounter.characterIds)
             .filter((characterId) => characterId !== actorId);
@@ -166,6 +168,8 @@ export function buildEncounterBarModel(options = {}) {
             mode: 'encounter',
             encounter,
             key,
+            noticedFirst: noticed,
+            title: noticed ? 'Encounter — they noticed you first' : 'Encounter',
             locationId: encounter.locationId ?? state.scene?.locationId ?? null,
             actions: [
                 {
@@ -345,6 +349,46 @@ export async function engageEncounter({
         }
     }
     return { ...started, key, message, posted };
+}
+
+/**
+ * Record a plain notice as an encounter-keyed flag. This is not a combat
+ * state change: it only lets the next prompt and the bar agree that the
+ * hostile saw the player first. A different encounter (or location) clears it
+ * by key mismatch.
+ */
+export function recordNotice(store, encounter, notice, { now = Date.now } = {}) {
+    try {
+        const key = encounterKey(encounter);
+        if (!key || !isObject(notice) || notice.noticedFirst !== true || notice.ambush === true) {
+            return null;
+        }
+        const state = store?.get?.();
+        if (!isObject(state)) {
+            return null;
+        }
+        const flags = isObject(state.flags) ? state.flags : {};
+        const next = {
+            ...state,
+            flags: {
+                ...flags,
+                encounter: {
+                    ...(isObject(flags.encounter) ? flags.encounter : {}),
+                    noticed: {
+                        key,
+                        actorId: typeof notice.actorId === 'string' ? notice.actorId : null,
+                        actorName: typeof notice.actorName === 'string' ? notice.actorName : null,
+                        at: now(),
+                    },
+                },
+            },
+        };
+        store.replace(next);
+        return next;
+    } catch (error) {
+        logger.warn('Could not record the notice', error);
+        return null;
+    }
 }
 
 /**

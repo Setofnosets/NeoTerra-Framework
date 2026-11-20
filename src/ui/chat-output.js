@@ -324,11 +324,19 @@ export async function postSceneMessage(ctx, message, { dedupeKey = null, avatarU
     const key = typeof dedupeKey === 'string' && dedupeKey.length > 0
         ? dedupeKey
         : sceneKeyOf(payload);
-    // Scan the whole chat, not only the last message: a travel frame is often
-    // followed by its notice/description frames, and a remount must still
-    // recognise the original key instead of posting a second copy.
+    // Scan the current turn only (back to the last user message), not the whole
+    // history: a travel frame is often followed by its notice/description
+    // frames, and a remount must still recognise the original key. Scanning the
+    // full chat would also swallow a legitimate repeat after a new season.
     if (key) {
+        let scanFrom = 0;
         for (let index = messages.length - 1; index >= 0; index -= 1) {
+            if (messages[index]?.is_user === true) {
+                scanFrom = index + 1;
+                break;
+            }
+        }
+        for (let index = messages.length - 1; index >= scanFrom; index -= 1) {
             if (sceneKeyOf(messages[index]) === key) {
                 return { posted: false, index, reason: 'duplicate', deduped: true };
             }

@@ -33,6 +33,13 @@ export const MAX_CONNECTED_CHOICES = 8;
  */
 export const CHOICE_KINDS = Object.freeze(['prose', 'travel', 'combat']);
 
+/**
+ * Only offensive combat actions can start a fight from a chip. Defend,
+ * retreat, surrender, and talk-down stay prose: a stale row from a finished
+ * fight must never re-open combat.
+ */
+const ENGAGE_COMBAT_ACTIONS = Object.freeze(['strike', 'grapple', 'feint', 'skill']);
+
 /** The resolver owns the combat vocabulary; choices re-export it. */
 export { COMBAT_ACTIONS, COMBAT_RISK_TIERS } from '../combat/resolver.js';
 
@@ -472,7 +479,7 @@ export function buildChoicesPrompt({
         }
         lines.push('Every choice requires an action from the allowed list and a risk tier.');
         lines.push('Prefer actions the resolver can settle: strike, defend, grapple, feint, skill, retreat, surrender, talk down.');
-        lines.push('Combat choices are already inside the fight: use kind "combat" with target "engage" and never omit the action.');
+        lines.push('Combat choices are already inside the fight; the narrator resolves them from the label. Never omit the action.');
     } else {
         lines.push(`Allowed intents: ${CHOICE_INTENTS.join(', ')}.`);
         lines.push('Exploration choices may include dialogue, investigation, travel, romance, or lewd content when the mix allows it.');
@@ -630,11 +637,15 @@ export function normalizeChoicesResult({
         let target = null;
         let targetName = null;
         if (combat) {
-            kind = 'combat';
-            target = 'engage';
-            targetName = hostiles.length > 0
-                ? hostiles.map((hostile) => hostile.name).join(', ')
-                : null;
+            // An offensive action can start/continue a fight; defensive ones
+            // are prose so a surviving row cannot re-engage after combat ends.
+            if (ENGAGE_COMBAT_ACTIONS.includes(action)) {
+                kind = 'combat';
+                target = 'engage';
+                targetName = hostiles.length > 0
+                    ? hostiles.map((hostile) => hostile.name).join(', ')
+                    : null;
+            }
         } else {
             const rawKind = typeof raw.kind === 'string' ? raw.kind.trim().toLowerCase() : 'prose';
             const rawTarget = typeof raw.target === 'string' ? raw.target.trim() : '';

@@ -636,10 +636,14 @@ test('combat chips keep action/risk and gain kind combat with the hostile list',
         mode: 'combat',
         state,
     });
-    assert.ok(normalized.choices.every((choice) => choice.kind === 'combat'));
     assert.ok(normalized.choices.every((choice) => choice.action && choice.risk));
+    // Only the offensive action is a routable engage; defend/retreat stay prose
+    // so a surviving row cannot re-open a finished fight.
+    assert.equal(normalized.choices[0].kind, 'combat');
     assert.equal(normalized.choices[0].target, 'engage');
     assert.equal(normalized.choices[0].targetName, 'Claire');
+    assert.equal(normalized.choices[1].kind, 'prose');
+    assert.equal(normalized.choices[2].kind, 'prose');
     assert.deepEqual(choiceHostiles({ state }).map((entry) => entry.id), ['c.villain']);
 });
 

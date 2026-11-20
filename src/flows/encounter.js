@@ -297,7 +297,9 @@ export function detectNotice({
     if (!isObject(state) || isCombatActive(state) || noticeFirst === false) {
         return null;
     }
-    const target = isObject(encounter) ? encounter : state.scene?.encounter ?? null;
+    // An explicitly passed `null` means "no encounter"; only `undefined`
+    // falls back to the persisted scene record.
+    const target = encounter === undefined ? state.scene?.encounter ?? null : encounter;
     if (!isObject(target)) {
         return null;
     }

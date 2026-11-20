@@ -27,6 +27,7 @@ import {
     engageEncounter,
     endEncounterCombat,
     markAmbushOpening,
+    recordNotice,
     startEncounterCombat,
     surrenderEncounterCombat,
 } from '../src/ui/encounter-bar.js';
@@ -847,10 +848,40 @@ test('the scene block and intro carry the recorded ambush actor', () => {
         characters: { 'c.villain': character('c.villain', 'villain', { displayName: 'Claire' }) },
     });
     state.scene.ambush = { actorId: 'c.villain', actorName: 'Claire', at: NOW };
+    state.scene.combat = {
+        id: 'combat-1',
+        participants: ['player', 'c.villain'],
+        round: 0,
+        opening: 'hostile',
+    };
     const rendered = renderContext(state, { settings: cloneDefaults() });
     assert.match(rendered.text, /Ambushed by: Claire/);
     const intro = buildLocationIntro({ state });
     assert.match(intro.text, /Claire sprang the ambush before you could move\./);
+});
+
+test('a recorded notice is keyed to the encounter and titles the bar', () => {
+    const state = makeState({
+        characters: { 'c.villain': character('c.villain', 'villain', { displayName: 'Claire' }) },
+        encounter: { locationId: 'loc.a', characterIds: ['c.villain'], threatNames: [] },
+    });
+    const store = {
+        get: () => state,
+        replace: (next) => { Object.assign(state, next); },
+    };
+    const next = recordNotice(store, state.scene.encounter, {
+        noticedFirst: true,
+        ambush: false,
+        actorId: 'c.villain',
+        actorName: 'Claire',
+    }, { now: () => NOW });
+    assert.equal(next.flags.encounter.noticed.key, encounterKey(state.scene.encounter));
+    const model = buildEncounterBarModel({ state });
+    assert.equal(model.visible, true);
+    assert.equal(model.noticedFirst, true);
+    assert.match(model.title, /noticed you first/);
+    const rendered = renderContext(state, { settings: cloneDefaults() });
+    assert.match(rendered.text, /Noticed: Claire/);
 });
 
 test('markAmbushOpening flags the opening round and the bar shows Surprised', () => {

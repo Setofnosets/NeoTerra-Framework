@@ -14,7 +14,7 @@ import {
     buildFormIndex,
     selectExclusiveCast,
 } from '../data/forms.js';
-import { describeEncounter, detectEncounter } from './encounter.js';
+import { describeEncounter, detectEncounter, encounterKey } from './encounter.js';
 import { validateWorldState } from '../state/world-state.js';
 
 export const POV_LABELS = Object.freeze({
@@ -229,14 +229,13 @@ export function buildLocationIntro({ state, season = null, from = null, travel =
     }
     // A recorded perception fact is neutral prose: who saw the player first.
     const ambush = state.scene?.ambush;
+    const noticed = state.flags?.encounter?.noticed;
+    const currentEncounterKey = state.scene?.encounter ? encounterKey(state.scene.encounter) : null;
     if (ambush && typeof ambush === 'object') {
         const actor = ambush.actorName ?? ambush.actorId ?? 'A hostile';
         lines.push(`${actor} sprang the ambush before you could move.`);
-    } else if (state.scene?.noticed) {
-        const noticed = state.scene.noticed;
-        const actor = typeof noticed === 'object'
-            ? noticed.actorName ?? noticed.actorId ?? 'A hostile'
-            : String(noticed);
+    } else if (noticed && currentEncounterKey && noticed.key === currentEncounterKey) {
+        const actor = noticed.actorName ?? noticed.actorId ?? 'A hostile';
         lines.push(`${actor} noticed you first.`);
     }
     const framing = state.scene?.framing;

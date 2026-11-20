@@ -24,6 +24,7 @@ import {
     estimateTokens,
 } from './budget.js';
 import { buildCastProfiles } from './worldbook.js';
+import { encounterKey } from '../flows/encounter.js';
 
 export const BLOCK_HEADINGS = Object.freeze({
     scene: '[NEOTERRA_SCENE]',
@@ -150,18 +151,19 @@ function renderScene(state, settings) {
         }
     }
 
-    // Perception facts from the arrival: an ambush is a recorded scene fact,
-    // a plain notice is prose-only (no state change).
-    if (isObject(scene.ambush) || typeof scene.ambush === 'string') {
+    // Perception facts from the arrival: an ambush is recorded on the combat
+    // scene, a plain notice on the encounter-keyed flag. A stale notice for a
+    // different encounter never renders.
+    if (isObject(scene.combat) && (isObject(scene.ambush) || typeof scene.ambush === 'string')) {
         const actor = typeof scene.ambush === 'string'
             ? scene.ambush
             : scene.ambush.actorName ?? scene.ambush.actorId ?? null;
         lines.push(`Ambushed by: ${actor ?? 'an unseen hostile'}`);
-    } else if (isObject(scene.noticed) || typeof scene.noticed === 'string') {
-        const actor = typeof scene.noticed === 'string'
-            ? scene.noticed
-            : scene.noticed.actorName ?? scene.noticed.actorId ?? null;
-        lines.push(`Noticed: ${actor ?? 'a hostile'}`);
+    } else if (encounter && isObject(state?.flags?.encounter?.noticed)) {
+        const noticed = state.flags.encounter.noticed;
+        if (noticed.key === encounterKey(encounter)) {
+            lines.push(`Noticed: ${noticed.actorName ?? noticed.actorId ?? 'a hostile'}`);
+        }
     }
 
     if (typeof scene.framing === 'string' && scene.framing.trim().length > 0) {

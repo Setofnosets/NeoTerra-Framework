@@ -672,6 +672,34 @@ test('travel posts the deterministic frame, then exactly one scene description',
     assert.equal(ctx.chat.length, 2);
 });
 
+test('travel.noticeFirst:false and travel.ambush:false act as real kill switches', async () => {
+    const off = travelCtx('c1', []);
+    await postTravelOutcome(off, { chatId: 'c1' }, encounterTravelResult(), {
+        getSettings: () => ({ travel: { noticeFirst: false, ambush: true } }),
+        requestChoices: async () => {},
+    });
+    assert.equal(off.chat.length, 1, 'no perception frame when notice-first is off');
+
+    const demoted = travelCtx('c1', []);
+    const result = encounterTravelResult();
+    let starts = 0;
+    const { detectNotice } = await import('../src/flows/encounter.js');
+    const expected = detectNotice({
+        state: result.state,
+        encounter: result.state.scene.encounter,
+        ambush: false,
+    });
+    await postTravelOutcome(demoted, { chatId: 'c1' }, result, {
+        getSettings: () => ({ travel: { noticeFirst: true, ambush: false } }),
+        combatFlow: { start: () => { starts += 1; return { ok: true, combat: {} }; } },
+        requestChoices: async () => {},
+    });
+    const frames = demoted.chat.filter((message) => message.extra?.neoterra?.scene?.kind === 'encounter');
+    assert.equal(frames.length, expected?.noticedFirst ? 1 : 0);
+    assert.equal(starts, 0, 'ambush:false never starts combat');
+    assert.ok(frames.every((message) => message.mes.indexOf('springs the ambush') === -1));
+});
+
 test('a disabled or failing describer posts nothing extra', async () => {
     for (const describer of [
         { run: async () => ({ ok: false, skipped: true, description: null }) },

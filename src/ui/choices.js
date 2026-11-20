@@ -379,6 +379,12 @@ export function resolveChoiceRoute(choice, state = null) {
         if (isCombatScene(state)) {
             return { route: 'prose', reason: 'combat-active' };
         }
+        // Defensive/social actions are never a new engagement, even if an old
+        // row somehow still carries the combat kind.
+        const action = typeof choice?.action === 'string' ? choice.action : '';
+        if (action && !['strike', 'grapple', 'feint', 'skill'].includes(action)) {
+            return { route: 'prose', reason: 'not-an-engage-action' };
+        }
         return { route: 'combat', target: typeof choice?.target === 'string' ? choice.target : 'engage' };
     }
     return { route: 'prose' };
@@ -410,7 +416,7 @@ export async function dispatchChoiceRoute({
         : { ok: false, reason: 'no-combat' };
     if (result?.ok === false && result?.reason === 'no-encounter') {
         const notice = typeof handlers.notice === 'function'
-            ? await handlers.notice(result.message ?? 'No one here to fight.')
+            ? await handlers.notice(result.message ?? 'No one here to fight.', choice)
             : null;
         return { route: 'notice', reason: 'no-encounter', result, notice };
     }

@@ -54,9 +54,11 @@ function clip(value, max) {
 }
 
 function stripContextBlocks(text) {
+    // Drop a block header line and any bare marker, but keep legitimate prose
+    // that follows on later lines. This never eats the rest of the paragraph.
     return String(text ?? '')
-        .replace(/\[NEOTERRA_[A-Z_]+\][\s\S]*?(?=\n\[NEOTERRA_[A-Z_]+\]|$)/g, '')
-        .replace(/\[NEOTERRA_[A-Z_]+\]/g, '')
+        .replace(/^[ \t]*\[\/?NEOTERRA_[A-Z_]+\][^\n]*$/gm, '')
+        .replace(/\[\/?NEOTERRA_[A-Z_]+\]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -203,8 +205,12 @@ export function buildSceneDescriptionPrompt({
  */
 export function createSceneDescriber({ runner = null, getSettings = null, log = null } = {}) {
     function settingsFor(request = {}) {
-        const fromGetter = typeof getSettings === 'function' ? getSettings() : null;
-        return fromGetter ?? request.settings ?? {};
+        // A request snapshot (the shell's settingsNow) wins; the getter is the
+        // fallback for callers that pass no snapshot.
+        if (isObject(request.settings)) {
+            return request.settings;
+        }
+        return (typeof getSettings === 'function' ? getSettings() : null) ?? {};
     }
 
     async function run(request = {}) {
