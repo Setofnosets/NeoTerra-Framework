@@ -109,6 +109,56 @@ and delete it afterwards.
 - [ ] Architect's season-start pass runs only with `agents.architect.seasonStart`.
 - [ ] Disable each agent in turn and confirm zero calls (agent log empty for it).
 
+## Player POV, choices, travel, and agents (1.3.0)
+
+One line per reported symptom; use the exact click path.
+
+- [ ] **Played character off the map:** start S2 as Leila → Map shows
+      "You are here" at her location and no `Present: Leila` strip; Story tab
+      cast omits her; Characters tab still lists her with every form/goal/card
+      action.
+- [ ] **Play-as relocation:** mid-story, Codex → Play as a character elsewhere →
+      scene moves, previous player reappears as an NPC where they stood, map
+      refreshes without a reload.
+- [ ] **S2 Leila form:** fresh S2 → Codex shows Leila as Femme Feral (villain,
+      villain portrait); form swap to the fallen card and back still works.
+- [ ] **Goals:** Play as a character with a goal label → goals appear in the
+      kickoff and Codex; with none → deterministic parse or one inference call
+      fills 3–5 grounded goals; `agents.goalInference.enabled:false` falls back
+      to the agenda line with no error.
+- [ ] **Player card:** Play as Leila → toast + instruction; download
+      `Leila Renya.json`, import it, select it; the narrator addresses the player
+      by name and `[NEOTERRA_PLAYER]` shows the card line.
+- [ ] **Travel chip:** CYOA on → click a travel chip → map closes (default),
+      `Location changed:` frame, arrival cues, chips return; no chip exists for
+      a non-connected location.
+- [ ] **Combat chip:** with an encounter, click an engage chip → combat frame +
+      tactical chips + travel blocked; no encounter → short notice frame, nothing
+      starts.
+- [ ] **Notice-first:** travel into a hostile location and reload the same
+      chat/turn → the same "spots you" outcome; `travel.noticeFirst:false` → no
+      notice frame.
+- [ ] **Ambush:** travel into a `hostile`/`contested` location until the
+      deterministic roll is a strong hostile success → "springs the ambush"
+      frame, combat starts, bar shows **Surprised** and only defensive/escape
+      chips; next round restores full combat chips; `travel.ambush:false` demotes
+      the same roll to a plain notice.
+- [ ] **Travel description:** `agents.sceneDescriber` on → a short second frame
+      within ~12 s; off → deterministic frame only; a bad model config → no
+      second frame and no error toast.
+
+## Agent control (1.3.0)
+
+- [ ] **Presets:** save a preset, change three agents, apply the preset → all
+      three revert; reload → the preset list persists; export/import settings →
+      presets survive; the dropdown lists the Recommended group.
+- [ ] **Pickers:** profile dropdown lists real profiles; selecting one changes
+      routing (check the agent log); cadence select only offers valid values; a
+      stored custom profile id stays selected under **Custom id…**.
+- [ ] **Test connection:** Test on a good profile → OK + route/model/latency;
+      a bogus profile id → readable failure; **Test all agents** → N/N summary;
+      closing the drawer or switching chat aborts the run.
+
 ## Content pilot
 
 - [ ] Review and approve the S1/S1Dark side beats, post-victory arcs, and
@@ -143,4 +193,7 @@ and delete it afterwards.
 - **2026-11-19 — mobile 390×844:** a live 390×844 iframe harness against the running app measured zero horizontal overflow for the shell, season grid, toolbar, cards, and map sheet; the command palette items render at 40 px minimum height with no undersized visible controls.
 - **2026-11-19 — mobile CSS:** the 720 px HUD sheet, window sheet, scene-card, and palette touch-target rules are asserted in `tests/ui-css.test.js`.
 - **Signed off for 1.2.0.**
+- **2026-11-19 — automated (1.3.0):** `npm run check` passes (1153+ tests,
+  build-data/map/coords/avatars checks, smoke test). Manual checks 1–14 above
+  remain the release gate for 1.3.0.
 

@@ -660,6 +660,169 @@ export function createAgentClient(options = {}) {
     };
 }
 
+/**
+ * Diagnostic connectivity check for one agent.
+ *
+ * Resolves the same configuration a real call would use, sends one tiny
+ * request through the normal route chain (profile -> main -> generateRaw), and
+ * reports the outcome. It never writes state, never enables/disables an agent,
+ * and never throws: failures come back as `{ ok: false, error }`.
+ */
+export async function testAgentConnection({
+    ctx = null,
+    settings = null,
+    agentId,
+    overrides = {},
+    timeoutMs = 20000,
+    now = Date.now,
+    transport,
+    signal = null,
+} = {}) {
+    const startedAt = Number(now()) || Date.now();
+    const override = isPlainObject(overrides) ? overrides : {};
+    let route = null;
+    let model = '';
+    let profileName = '';
+    let client = null;
+    let profileOnly = false;
+
+    try {
+        const resolvedSettings = settings
+            ?? (ctx ? readSettings(ctx) : null)
+            ?? {};
+        const config = resolveAgentConfig(resolvedSettings, agentId, {
+            ...override,
+            // Testing is diagnostic: a disabled agent still gets a probe.
+            enabled: true,
+        });
+        model = config.model || '';
+        if (config.connectionProfileId) {
+            const profile = resolveProfile(ctx, config.connectionProfileId);
+            profileName = profile.name;
+            if (!model) {
+                model = profile.model;
+            }
+        }
+        // Only report the main chat model when the main route is what runs.
+        if (!model && !config.connectionProfileId && typeof ctx?.getChatCompletionModel === 'function') {
+            try {
+                const current = ctx.getChatCompletionModel();
+                model = typeof current === 'string' ? current : '';
+            } catch {
+                // The model getter is optional.
+            }
+        }
+
+        // A configured profile is tested on its own: silently falling back to
+        // the main connection would hide the broken pick the user is checking.
+        let effectiveTransport = transport;
+        if (
+            typeof effectiveTransport !== 'function'
+            && config.connectionProfileId
+            && typeof ctx?.ConnectionManagerRequestService?.sendRequest === 'function'
+        ) {
+            profileOnly = true;
+            const profileId = config.connectionProfileId;
+            effectiveTransport = ({ messages, config: routeConfig, signal: routeSignal }) => (
+                ctx.ConnectionManagerRequestService.sendRequest(
+                    profileId,
+                    messages,
+                    routeConfig.maxTokens,
+                    {
+                        stream: false,
+                        extractData: true,
+                        includeInstruct: true,
+                        signal: routeSignal,
+                    },
+                    {
+                        model: routeConfig.model || undefined,
+                        temperature: routeConfig.temperature,
+                        max_tokens: routeConfig.maxTokens,
+                    },
+                )
+            );
+        }
+
+        client = createAgentClient({
+            ctx,
+            getSettings: () => resolvedSettings,
+            now,
+            transport: effectiveTransport,
+            logger: createLogger('agent-test'),
+        });
+        const result = await client.sendAgentRequest({
+            agentId,
+            prompt: 'Reply with {"ok":true}. Return only that JSON object.',
+            schema: {
+                type: 'object',
+                required: ['ok'],
+                properties: { ok: { type: 'boolean' } },
+            },
+            overrides: { ...override, enabled: true },
+            timeoutMs,
+            signal,
+        });
+        route = profileOnly ? 'profile' : (result?.route ?? null);
+        return {
+            ok: true,
+            route,
+            model,
+            profileName,
+            latencyMs: Math.max(0, Number(now()) - startedAt),
+            error: null,
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            route: profileOnly ? 'profile' : route,
+            model,
+            profileName,
+            latencyMs: Math.max(0, Number(now()) - startedAt),
+            error: describeTestFailure(error, timeoutMs),
+        };
+    } finally {
+        try {
+            client?.dispose?.();
+        } catch {
+            // Disposal must never mask the result.
+        }
+    }
+}
+
+function resolveProfile(ctx, profileId) {
+    try {
+        const list = ctx?.ConnectionManagerRequestService?.getSupportedProfiles?.();
+        const match = Array.isArray(list) ? list.find((profile) => profile?.id === profileId) : null;
+        return {
+            name: typeof match?.name === 'string' ? match.name : '',
+            model: typeof match?.model === 'string' ? match.model : '',
+        };
+    } catch {
+        return { name: '', model: '' };
+    }
+}
+
+function describeTestFailure(error, timeoutMs) {
+    let current = error;
+    let lastMessage = '';
+    for (let depth = 0; current && depth < 6; depth += 1) {
+        if (current.timedOut) {
+            return `timed out after ${timeoutMs}ms`;
+        }
+        const message = String(current.message ?? '').trim();
+        if (message) {
+            lastMessage = message;
+        }
+        const status = Number(current.status ?? current.statusCode);
+        if (Number.isFinite(status) && status > 0) {
+            const text = message || lastMessage;
+            return text.includes(String(status)) ? text : `${status} · ${text || 'request failed'}`;
+        }
+        current = current.cause;
+    }
+    return lastMessage || 'Unknown error';
+}
+
 /* ------------------------------------------------------------------ */
 /* Internal helpers                                                    */
 /* ------------------------------------------------------------------ */

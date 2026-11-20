@@ -195,6 +195,44 @@ generation replaces the injected copy instead of duplicating it. Scene frames
 are the only visible Neo Terra chat elements; there is no in-chat status strip
 or HUD.
 
+## Encounter, notice, and scene-description frames
+
+Three optional frames can follow the deterministic arrival frame. Each is an
+ordinary assistant message (`is_system: false`, `is_user: false`) and none
+writes to `ctx.chat` outside its own visible text.
+
+| Frame | `kind` | When | Dedupe key |
+| --- | --- | --- | --- |
+| Notice | `encounter` | `travel.noticeFirst` and a hostile spots the player | `encounter:<chatId>:<from>:<to>:<turn>:notice` |
+| Ambush | `encounter` | `travel.ambush`, strong hostile success, hostile/contested district, no stealth arrival | `encounter:<chatId>:<from>:<to>:<turn>:ambush` |
+| Travel description | `scene` | `agents.sceneDescriber.enabled` after arrival | `scene-desc:<chatId>:<travelKey>` |
+
+**Notice vs ambush.** `detectNotice` is a deterministic seeded check
+(`chatId + turn + encounterKey`). The default notice is prose plus an
+`encounter` frame: the hostile spots the player, the player still moves first,
+and no state changes. An **ambush** is the exception: when the check is a strong
+success (`margin >= 5`) in a `hostile`/`contested` location and the player
+arrived without stealth, the shell posts one ambush frame, starts combat through
+the existing `createCombatFlow.start` (player side `a`, hostiles `b`), records
+`flags.lastCombat.ambush = true` and `scene.combat.opening = 'hostile'`, and
+shows the encounter bar in a **Surprised** state for one round. The first chip
+set is restricted to `defend`, `retreat`, `talk-down`, and `surrender`. No
+hostile action is resolved automatically, so the engine still has no NPC turns.
+Kill switches: `travel.noticeFirst` and `travel.ambush` (both default `true`).
+
+`buildLocationIntro` appends one neutral notice/ambush line when the scene
+carries `scene.noticed` / `scene.ambush`, and `[NEOTERRA_SCENE]` renders
+`Noticed:` / `Ambushed by:` so the next prompt knows.
+
+**Travel description.** `src/agents/scene-describer.js` runs one short pass
+(`agents.sceneDescriber`, temperature 0.85, 320 tokens, 12 s timeout, cadence
+`onTravel`) grounded in the location, time, present NPCs, encounter facts, and
+season tone. It posts at most one `scene` frame, content-gated and stripped of
+context blocks. Failure, timeout, or a chat switch posts nothing and logs at
+debug; the map close is never blocked. The last 10 descriptions are mirrored in
+`WorldState.flags.travelDescriptions` (shaped `{ key, text, at }`) for the map
+sidebar.
+
 ## Settings used here
 
 | Setting | Default | Effect |
@@ -204,6 +242,9 @@ or HUD.
 | `cyoa.enabled` | `false` | Exploration choices after a frame/turn. |
 | `cyoa.combatChoices.enabled` | `false` | Tactical chips while combat is active. |
 | `map.closeOnTravel` | `true` | Close the shell after a successful travel post. |
+| `travel.noticeFirst` | `true` | Post one `encounter` frame when a hostile spots the player. |
+| `travel.ambush` | `true` | Allow a deterministic ambush in hostile/contested districts. |
+| `agents.sceneDescriber.enabled` | `true` | Post one generated `scene` frame after arrival. |
 | `agents.stateTracker.enabled` | `true` | Run the player tracker every assistant turn. |
 | `agents.storyline.everyNTurns` | `6` | Storyline cadence, in turns. |
 | `agents.storyline.onLocationChange` | `true` | Also run the storyline on travel. |

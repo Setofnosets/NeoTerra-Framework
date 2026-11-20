@@ -2,10 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { SCHEMA_VERSION, SETTINGS_KEY } from '../src/core/constants.js';
+import { AGENT_IDS, SCHEMA_VERSION, SETTINGS_KEY } from '../src/core/constants.js';
 import { DEFAULT_SETTINGS, cloneDefaults } from '../src/core/defaults.js';
+import {
+    applyAgentPreset,
+    deleteAgentPreset,
+    listAgentPresets,
+    renameAgentPreset,
+    saveAgentPreset,
+} from '../src/core/agent-presets.js';
 import { migrateSettings, needsMigration } from '../src/core/migrations.js';
-import { resolveWorldContext } from '../src/ui/settings.js';
+import {
+    buildAgentConfigMarkup,
+    buildAgentPresetOptionsMarkup,
+    buildAgentProfileOptionsMarkup,
+    buildModelSuggestions,
+    cadenceOptionsForAgent,
+    normalizeConnectionProfiles,
+    readAgentPickerContext,
+    readConnectionProfiles,
+    resolveWorldContext,
+} from '../src/ui/settings.js';
 import {
     getByPath,
     getSettings,
@@ -451,6 +468,269 @@ test('the world-tick settings normalizer fills defaults and keeps unknown keys',
     assert.equal(newspaper.newspaper.everyDays, 1);
     assert.equal(newspaper.newspaper.minEvents, 50);
     assert.equal(newspaper.newspaper.custom, 'keep');
+});
+
+test('agent presets snapshot the agents block and restore it on apply', () => {
+    const base = cloneDefaults();
+    base.agents.stateTracker.model = 'model-a';
+    base.agents.choices.prompt = 'custom prompt';
+
+    const saved = saveAgentPreset(base, 'Night run', { now: 1000 });
+    const id = saved.agentPresets.activeId;
+    assert.ok(id, 'saving marks the preset active');
+    assert.deepEqual(listAgentPresets(saved).map((preset) => preset.name), ['Night run']);
+    assert.deepEqual(Object.keys(saved.agentPresets).sort(), ['activeId', 'items']);
+    assert.deepEqual(saved.agentPresets.items[id].agents, base.agents);
+    assert.equal(saved.agentPresets.items[id].createdAt, 1000);
+
+    // Editing the live agents document does not touch the snapshot until Update.
+    const edited = structuredClone(saved);
+    edited.agents.stateTracker.model = 'model-b';
+    edited.agents.choices.prompt = '';
+    edited.agents.lore.cadence = 'everyTurn';
+    assert.equal(saved.agentPresets.items[id].agents.stateTracker.model, 'model-a');
+
+    const updated = saveAgentPreset(edited, 'Night run', { id, now: 2000 });
+    assert.equal(updated.agentPresets.items[id].createdAt, 1000, 'update keeps createdAt');
+    assert.equal(updated.agentPresets.items[id].agents.stateTracker.model, 'model-b');
+    assert.equal(updated.agentPresets.items[id].agents.choices.prompt, '');
+    assert.equal(updated.agentPresets.items[id].agents.lore.cadence, 'everyTurn');
+
+    const applied = applyAgentPreset(updated, id);
+    assert.equal(applied.agents.stateTracker.model, 'model-b');
+    assert.equal(applied.agents.choices.prompt, '');
+    assert.equal(applied.agents.lore.cadence, 'everyTurn');
+    assert.equal(
+        applied.agents.stateTracker.connectionProfileId,
+        base.agents.stateTracker.connectionProfileId,
+        'fields missing from the snapshot fall back to the defaults',
+    );
+
+    // Applying after later live drift restores the snapshot, not the live doc.
+    const drift = structuredClone(applied);
+    drift.agents.stateTracker.model = 'model-z';
+    drift.agents.lore.cadence = 'everyTurn';
+    const restored = applyAgentPreset(drift, id);
+    assert.equal(restored.agents.stateTracker.model, 'model-b');
+    assert.equal(restored.agents.choices.prompt, '');
+    assert.equal(restored.agents.lore.cadence, 'everyTurn');
+
+    const renamed = renameAgentPreset(applied, id, 'Day run');
+    assert.equal(listAgentPresets(renamed)[0].name, 'Day run');
+    assert.equal(renamed.agentPresets.activeId, id, 'renaming keeps the active preset');
+
+    const removed = deleteAgentPreset(renamed, id);
+    assert.equal(listAgentPresets(removed).length, 0);
+    assert.equal(removed.agentPresets.activeId, '');
+    assert.equal(removed.agents.lore.cadence, 'everyTurn', 'deleting leaves the live agents intact');
+    assert.throws(() => applyAgentPreset(removed, id), /no longer exists/);
+    assert.throws(() => deleteAgentPreset(removed, id), /no longer exists/);
+    assert.throws(
+        () => saveAgentPreset(removed, 'Stale update', { id: 'ghost' }),
+        /no longer exists/,
+        'an update for a deleted preset must not silently create a new one',
+    );
+});
+
+test('agent presets validate names and cap at 20', () => {
+    let settings = cloneDefaults();
+    for (let index = 0; index < 20; index += 1) {
+        settings = saveAgentPreset(settings, `Preset ${index}`, { now: 1000 + index });
+    }
+    assert.equal(listAgentPresets(settings).length, 20);
+    assert.throws(
+        () => saveAgentPreset(settings, 'Overflow', { now: 5000 }),
+        /At most 20 agent presets/,
+    );
+    assert.throws(() => saveAgentPreset(settings, '   '), /Enter a preset name/);
+    assert.throws(() => saveAgentPreset(settings, 'x'.repeat(61)), /at most 60/);
+});
+
+test('agentPresets migrate to the empty shape and survive export/import', () => {
+    const migrated = migrateSettings({ schemaVersion: SCHEMA_VERSION });
+    assert.deepEqual(migrated.agentPresets, { activeId: '', items: {} });
+
+    const base = cloneDefaults();
+    base.agents.lore.model = 'kept-model';
+    const saved = saveAgentPreset(base, 'Exported', { now: 42 });
+    const roundTripped = migrateSettings(JSON.parse(JSON.stringify(saved)));
+    assert.equal(listAgentPresets(roundTripped)[0].name, 'Exported');
+    assert.equal(
+        applyAgentPreset(roundTripped, roundTripped.agentPresets.activeId).agents.lore.model,
+        'kept-model',
+    );
+
+    const cleaned = migrateSettings({
+        schemaVersion: SCHEMA_VERSION,
+        agentPresets: {
+            activeId: 'ghost',
+            items: {
+                ok: { name: 'Ok', createdAt: 1, agents: { choices: { model: 'm' } } },
+                bad: { name: '' },
+            },
+        },
+    });
+    assert.equal(cleaned.agentPresets.activeId, '', 'an unknown active id is dropped');
+    assert.deepEqual(Object.keys(cleaned.agentPresets.items), ['ok']);
+    assert.equal(cleaned.agentPresets.items.ok.agents.choices.model, 'm');
+    assert.equal(
+        cleaned.agentPresets.items.ok.agents.choices.temperature,
+        DEFAULT_SETTINGS.agents.choices.temperature,
+        'preset agents are normalized against the defaults',
+    );
+});
+
+test('the settings panel exposes the agent preset controls', () => {
+    const html = readFileSync(new URL('../src/ui/settings.html', import.meta.url), 'utf8');
+    for (const hook of [
+        'data-neoterra-preset-select',
+        'data-neoterra-preset-name',
+        'data-neoterra-preset-save',
+        'data-neoterra-preset-update',
+        'data-neoterra-preset-delete',
+        'data-neoterra-preset-apply',
+        'data-neoterra-preset-status',
+    ]) {
+        assert.match(html, new RegExp(hook));
+    }
+
+    const options = buildAgentPresetOptionsMarkup(cloneDefaults());
+    assert.match(options, /optgroup label="Recommended"/);
+    for (const id of ['cinematic', 'classic', 'sandbox']) {
+        assert.match(options, new RegExp(`value="ui:${id}"`));
+    }
+
+    const saved = saveAgentPreset(cloneDefaults(), 'Mine', { now: 1 });
+    const savedOptions = buildAgentPresetOptionsMarkup(saved);
+    assert.match(savedOptions, /optgroup label="Saved"/);
+    assert.match(
+        savedOptions,
+        new RegExp(`value="preset:${saved.agentPresets.activeId}" selected`),
+    );
+});
+
+test('every agent row renders profile, model, and cadence pickers', () => {
+    const html = readFileSync(new URL('../src/ui/settings.html', import.meta.url), 'utf8');
+    const markup = buildAgentConfigMarkup();
+    for (const id of AGENT_IDS) {
+        assert.match(
+            markup,
+            new RegExp(`data-neoterra-profile-select="agents\\.${id}\\.connectionProfileId"`),
+            `${id} has a connection-profile select`,
+        );
+        assert.match(
+            markup,
+            new RegExp(`<select data-neoterra-path="agents\\.${id}\\.cadence">`),
+            `${id} has a cadence select`,
+        );
+        assert.match(markup, new RegExp(`data-neoterra-fetch-models="${id}"`));
+        assert.match(markup, new RegExp(`data-neoterra-test-agent="${id}"`));
+        assert.match(markup, new RegExp(`data-neoterra-test-status="${id}"`));
+    }
+    assert.match(html, /data-neoterra-test-all-agents/);
+    assert.match(html, /data-neoterra-test-all-status/);
+    assert.match(markup, /list="neoterra-model-options"/);
+    assert.match(markup, /data-neoterra-model-options/);
+    // The cadence select offers the agent's own default.
+    for (const id of AGENT_IDS) {
+        const cadence = DEFAULT_SETTINGS.agents[id].cadence;
+        assert.ok(
+            cadenceOptionsForAgent(id).includes(cadence),
+            `${id} offers its default cadence ${cadence}`,
+        );
+    }
+    assert.match(markup, /<option value="everyTurn">everyTurn<\/option>/);
+    assert.doesNotMatch(markup, /Connection profile ID/);
+    // Options stay limited to values the scheduler actually reads.
+    assert.deepEqual(cadenceOptionsForAgent('stateTracker'), ['everyTurn']);
+    assert.deepEqual(cadenceOptionsForAgent('storyline'), ['everyNTurns']);
+    assert.deepEqual(cadenceOptionsForAgent('castDirector'), ['sceneChange', 'everyNTurns']);
+    assert.deepEqual(cadenceOptionsForAgent('auditor'), ['actChange', 'everyNTurns']);
+});
+
+test('connection profiles normalize and degrade without the service', () => {
+    const profiles = normalizeConnectionProfiles([
+        { id: 'b', name: 'Bravo', api: 'openai', model: 'm2' },
+        { id: 'a', name: 'Alpha', api: 'openai', model: 'm1' },
+        { id: 'a', name: 'Alpha duplicate', api: 'openai' },
+        { id: 'c', name: 'Disabled', api: 'openai', disabled: true },
+        { id: 'd', name: 'No API' },
+        { name: 'No id', api: 'openai' },
+    ]);
+    assert.deepEqual(profiles.map((profile) => profile.id), ['a', 'b']);
+    assert.equal(profiles[0].name, 'Alpha');
+    assert.equal(profiles[0].model, 'm1');
+
+    assert.deepEqual(readConnectionProfiles(undefined), { available: false, profiles: [] });
+    assert.deepEqual(
+        readConnectionProfiles({ ConnectionManagerRequestService: {} }),
+        { available: false, profiles: [] },
+    );
+    assert.deepEqual(
+        readConnectionProfiles({
+            ConnectionManagerRequestService: {
+                getSupportedProfiles: () => { throw new Error('connection manager disabled'); },
+            },
+        }),
+        { available: false, profiles: [] },
+    );
+
+    const picker = readAgentPickerContext({
+        ConnectionManagerRequestService: {
+            getSupportedProfiles: () => [{ id: 'p1', name: 'P1', api: 'openai', model: 'm1' }],
+        },
+        getChatCompletionModel: () => 'main-model',
+    });
+    assert.equal(picker.available, true);
+    assert.equal(picker.currentModel, 'main-model');
+    assert.equal(picker.profiles.length, 1);
+});
+
+test('profile selects preserve unknown stored ids as Custom options', () => {
+    const known = buildAgentProfileOptionsMarkup(
+        [{ id: 'p1', name: 'Profile One', model: 'gpt-x' }],
+        'p1',
+    );
+    assert.match(known, /value="p1" selected/);
+    assert.doesNotMatch(known, /value="__custom__" selected/);
+    assert.match(known, /Profile One \(gpt-x\)/);
+
+    const custom = buildAgentProfileOptionsMarkup(
+        [{ id: 'p1', name: 'Profile One', model: 'gpt-x' }],
+        'legacy-profile',
+    );
+    assert.match(custom, /value="__custom__" selected/);
+
+    const main = buildAgentProfileOptionsMarkup([], '');
+    assert.match(main, /value="" selected/);
+    assert.doesNotMatch(main, /value="__custom__" selected/);
+});
+
+test('model suggestions merge profiles, agents, and presets deterministically', () => {
+    const settings = cloneDefaults();
+    settings.agents.choices.model = 'm-choice';
+    settings.agents.lore.connectionProfileId = 'p1';
+    const saved = saveAgentPreset(settings, 'With models', { now: 10 });
+    saved.agents.stateTracker.model = 'm-live';
+    saved.agentPresets.items[saved.agentPresets.activeId].agents.stateTracker.model = 'm-preset';
+
+    const profiles = [{ id: 'p1', name: 'P1', model: 'm-profile' }];
+    const suggestions = buildModelSuggestions(saved, {
+        profiles,
+        currentModel: 'm-main',
+        cap: 5,
+    });
+    assert.deepEqual(suggestions, ['m-main', 'm-live', 'm-profile', 'm-choice', 'm-preset']);
+    assert.deepEqual(
+        buildModelSuggestions(saved, { profiles, currentModel: 'm-main', cap: 5 }),
+        suggestions,
+        'merging is stable across calls',
+    );
+    assert.equal(
+        buildModelSuggestions(saved, { profiles, currentModel: 'm-main', cap: 2 }).length,
+        2,
+        'suggestions are capped',
+    );
 });
 
 test('the map off-screen settings normalize with defaults', () => {

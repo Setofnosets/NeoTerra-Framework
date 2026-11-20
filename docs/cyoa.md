@@ -87,8 +87,35 @@ conflict is active and **both** switches are on.
 - If all choices are filtered out, the row hides instead of rendering empty
   buttons.
 
+## Routable chips
+
+A choice may carry an optional routable payload: `kind` (`prose | travel |
+combat`) and `target` (a connected location id or `engage`).
+
+- The exploration prompt lists only the current location's **connected**
+  locations as `id — name` (capped at 8) and the current encounter's hostile
+  ids/names, so a chip cannot be created for an unreachable district.
+- `normalizeChoice` validates the target against those allow-lists; an unknown
+  location is downgraded to `prose`, never a broken chip. A valid travel chip
+  round-trips `kind` + `target` and renders
+  `data-neoterra-choice-kind`/`data-neoterra-choice-target`.
+- **Travel** chips run the same handler as the map: validated travel, one
+  arrival frame, the map's close rule (`map.closeOnTravel`), then notice/ambush
+  handling and the next chip set. A rejected travel posts nothing and shows a
+  status line.
+- **Combat** chips (`kind: 'combat'`) require an active encounter; they start
+  the same combat flow as the encounter bar's Engage action. With no encounter
+  they post a short `notice` frame instead ("No one here to fight") and start
+  nothing.
+- A routed chip consumes the same exactly-once guard as a prose chip, so a
+  double click (or a click while travel/combat is in flight) is a no-op.
+
+Free text still goes through SillyTavern's normal send path.
+
 Choices are suggestions only. They never write state; the chosen text becomes
-ordinary player input and the normal trackers process it.
+ordinary player input and the normal trackers process it. A routed travel or
+combat chip is the only exception: it invokes the deterministic engine action
+the chip names, with a visible frame.
 
 ## Data
 

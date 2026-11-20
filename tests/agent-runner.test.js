@@ -12,6 +12,7 @@ import {
     collectCompletionText,
     createAgentClient,
     extractJson,
+    testAgentConnection,
     validateJsonSchema,
 } from '../src/agents/client.js';
 import {
@@ -960,4 +961,138 @@ test('agent client requests are asynchronous and do not block the caller', async
     const result = await pending;
     assert.deepEqual(result.value, { ok: true });
     client.dispose();
+});
+
+test('testAgentConnection reports route, profile, model, and latency on success', async () => {
+    const settings = makeSettings({
+        stateTracker: { model: 'm-test', connectionProfileId: 'p1' },
+    });
+    const ctx = {
+        getChatCompletionModel: () => 'main-model',
+        ConnectionManagerRequestService: {
+            getSupportedProfiles: () => [
+                { id: 'p1', name: 'Profile One', api: 'openai', model: 'm1' },
+            ],
+        },
+    };
+    let seen = null;
+    let tick = 1000;
+    const result = await testAgentConnection({
+        ctx,
+        settings,
+        agentId: 'stateTracker',
+        transport: async (request) => {
+            seen = request;
+            return '{"ok":true}';
+        },
+        now: () => (tick += 500),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.route, 'transport');
+    assert.equal(result.model, 'm-test');
+    assert.equal(result.profileName, 'Profile One');
+    assert.ok(result.latencyMs >= 500);
+    assert.match(seen.messages.at(-1).content, /"ok":true/);
+});
+
+test('testAgentConnection surfaces provider errors and timeouts readably', async () => {
+    const unauthorized = Object.assign(new Error('Request failed: 401 Unauthorized'), { status: 401 });
+    const failed = await testAgentConnection({
+        settings: makeSettings(),
+        agentId: 'choices',
+        transport: async () => { throw unauthorized; },
+    });
+    assert.equal(failed.ok, false);
+    assert.match(failed.error, /401/);
+    assert.match(failed.error, /Unauthorized/);
+
+    const timedOut = await testAgentConnection({
+        settings: makeSettings(),
+        agentId: 'choices',
+        timeoutMs: 10,
+        transport: ({ signal }) => new Promise((resolve, reject) => {
+            signal.addEventListener('abort', () => {
+                const error = new Error('aborted');
+                error.name = 'AbortError';
+                reject(error);
+            }, { once: true });
+        }),
+    });
+    assert.equal(timedOut.ok, false);
+    assert.match(timedOut.error, /timed out after 10ms/);
+});
+
+test('testAgentConnection probes disabled agents and honours overrides', async () => {
+    const settings = makeSettings({ choices: { enabled: false } });
+    const ctx = {
+        ConnectionManagerRequestService: {
+            getSupportedProfiles: () => [
+                { id: 'p2', name: 'Profile Two', api: 'openai', model: 'm2' },
+            ],
+        },
+    };
+    const result = await testAgentConnection({
+        ctx,
+        settings,
+        agentId: 'choices',
+        overrides: { model: 'override-model', connectionProfileId: 'p2' },
+        transport: async () => '{"ok":true}',
+    });
+    assert.equal(result.ok, true, 'testing is diagnostic even when the agent is disabled');
+    assert.equal(result.model, 'override-model');
+    assert.equal(result.profileName, 'Profile Two');
+
+    const noRoute = await testAgentConnection({ ctx: {}, settings: makeSettings(), agentId: 'choices' });
+    assert.equal(noRoute.ok, false);
+    assert.match(noRoute.error, /transport|route/i);
+});
+
+test('testAgentConnection probes the configured profile without silent fallback', async () => {
+    const settings = makeSettings({ choices: { connectionProfileId: 'p1' } });
+    let sent = 0;
+    const ctx = {
+        ConnectionManagerRequestService: {
+            getSupportedProfiles: () => [{ id: 'p1', name: 'Profile One', api: 'openai', model: 'm1' }],
+            sendRequest: async () => { sent += 1; return '{"ok":true}'; },
+        },
+        generateRaw: async () => { throw new Error('should not fall back'); },
+    };
+    const ok = await testAgentConnection({ ctx, settings, agentId: 'choices' });
+    assert.equal(ok.ok, true);
+    assert.equal(ok.route, 'profile');
+    assert.equal(sent, 1);
+
+    const brokenCtx = {
+        ConnectionManagerRequestService: {
+            getSupportedProfiles: () => [],
+            sendRequest: async () => { throw new Error('Profile not found (ID: bogus)'); },
+        },
+        generateRaw: async () => '{"ok":true}',
+    };
+    const failed = await testAgentConnection({
+        ctx: brokenCtx,
+        settings: makeSettings({ choices: { connectionProfileId: 'bogus' } }),
+        agentId: 'choices',
+    });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.route, 'profile');
+    assert.match(failed.error, /Profile not found/);
+});
+
+test('testAgentConnection reports the tested profile model, not the main model', async () => {
+    const settings = makeSettings({ choices: { connectionProfileId: 'p1' } });
+    const ctx = {
+        getChatCompletionModel: () => 'main-model',
+        ConnectionManagerRequestService: {
+            getSupportedProfiles: () => [
+                { id: 'p1', name: 'Profile One', api: 'openai', model: 'profile-model' },
+            ],
+            sendRequest: async () => '{"ok":true}',
+        },
+    };
+    const result = await testAgentConnection({ ctx, settings, agentId: 'choices' });
+    assert.equal(result.ok, true);
+    assert.equal(result.route, 'profile');
+    assert.equal(result.profileName, 'Profile One');
+    assert.equal(result.model, 'profile-model');
 });

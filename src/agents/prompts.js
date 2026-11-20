@@ -46,6 +46,50 @@ export const DEFAULT_AGENT_PROMPTS = Object.freeze({
     sceneDescriber: `You are the Neo Terra Scene Describer. Write a short atmospheric description of the place the player just arrived at. Address the player in second person, present tense, for 2-3 sentences. Use only the supplied location, time, cast, and encounter facts. Never introduce new characters, never decide outcomes, never use numbers, and never write state. You are read-only: emit prose data only.`,
 });
 
+/**
+ * Every cadence an agent can honour. Per-agent options are the agent's
+ * default cadence plus the documented extras in `AGENT_CADENCE_EXTRAS`, so the
+ * settings picker can only offer values the runner actually acts on.
+ */
+export const AGENT_CADENCES = Object.freeze([
+    'once',
+    'everyTurn',
+    'everyNTurns',
+    'sceneChange',
+    'actChange',
+    'afterAssistantTurn',
+    'afterTracker',
+    'onTransform',
+    'onRequest',
+    'onTravel',
+    'newspaper',
+    'onIdentityChange',
+]);
+
+/**
+ * Extra cadences each agent honours beyond its default. Only list values the
+ * scheduler actually reads (`src/flows/initiative.js`): storyline/lore always
+ * use `everyNTurns` plus their triggers, the cast director switches between
+ * `sceneChange` and `everyNTurns`, and the auditor between `actChange` and
+ * `everyNTurns`.
+ */
+export const AGENT_CADENCE_EXTRAS = Object.freeze({
+    architect: [],
+    storyline: [],
+    stateTracker: [],
+    castDirector: ['everyNTurns'],
+    lore: [],
+    auditor: ['everyNTurns'],
+    epilogue: [],
+    choices: [],
+    badEnd: [],
+    newspaper: [],
+    formArchitect: [],
+    characterCreator: [],
+    goalInference: [],
+    sceneDescriber: [],
+});
+
 /** Instructions for the single allowed repair attempt. */
 export const DEFAULT_REPAIR_PROMPT = `Your previous answer was not valid. Repair it now.
 Restate and obey the JSON-only contract: return exactly one JSON value, with no markdown fences and no prose before or after it.

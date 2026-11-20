@@ -62,6 +62,37 @@ edge.
 No settings are required: the tab is always available. The graph never mutates
 `WorldState`.
 
+## Player POV
+
+Presence arrays (`locations[].present`, `scene.present`) are an **NPC list**.
+The player is never written into them: `syncPresence`, the season seed, and the
+presence migration all skip `controlledBy === 'player'` (or
+`player.characterId`). Consumers that need the player read `state.player`:
+
+- `buildMapViewModel` exposes `playerLocationId` and renders the played
+  character as a distinct **You are here** marker, not an avatar in `Present:`.
+- Session Home keeps `presentNpcs` and a separate `playerHere` flag.
+- The Codex and Player tabs still list the played character with every
+  per-character action (form swap, re-derive, reset goals, import, generated
+  form review, return to custom).
+
+**Play-as relocation.** `SET_PLAYER_IDENTITY` sets `scene.locationId` to the new
+player's location (taking over a character takes over where they are) and
+re-runs `syncPresence`; the previous player re-enters the NPC pool at their old
+location. `state.player.locationId` mirrors `scene.locationId`.
+
+**Goals.** On identity change, `src/data/goals.js` derives goals from explicit
+card labels first, then from explicit motive sentences. If the result is empty
+and `agents.goalInference.enabled` is on, one bounded
+`onIdentityChange` inference call runs (20 s budget); failures leave goals empty
+and never block the change. `goalsSource` is `card` or `live`; the Codex shows
+the source and an **Infer goals** retry. The deterministic parse always works
+with the agent off.
+
+**Player card.** `identity.cardInstruction` (default `true`) enables the Codex
+instruction and downloadable `<Name>.json` card; the `[NEOTERRA_PLAYER]` prompt
+block gains one `Player card: <Name>` line so the narrator keeps the POV name.
+
 ## Lore agent
 
 When `agents.lore.enabled` is on, `initiative.runLore` runs every

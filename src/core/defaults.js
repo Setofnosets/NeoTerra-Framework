@@ -161,6 +161,13 @@ export const DEFAULT_SETTINGS = freezeDeep({
         epiloguePrompt: DEFAULT_BAD_END_EPILOGUE_PROMPT,
     },
 
+    // Saved snapshots of the `agents` block. `items` is keyed by preset id;
+    // `activeId` only marks the last applied/saved preset for the select.
+    agentPresets: {
+        activeId: '',
+        items: {},
+    },
+
     agents: {
         architect: {
             // The agent stays available for explicit runs; the automatic

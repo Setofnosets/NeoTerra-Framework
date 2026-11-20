@@ -433,9 +433,44 @@
                 A blank prompt uses the built-in role prompt. A blank connection profile uses the
                 main SillyTavern connection.
             </p>
+            <div class="neoterra-agent-presets" data-neoterra-agent-presets>
+                <div class="neoterra-settings-grid">
+                    <label class="neoterra-field">
+                        <span>Preset</span>
+                        <select data-neoterra-preset-select>
+                            <option value="">None</option>
+                        </select>
+                    </label>
+                    <label class="neoterra-field">
+                        <span>Save as</span>
+                        <input type="text" maxlength="60" data-neoterra-preset-name
+                            placeholder="Preset name">
+                    </label>
+                </div>
+                <div class="neoterra-settings-actions">
+                    <button type="button" class="menu_button" data-neoterra-preset-save>Save as…</button>
+                    <button type="button" class="menu_button" data-neoterra-preset-update>Update</button>
+                    <button type="button" class="menu_button" data-neoterra-preset-delete>Delete</button>
+                    <button type="button" class="menu_button" data-neoterra-preset-apply>Apply</button>
+                </div>
+                <p class="neoterra-hint" data-neoterra-preset-status role="status"></p>
+                <p class="neoterra-hint">
+                    Presets snapshot every agent's profile, model, cadence, and prompt. Selecting
+                    one applies it immediately; the Recommended group applies a whole-settings
+                    preset instead. Presets travel with settings export/import.
+                </p>
+            </div>
             <div class="neoterra-agent-config" data-neoterra-agent-config>
                 <p class="neoterra-hint">Loading agent configuration…</p>
             </div>
+            <div class="neoterra-settings-actions">
+                <button type="button" class="menu_button" data-neoterra-test-all-agents>Test all agents</button>
+            </div>
+            <p class="neoterra-hint" data-neoterra-test-all-status role="status"></p>
+            <p class="neoterra-hint">
+                A test sends one tiny request through the agent's configured route. It never changes
+                a setting or enables a disabled agent.
+            </p>
 
             <h4 class="neoterra-section-title">Token budgets</h4>
             <div class="neoterra-settings-grid">

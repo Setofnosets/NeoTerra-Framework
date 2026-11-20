@@ -188,6 +188,27 @@ custom sizes survive and are re-clamped to the map host. Drag and resize use
 the host box, not the browser window, so the panel cannot be dragged outside
 the shell.
 
+## Player marker and travel frames
+
+The map is a view over the same `WorldState`; it never invents presence. Because
+presence is NPC-only, `buildMapViewModel` carries `playerLocationId` (from
+`state.player.locationId ?? state.scene.locationId`) and the panel renders
+`data-neoterra-map-player-here` ("You are here") on that location instead of
+listing the played character in the `Present:` avatar strip. The submenu keeps
+the NPC list and adds `isPlayerHere`.
+
+A successful travel still posts the deterministic arrival frame (one message,
+dedupe key `travel:<chatId>:<from>:<to>:<turn>`) and then may post:
+
+- one `encounter` notice/ambush frame when a hostile notices the player
+  (`travel.noticeFirst`, `travel.ambush`), and
+- one generated `scene` frame keyed `scene-desc:<chatId>:<travelKey>` when
+  `agents.sceneDescriber.enabled` is on.
+
+Neither extra frame changes the travel dedupe key, delays the map close, or
+writes state beyond `flags.travelDescriptions` (last 10 entries). See
+[docs/scene-output.md](docs/scene-output.md#encounter-notice-and-scene-description-frames).
+
 ## Per-chat overrides
 
 Global edits belong in `data/map/overrides.json`. A destroyed bridge, captured

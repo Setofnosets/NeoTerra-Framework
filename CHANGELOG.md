@@ -4,10 +4,56 @@ All notable changes to the Neo Terra Framework are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 1.3.0 (travel feedback follow-up)
+## [1.3.0] - 2026-11-19
+
+**Player POV, actor feedback, and agent control.** Closes the seven reported
+gaps: played characters leave NPC presence, S2 Leila defaults to her villain
+form, POV goals are real, choosing a character produces a card named after
+them, travel/combat choices actually happen, travel narrates its arrival, and
+the settings drawer can save and verify agent configuration.
 
 ### Added
 
+- **Player POV presence** — presence arrays are now NPC-only; the played
+  character is replaced by a distinct **You are here** map marker and keeps
+  every Codex/Player-tab action. Play-as moves the scene to the new character's
+  location, and the previous player re-enters the NPC pool where they stood.
+- **POV goals and player card** — goals are derived from explicit card labels
+  and motive sentences, with one bounded inference pass when empty
+  (`agents.goalInference`, `onIdentityChange` cadence, 20 s budget). The Codex
+  shows the goal source and an **Infer goals** retry. `identity.cardInstruction`
+  (default `true`) adds a copyable "create a card named <Name>" instruction, a
+  downloadable `<Name>.json`, and one `Player card:` line in the player block.
+- **Routable choice chips** — exploration chips may carry
+  `kind: travel|combat` and a connected location `target` (max 8 connections).
+  Clicking a travel chip runs the map's travel path; an engage chip starts the
+  encounter bar's combat flow. Unknown targets downgrade to prose; a routed chip
+  consumes the same exactly-once guard as typed text.
+- **Notice-first arrivals and ambushes** — travel into danger posts one
+  `encounter` frame. The default notice leaves the player the first move; a
+  strong hostile roll in a hostile/contested district (without a stealth
+  arrival) becomes a deterministic ambush that starts combat, flags
+  `flags.lastCombat.ambush`, and restricts the first round to
+  `defend`/`retreat`/`talk-down`/`surrender`. Kill switches:
+  `travel.noticeFirst` and `travel.ambush` (both default `true`).
+- **Generated travel scene** — `agents.sceneDescriber` posts one short,
+  content-gated `scene` frame after the deterministic arrival frame (12 s cap,
+  never blocks the map close) and mirrors the last 10 in
+  `flags.travelDescriptions`.
+- **Agent presets** — `agentPresets` snapshots the `agents` block only; save,
+  update, apply, and delete from the settings drawer, capped at 20 and carried
+  by settings export/import. The Recommended optgroup still holds
+  `cinematic` / `classic` / `sandbox`.
+- **Agent pickers** — connection profile select backed by
+  `ConnectionManagerRequestService.getSupportedProfiles()` with a **Custom id…**
+  fallback, a model combobox, and a cadence select limited to values each agent
+  honours.
+- **Connection test** — per-agent **Test connection** and **Test all agents**
+  send one tiny request through the agent's configured route (20 s cap). A
+  selected connection profile is tested on its own, without falling back to the
+  main connection, so a broken pick fails visibly. The status reports
+  route/profile/model/latency or a readable error; testing never changes a
+  setting or enables a disabled agent.
 - **Travel arrival cues** — every accepted travel now announces itself from the
   travel flow (never the turn diff): a destination toast with the time slot,
   district, and encounter line (`travel:<from>:<to>:<lastAt>`), a **Return to
@@ -21,6 +67,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **S2 Leila is seeded as Femme Feral** — the S2 roster now points at
+  `s2.leila.renya.femme.feral` (villain) for the season's date; the fallen
+  `s2.leila.renya` card remains reachable through `altFormsAllowed` and a form
+  swap. Roster `formId` is authoritative for canon POV forms.
 - **Spike B closed: `map.closeOnTravel` stays `true`** — the 1.3 follow-up re-run
   found that keep-open now orients the player without reopening the map, but the
   default does not move: the scene card behind the map is still one click away

@@ -209,6 +209,21 @@ multi-threat behavior. For a living example, read `data/seasons/s4.json`
 (two main threats, post-victory arcs) and `data/seasons/s1dark.json`
 (villain POV, default canon player).
 
+## Roster forms and the default POV form
+
+`roster[].formId` is authoritative for a canon character's seeded form: the
+season seed uses that form's side, portrait, and traits, and the identity step
+highlights the same option. `resolveIdentitySelection` returns the roster
+`formId` for canon picks and the roster entry id for sandbox/guest picks, so a
+chosen form is no longer dropped between the identity step and the seed.
+
+S2 is the worked example: its roster points Leila at
+`s2.leila.renya.femme.feral` (`side: villain`) because the season's date
+(2042-05-04) is post-usurpation and pre-defeat. The post-defeat base card
+`s2.leila.renya` (`side: vigilante`) stays in `altFormsAllowed`, so a
+`TRANSFORM` back to the fallen form still works. When adding a season, list the
+canon-era form as `formId` and the alternates in `altFormsAllowed`.
+
 ## Narrator card
 
 Director mode uses `assets/neoterra-director.json`, a bundled V2 character card

@@ -19,7 +19,13 @@ small schema-constrained agents that never free-write state.
   appears as a disabled "auxiliary data present — coming later" card.
 - **Player identity** — custom persona by default, or "Play as" a canon
   character from the current roster (any registry character in Sandbox, with a
-  persistent non-canon warning).
+  persistent non-canon warning). Playing as a character moves the scene to
+  their location and removes them from every NPC presence surface; the map marks
+  their location with **You are here** instead. Their goals are derived from the
+  card (with one optional inference pass), and the Codex offers a copyable
+  instruction plus a downloadable card named after the POV. See
+  [docs/relationships.md](docs/relationships.md#player-pov) and
+  [docs/scene-output.md](docs/scene-output.md).
 - **In-chat scene output** — season start and travel post deduped Neo Terra
   narrator frames into the same chat, including a "your move" kickoff card and
   travel arrival/encounter prose. World state stays in the prompt, not the
@@ -60,7 +66,10 @@ small schema-constrained agents that never free-write state.
   stored epilogues; continue as the character or as someone else.
 - **Optional CYOA choices** — 4 context-derived choices by default, labels up
   to 100 characters, plus a completely independent tactical combat-choices
-  setting.
+  setting. Travel and combat chips carry a routable `kind`/`target`, so clicking
+  one runs the same travel/engage action as the map or encounter bar and posts a
+  visible frame (including a hostile **notice** or deterministic **ambush** on
+  arrival). See [docs/cyoa.md](docs/cyoa.md#routable-chips).
 - **Content gate (off by default)** — `full`, `reduced`, `mature-only`,
   `strict`, with per-character and per-player hard limits that always win.
 - **SVG map** — 36 districts, 12 bridges, and 22 key locations extracted from
@@ -71,7 +80,10 @@ small schema-constrained agents that never free-write state.
   attrition, with `/neoterra-roll` and a registered dice function tool.
 - **Codex and settings** — searchable cast, live state, form lineage, bad-end
   badges, "Play as", agent routing/prompts/cadence, token budgets, world
-  export/import, and card-import override generation.
+  export/import, and card-import override generation. The Agents section now has
+  saved presets (`agentPresets`), connection-profile and cadence pickers, a
+  model combobox, and a per-agent **Test connection** (plus **Test all agents**)
+  that sends one tiny request without changing any setting.
 - **Living city (V1.1)** — a fiction clock with a one-click time brake, an
   off-screen world tick, a pacing director, an opt-in in-world newspaper, fog
   of war, a **Relations** graph tab, and a generic **Domain** sensorium for
@@ -85,6 +97,11 @@ small schema-constrained agents that never free-write state.
   act-boundary continuity findings, the opt-in Bad End panel, an agent log
   drawer, optional season-start Architect passes, optional side beats,
   deterministic downtime actions, and season-specific ending-pilot epilogues.
+- **Player POV and agent control (V1.3)** — NPC-only presence with a player map
+  marker; Play-as relocation; S2's Leila seeded as Femme Feral; derived/inferred
+  goals and a named player card; routable travel/combat chips; notice-first
+  arrivals and deterministic ambushes; a generated travel scene description; and
+  agent presets, pickers, and connection tests.
 
 > **Experience audit:** [docs/experience-audit.md](docs/experience-audit.md)
 > records the 2026-11-18 audit of the in-play experience, the intended-vs-actual
@@ -227,6 +244,12 @@ reflect the updated state. The season opening frame and a travel arrival frame
 also request choices when `cyoa.enabled` is on, even though no
 `MESSAGE_RECEIVED` event fired for them.
 
+Travel chips may only target a directly connected location (at most eight), and
+an engage chip only appears when an encounter exists. Clicking a travel chip
+runs the map's travel path (arrival frame, map-close rule, encounter/notice
+handling) and clicking an engage chip starts the encounter bar's combat flow;
+both consume the same exactly-once guard as prose chips.
+
 ---
 
 ## Settings handoff
@@ -238,6 +261,18 @@ instead of silently scrolling a hidden element. Re-clicking with the drawer
 already open leaves it open. If `#rm_extensions_block` or the Neo Terra panel
 is missing, the Settings tab shows a visible status message and logs the
 failure.
+
+Agent control lives in the same panel. **Presets** snapshot the `agents` block
+only (`agentPresets`) and travel with settings export/import; the Recommended
+group still holds the whole-settings `cinematic` / `classic` / `sandbox`
+presets. Connection profile IDs come from
+`ConnectionManagerRequestService.getSupportedProfiles()` with a **Custom id…**
+fallback, the model field is a free-text combobox, and cadence is a select of
+the values each agent actually honours. **Test connection** resolves the
+agent's configured route and sends one tiny request (20 s cap); when a
+connection profile is selected it tests that profile only (no silent fallback),
+so a broken pick fails visibly. Failures never change a setting or disable an
+agent.
 
 ---
 

@@ -21,6 +21,7 @@ import {
     DEFAULT_SETTINGS,
     cloneDefaults,
 } from './defaults.js';
+import { MAX_AGENT_PRESETS, MAX_AGENT_PRESET_NAME } from './agent-presets.js';
 import {
     NEWSROOM_MAX_HEADLINES,
     NEWSPAPER_STYLES,
@@ -197,6 +198,33 @@ function normalizeAgents(agents, defaults) {
     return out;
 }
 
+function normalizeAgentPresets(presets, agentsDefaults) {
+    const source = isPlainObject(presets) ? presets : {};
+    const rawItems = isPlainObject(source.items) ? source.items : {};
+    const entries = Object.entries(rawItems)
+        .filter(([, preset]) => isPlainObject(preset))
+        .filter(([, preset]) => typeof preset.name === 'string' && preset.name.trim().length > 0)
+        .sort((a, b) => (Number(a[1].createdAt) || 0) - (Number(b[1].createdAt) || 0))
+        .slice(0, MAX_AGENT_PRESETS);
+
+    const items = {};
+    for (const [id, preset] of entries) {
+        items[id] = {
+            name: preset.name.trim().slice(0, MAX_AGENT_PRESET_NAME),
+            createdAt: asNumber(preset.createdAt, 0, { min: 0, max: 8.64e15, integer: true }),
+            agents: normalizeAgents(
+                isPlainObject(preset.agents) ? preset.agents : {},
+                agentsDefaults,
+            ),
+        };
+    }
+
+    const activeId = typeof source.activeId === 'string' && Object.hasOwn(items, source.activeId)
+        ? source.activeId
+        : '';
+    return { ...source, activeId, items };
+}
+
 function normalizeTokenBudget(budget, defaults) {
     const out = { ...budget };
     for (const [key, defaultValue] of Object.entries(defaults)) {
@@ -345,6 +373,10 @@ export function normalizeSettings(settings) {    const defaults = DEFAULT_SETTIN
         travel: normalizeTravel(
             isPlainObject(settings.travel) ? settings.travel : {},
             defaults.travel,
+        ),
+        agentPresets: normalizeAgentPresets(
+            isPlainObject(settings.agentPresets) ? settings.agentPresets : {},
+            defaults.agents,
         ),
         agents: normalizeAgents(isPlainObject(settings.agents) ? settings.agents : {}, defaults.agents),
         tokenBudget: normalizeTokenBudget(

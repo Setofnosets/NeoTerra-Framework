@@ -10,13 +10,32 @@ import {
     DEFAULT_BAD_END_EPILOGUE_PROMPT,
     DEFAULT_BAD_END_PROMPT,
     DEFAULT_SETTINGS,
+    UI_PRESETS,
+    applyUiPreset,
 } from '../core/defaults.js';
-import { DEFAULT_AGENT_PROMPTS } from '../agents/prompts.js';
+import {
+    applyAgentPreset,
+    deleteAgentPreset,
+    listAgentPresets,
+    saveAgentPreset,
+} from '../core/agent-presets.js';
+import {
+    AGENT_CADENCES,
+    AGENT_CADENCE_EXTRAS,
+    DEFAULT_AGENT_PROMPTS,
+} from '../agents/prompts.js';
+import { testAgentConnection } from '../agents/client.js';
 import { loadRegistry } from '../data/registry.js';
 import { bus, EVENTS } from '../core/events.js';
 import { readLiveContext, resolveActiveChatId } from '../core/live-context.js';
 import { createLogger } from '../core/logger.js';
-import { getSettings, resetSettings, saveSettings, setByPath } from '../core/settings.js';
+import {
+    getByPath,
+    getSettings,
+    resetSettings,
+    saveSettings,
+    setByPath,
+} from '../core/settings.js';
 import { downloadJson } from './download.js';
 import { createWorldStateStore } from '../state/store.js';
 import { migrateWorldState } from '../state/migrations.js';
@@ -47,6 +66,7 @@ export const AGENT_LABELS = Object.freeze({
     formArchitect: 'Form architect',
     characterCreator: 'Character creator',
     goalInference: 'Goal inference',
+    sceneDescriber: 'Scene describer',
 });
 
 /** Default values restored by the per-prompt reset buttons. */
@@ -64,6 +84,7 @@ export function defaultPromptFor(path) {
 
 let panelAbort = null;
 let mountedCtx = null;
+let activeTestAbort = null;
 
 function hasDom() {
     return typeof document !== 'undefined' && typeof window !== 'undefined';
@@ -398,7 +419,21 @@ function writeValue(input, value) {
     } else if (input.dataset.neoterraType === 'boolean') {
         input.value = String(value === true);
     } else if (value !== undefined && value !== null) {
-        input.value = String(value);
+        const text = String(value);
+        if (input.tagName === 'SELECT') {
+            // Preserve a stored value the option list does not know (older
+            // cadences, custom profile ids) instead of silently blanking it.
+            const options = typeof input.options?.length === 'number' ? [...input.options] : [];
+            if (!options.some((option) => option.value === text)) {
+                const option = input.ownerDocument?.createElement?.('option');
+                if (option) {
+                    option.value = text;
+                    option.textContent = text;
+                    input.appendChild(option);
+                }
+            }
+        }
+        input.value = text;
     }
 }
 
@@ -424,15 +459,162 @@ function limitOptions(selected) {
     )).join('');
 }
 
+function isRecord(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Normalize `ConnectionManagerRequestService.getSupportedProfiles()` output:
+ * drop entries without an id/api, drop disabled profiles, dedupe by id.
+ */
+export function normalizeConnectionProfiles(profiles) {
+    const list = Array.isArray(profiles) ? profiles : [];
+    const seen = new Set();
+    const out = [];
+    for (const profile of list) {
+        if (!isRecord(profile)) {
+            continue;
+        }
+        const id = typeof profile.id === 'string' ? profile.id.trim() : '';
+        if (!id || seen.has(id) || profile.disabled === true || !profile.api) {
+            continue;
+        }
+        seen.add(id);
+        out.push({
+            id,
+            name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : id,
+            model: typeof profile.model === 'string' ? profile.model.trim() : '',
+        });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Read the connection profiles available to the picker. Never throws: when the
+ * Connection Manager is absent or disabled, callers get the fallback shape.
+ */
+export function readConnectionProfiles(ctx) {
+    const service = ctx?.ConnectionManagerRequestService;
+    if (typeof service?.getSupportedProfiles !== 'function') {
+        return { available: false, profiles: [] };
+    }
+    try {
+        return { available: true, profiles: normalizeConnectionProfiles(service.getSupportedProfiles()) };
+    } catch (error) {
+        logger.debug('Could not read connection profiles', error);
+        return { available: false, profiles: [] };
+    }
+}
+
+/** Read the picker state (profiles + current main model) from a live context. */
+export function readAgentPickerContext(ctx) {
+    const connection = readConnectionProfiles(ctx);
+    let currentModel = '';
+    try {
+        if (typeof ctx?.getChatCompletionModel === 'function') {
+            const value = ctx.getChatCompletionModel();
+            currentModel = typeof value === 'string' ? value : '';
+        }
+    } catch {
+        // The model getter is best-effort; the combobox still accepts free text.
+    }
+    return { ...connection, currentModel };
+}
+
+export const MAX_MODEL_SUGGESTIONS = 20;
+
+/**
+ * Merge model suggestions for the combobox: the current main model, every
+ * stored agent model, every selected profile's model, and the models saved in
+ * presets. Stable order, deduped, capped.
+ */
+export function buildModelSuggestions(settings, { profiles = [], currentModel = '', cap = MAX_MODEL_SUGGESTIONS } = {}) {
+    const byId = new Map((Array.isArray(profiles) ? profiles : []).map((profile) => [profile.id, profile]));
+    const values = [];
+    const add = (value) => {
+        const text = String(value ?? '').trim();
+        if (text && !values.includes(text)) {
+            values.push(text);
+        }
+    };
+    add(currentModel);
+    const addAgent = (agent) => {
+        if (!isRecord(agent)) {
+            return;
+        }
+        add(agent.model);
+        const profile = byId.get(agent.connectionProfileId);
+        if (profile?.model) {
+            add(profile.model);
+        }
+    };
+    for (const agent of Object.values(isRecord(settings?.agents) ? settings.agents : {})) {
+        addAgent(agent);
+    }
+    for (const preset of Object.values(isRecord(settings?.agentPresets?.items) ? settings.agentPresets.items : {})) {
+        for (const agent of Object.values(isRecord(preset?.agents) ? preset.agents : {})) {
+            addAgent(agent);
+        }
+    }
+    return values.slice(0, Math.max(1, cap));
+}
+
+/**
+ * Options for one agent's connection-profile select. A stored id that is not
+ * in the profile list is preserved as a selected "Custom id…" option.
+ */
+export function buildAgentProfileOptionsMarkup(profiles, storedValue = '') {
+    const list = Array.isArray(profiles) ? profiles : [];
+    const value = String(storedValue ?? '');
+    const custom = value !== '' && !list.some((profile) => profile.id === value);
+    const options = [
+        `<option value="" ${value === '' ? 'selected' : ''}>Main connection</option>`,
+    ];
+    for (const profile of list) {
+        const label = profile.model ? `${profile.name} (${profile.model})` : profile.name;
+        options.push(
+            `<option value="${escapeHtml(profile.id)}" ${profile.id === value ? 'selected' : ''}>${escapeHtml(label)}</option>`,
+        );
+    }
+    options.push(
+        `<option value="__custom__" ${custom ? 'selected' : ''}>Custom id…</option>`,
+    );
+    return options.join('');
+}
+
+/** Cadence options an agent actually honours (default first). */
+export function cadenceOptionsForAgent(agentId) {
+    const defaults = DEFAULT_SETTINGS.agents[agentId] ?? {};
+    const values = [];
+    const add = (value) => {
+        if (typeof value === 'string' && value && AGENT_CADENCES.includes(value) && !values.includes(value)) {
+            values.push(value);
+        }
+    };
+    add(defaults.cadence);
+    for (const value of AGENT_CADENCE_EXTRAS[agentId] ?? []) {
+        add(value);
+    }
+    return values;
+}
+
+function buildCadenceOptionsMarkup(agentId) {
+    return cadenceOptionsForAgent(agentId)
+        .map((cadence) => `<option value="${cadence}">${cadence}</option>`)
+        .join('');
+}
+
 /** Markup for one agent's routing/prompt/cadence row. Exported for tests. */
 export function buildAgentConfigMarkup() {
-    return AGENT_IDS.map((id) => {
+    const rows = AGENT_IDS.map((id) => {
         const defaults = DEFAULT_SETTINGS.agents[id] ?? {};
         const prompt = DEFAULT_AGENT_PROMPTS[id] ?? '';
+        const path = `agents.${id}.connectionProfileId`;
         const cadenceExtra = Object.hasOwn(defaults, 'everyNTurns')
             ? `<label class="neoterra-field">
                     <span>Every N turns</span>
-                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.${id}.everyNTurns">
+                    <input type="number" min="1" max="100" step="1" data-neoterra-path="agents.${id}.everyNTurns"
+                        title="1-100 turns, default ${escapeHtml(defaults.everyNTurns)}">
                 </label>`
             : '';
         const locationExtra = Object.hasOwn(defaults, 'onLocationChange')
@@ -453,31 +635,54 @@ export function buildAgentConfigMarkup() {
                     <input type="checkbox" data-neoterra-path="agents.${id}.enabled">
                     <span><strong>${escapeHtml(AGENT_LABELS[id] ?? id)}</strong></span>
                 </label>
-                <button type="button" class="menu_button" data-neoterra-reset-prompt="agents.${id}.prompt">
-                    Reset prompt
-                </button>
+                <div class="neoterra-settings-actions">
+                    <button type="button" class="menu_button" data-neoterra-test-agent="${id}">
+                        Test connection
+                    </button>
+                    <button type="button" class="menu_button" data-neoterra-reset-prompt="agents.${id}.prompt">
+                        Reset prompt
+                    </button>
+                </div>
             </header>
             <div class="neoterra-settings-grid">
                 <label class="neoterra-field">
-                    <span>Connection profile ID</span>
-                    <input type="text" data-neoterra-path="agents.${id}.connectionProfileId"
-                        placeholder="Main connection">
+                    <span>Connection profile</span>
+                    <select data-neoterra-profile-select="${path}">
+                        <option value="">Main connection</option>
+                        <option value="__custom__">Custom id…</option>
+                    </select>
                 </label>
+                <label class="neoterra-field" data-neoterra-profile-custom="${path}" hidden>
+                    <span>Custom profile id</span>
+                    <input type="text" data-neoterra-path="${path}">
+                </label>
+                <p class="neoterra-hint" data-neoterra-profile-hint="${path}" hidden></p>
                 <label class="neoterra-field">
-                    <span>Model override</span>
-                    <input type="text" data-neoterra-path="agents.${id}.model" placeholder="Default model">
+                    <span>Model</span>
+                    <input type="text" list="neoterra-model-options" data-neoterra-path="agents.${id}.model"
+                        placeholder="Default model">
                 </label>
+                <div class="neoterra-settings-actions">
+                    <button type="button" class="menu_button" data-neoterra-fetch-models="${id}">
+                        Refresh model suggestions
+                    </button>
+                </div>
+                <p class="neoterra-hint" data-neoterra-model-status="${id}" role="status"></p>
                 <label class="neoterra-field">
                     <span>Temperature</span>
-                    <input type="number" min="0" max="2" step="0.05" data-neoterra-path="agents.${id}.temperature">
+                    <input type="number" min="0" max="2" step="0.05" data-neoterra-path="agents.${id}.temperature"
+                        title="0-2, default ${escapeHtml(defaults.temperature)}">
                 </label>
                 <label class="neoterra-field">
                     <span>Max tokens</span>
-                    <input type="number" min="64" max="65536" step="64" data-neoterra-path="agents.${id}.maxTokens">
+                    <input type="number" min="64" max="65536" step="64" data-neoterra-path="agents.${id}.maxTokens"
+                        title="64-65536 tokens, default ${escapeHtml(defaults.maxTokens)}">
                 </label>
                 <label class="neoterra-field">
                     <span>Cadence</span>
-                    <input type="text" data-neoterra-path="agents.${id}.cadence">
+                    <select data-neoterra-path="agents.${id}.cadence">
+                        ${buildCadenceOptionsMarkup(id)}
+                    </select>
                 </label>
                 ${cadenceExtra}
                 ${locationExtra}
@@ -488,8 +693,368 @@ export function buildAgentConfigMarkup() {
                 <textarea rows="3" data-neoterra-path="agents.${id}.prompt"
                     placeholder="${escapeHtml(prompt)}"></textarea>
             </label>
+            <p class="neoterra-hint" data-neoterra-test-status="${id}" role="status"></p>
         </section>`;
     }).join('');
+    return `<datalist id="neoterra-model-options" data-neoterra-model-options></datalist>${rows}`;
+}
+
+let agentPickerState = { available: false, profiles: [], currentModel: '' };
+
+/** Repaint the profile selects, custom-id inputs, and the shared model list. */
+export function syncAgentPickers(root, settings, pickerState = agentPickerState) {
+    const state = isRecord(pickerState) ? pickerState : { available: false, profiles: [], currentModel: '' };
+    const profiles = Array.isArray(state.profiles) ? state.profiles : [];
+    for (const select of root.querySelectorAll('[data-neoterra-profile-select]')) {
+        const path = select.dataset.neoterraProfileSelect;
+        const stored = String(getByPath(settings, path) ?? '');
+        select.innerHTML = buildAgentProfileOptionsMarkup(profiles, stored);
+        select.hidden = state.available === false;
+        select.disabled = state.available === false;
+        const customHost = root.querySelector(`[data-neoterra-profile-custom="${path}"]`);
+        const isCustom = stored !== '' && !profiles.some((profile) => profile.id === stored);
+        if (customHost) {
+            customHost.hidden = state.available !== false && !isCustom;
+        }
+        const hint = root.querySelector(`[data-neoterra-profile-hint="${path}"]`);
+        if (hint) {
+            hint.hidden = state.available !== false;
+            hint.textContent = state.available === false
+                ? 'Connection Manager is not available; type the profile id manually.'
+                : '';
+        }
+    }
+    const datalist = root.querySelector('[data-neoterra-model-options]');
+    if (datalist) {
+        const suggestions = buildModelSuggestions(settings, {
+            profiles,
+            currentModel: state.currentModel,
+        });
+        datalist.innerHTML = suggestions
+            .map((model) => `<option value="${escapeHtml(model)}"></option>`)
+            .join('');
+    }
+}
+
+/**
+ * Options for the agent preset select. Value scheme:
+ * `preset:<id>` = a saved snapshot of the `agents` block;
+ * `ui:<id>` = one of the recommended whole-settings presets.
+ * Exported for tests.
+ */
+export function buildAgentPresetOptionsMarkup(settings) {
+    const presets = listAgentPresets(settings);
+    const activeId = settings?.agentPresets?.activeId ?? '';
+    const saved = presets.map((preset) => (
+        `<option value="preset:${escapeHtml(preset.id)}" ${preset.id === activeId ? 'selected' : ''}>${escapeHtml(preset.name)}</option>`
+    )).join('');
+    const recommended = UI_PRESETS.map((preset) => (
+        `<option value="ui:${escapeHtml(preset.id)}">${escapeHtml(preset.label)}</option>`
+    )).join('');
+    return [
+        '<option value="">None</option>',
+        saved ? `<optgroup label="Saved">${saved}</optgroup>` : '',
+        `<optgroup label="Recommended">${recommended}</optgroup>`,
+    ].join('');
+}
+
+function setPresetStatus(root, text) {
+    const host = root.querySelector('[data-neoterra-preset-status]');
+    if (host) {
+        host.textContent = text;
+    }
+}
+
+function readPresetSelection(root) {
+    const select = root.querySelector('[data-neoterra-preset-select]');
+    return String(select?.value ?? '');
+}
+
+function applyPresetSelection(ctx, root, value) {
+    const settings = getSettings(ctx);
+    if (!value) {
+        // "None" means no saved preset is active; clearing the marker stops
+        // the next repaint from re-selecting a stale preset.
+        const cleared = saveSettings(ctx, {
+            ...settings,
+            agentPresets: { ...(settings.agentPresets ?? {}), activeId: '' },
+        });
+        setPresetStatus(root, 'Preset selection cleared.');
+        paintSettingsPanel(ctx, root);
+        syncDependentFields(root, cleared);
+        bus.emit(EVENTS.SETTINGS_CHANGED, { path: 'agentPresets', settings: cleared });
+        return cleared;
+    }
+    let saved = null;
+    const changedPath = value.startsWith('ui:') ? '*' : 'agents';
+    try {
+        if (value.startsWith('ui:')) {
+            const id = value.slice(3);
+            const next = applyUiPreset(settings, id);
+            // A whole-settings preset is not the snapshot the saved preset
+            // marker refers to; clear it so Update cannot overwrite the latter.
+            next.agentPresets = { ...(next.agentPresets ?? {}), activeId: '' };
+            saved = saveSettings(ctx, next);
+            const label = UI_PRESETS.find((preset) => preset.id === id)?.label ?? id;
+            setPresetStatus(root, `Applied the recommended ${label} preset.`);
+        } else if (value.startsWith('preset:')) {
+            const id = value.slice(7);
+            saved = saveSettings(ctx, applyAgentPreset(settings, id));
+            const preset = listAgentPresets(saved).find((item) => item.id === id);
+            const nameInput = root.querySelector('[data-neoterra-preset-name]');
+            if (nameInput && preset) {
+                nameInput.value = preset.name;
+            }
+            setPresetStatus(
+                root,
+                `Applied preset ${preset?.name ?? id} to ${Object.keys(saved.agents ?? {}).length} agents.`,
+            );
+        } else {
+            setPresetStatus(root, 'Unknown preset selection.');
+            return null;
+        }
+    } catch (error) {
+        setPresetStatus(root, `Preset failed: ${error?.message ?? error}`);
+        return null;
+    }
+    paintSettingsPanel(ctx, root);
+    syncDependentFields(root, saved);
+    bus.emit(EVENTS.SETTINGS_CHANGED, { path: changedPath, settings: saved });
+    return saved;
+}
+
+function handlePresetAction(ctx, root, button) {
+    const selection = readPresetSelection(root);
+    const presetId = selection.startsWith('preset:') ? selection.slice(7) : null;
+    const nameInput = root.querySelector('[data-neoterra-preset-name]');
+    const typedName = String(nameInput?.value ?? '').trim();
+    const settings = getSettings(ctx);
+    let next = null;
+    try {
+        if (button.matches('[data-neoterra-preset-save]')) {
+            // "Save as…" always creates a new preset; "Update" edits the
+            // selected one in place.
+            next = saveAgentPreset(settings, typedName);
+            setPresetStatus(root, `Saved preset ${listAgentPresets(next).find((item) => item.id === next.agentPresets.activeId)?.name ?? typedName} with ${Object.keys(next.agents ?? {}).length} agents.`);
+        } else if (button.matches('[data-neoterra-preset-update]')) {
+            if (!presetId) {
+                setPresetStatus(root, 'Select a saved preset before choosing Update.');
+                return;
+            }
+            const existing = listAgentPresets(settings).find((item) => item.id === presetId);
+            next = saveAgentPreset(settings, typedName || existing?.name || '', { id: presetId });
+            setPresetStatus(root, `Updated preset ${existing?.name ?? presetId}.`);
+        } else if (button.matches('[data-neoterra-preset-delete]')) {
+            if (!presetId) {
+                setPresetStatus(root, 'Select a saved preset before choosing Delete.');
+                return;
+            }
+            const existing = listAgentPresets(settings).find((item) => item.id === presetId);
+            next = deleteAgentPreset(settings, presetId);
+            setPresetStatus(root, `Deleted preset ${existing?.name ?? presetId}.`);
+        } else if (button.matches('[data-neoterra-preset-apply]')) {
+            applyPresetSelection(ctx, root, selection);
+            return;
+        }
+    } catch (error) {
+        setPresetStatus(root, `${error?.message ?? error}`);
+        return;
+    }
+    if (!next) {
+        return;
+    }
+    const saved = saveSettings(ctx, next);
+    paintSettingsPanel(ctx, root);
+    syncDependentFields(root, saved);
+    bus.emit(EVENTS.SETTINGS_CHANGED, { path: 'agentPresets', settings: saved });
+}
+
+function handleProfileSelect(ctx, root, select) {
+    const path = select.dataset.neoterraProfileSelect;
+    if (String(select.value) === '__custom__') {
+        const customHost = root.querySelector(`[data-neoterra-profile-custom="${path}"]`);
+        const input = customHost?.querySelector?.('input') ?? null;
+        // Never leave a stale profile id behind the "Custom id…" label: the
+        // stored value becomes whatever the text input currently holds.
+        const settings = getSettings(ctx);
+        setByPath(settings, path, String(input?.value ?? '').trim());
+        const saved = saveSettings(ctx, settings);
+        if (customHost) {
+            customHost.hidden = false;
+        }
+        if (!String(input?.value ?? '').trim()) {
+            // Empty custom id === main connection until the user types one.
+            select.value = '';
+        }
+        input?.focus?.();
+        syncDependentFields(root, saved);
+        bus.emit(EVENTS.SETTINGS_CHANGED, { path, settings: saved });
+        return;
+    }
+    const settings = getSettings(ctx);
+    setByPath(settings, path, String(select.value));
+    const saved = saveSettings(ctx, settings);
+    paintSettingsPanel(ctx, root);
+    syncDependentFields(root, saved);
+    bus.emit(EVENTS.SETTINGS_CHANGED, { path, settings: saved });
+}
+
+/**
+ * Best-effort model list. SillyTavern exposes no stable cross-provider model
+ * API, so this only fills the datalist from data we already have and tells the
+ * user to type a model id otherwise. Never throws.
+ */
+function handleFetchModels(ctx, root, agentId) {
+    const status = root.querySelector(`[data-neoterra-model-status="${agentId}"]`);
+    const settings = getSettings(ctx);
+    const storedId = String(settings.agents?.[agentId]?.connectionProfileId ?? '');
+    const profiles = Array.isArray(agentPickerState.profiles) ? agentPickerState.profiles : [];
+    const profile = profiles.find((item) => item.id === storedId);
+    const models = [];
+    const collect = (list) => {
+        for (const value of Array.isArray(list) ? list : []) {
+            if (typeof value === 'string' && value.trim() && !models.includes(value.trim())) {
+                models.push(value.trim());
+            }
+        }
+    };
+    if (profile) {
+        collect(profile.models);
+        collect(profile.modelList);
+    }
+    if (models.length === 0 && agentPickerState.currentModel) {
+        models.push(agentPickerState.currentModel);
+    }
+    const suggestions = buildModelSuggestions(settings, {
+        profiles,
+        currentModel: agentPickerState.currentModel,
+    });
+    collect(suggestions);
+    const datalist = root.querySelector('[data-neoterra-model-options]');
+    if (datalist) {
+        datalist.innerHTML = models
+            .slice(0, MAX_MODEL_SUGGESTIONS)
+            .map((model) => `<option value="${escapeHtml(model)}"></option>`)
+            .join('');
+    }
+    if (status) {
+        status.textContent = models.length > 0
+            ? `Refreshed ${models.length} model suggestion(s). Pick one or type a model id.`
+            : 'No model list is available for this provider — type a model id.';
+    }
+}
+
+function formatTestStatus(result) {
+    if (!result?.ok) {
+        return `Failed · ${result?.error ?? 'unknown error'}`;
+    }
+    const parts = ['OK', result.route ?? 'route'];
+    if (result.profileName) {
+        parts.push(result.profileName);
+    }
+    if (result.model) {
+        parts.push(result.model);
+    }
+    parts.push(`${(Math.max(0, Number(result.latencyMs) || 0) / 1000).toFixed(1)} s`);
+    return parts.join(' · ');
+}
+
+async function runAgentTest(ctx, root, agentId, { signal = null } = {}) {
+    const button = root.querySelector(`[data-neoterra-test-agent="${agentId}"]`);
+    const status = root.querySelector(`[data-neoterra-test-status="${agentId}"]`);
+    const controller = signal ? null : new AbortController();
+    if (controller) {
+        activeTestAbort?.abort();
+        activeTestAbort = controller;
+    }
+    const requestSignal = signal ?? controller.signal;
+    const live = resolveWorldContext(ctx);
+    const chatId = resolveActiveChatId(live);
+    if (button) {
+        button.disabled = true;
+    }
+    if (status) {
+        status.textContent = 'Testing…';
+    }
+    try {
+        const result = await testAgentConnection({
+            ctx: live,
+            settings: getSettings(live),
+            agentId,
+            timeoutMs: 20000,
+            signal: requestSignal,
+        });
+        // A closed panel or a chat switch makes the result stale: drop it
+        // instead of writing into a detached panel or the wrong chat.
+        if (requestSignal.aborted || resolveActiveChatId(resolveWorldContext(ctx)) !== chatId) {
+            return { ...result, ok: false, aborted: true, error: 'cancelled' };
+        }
+        if (status) {
+            status.textContent = formatTestStatus(result);
+        }
+        return result;
+    } finally {
+        if (button) {
+            button.disabled = false;
+        }
+        if (controller && activeTestAbort === controller) {
+            activeTestAbort = null;
+        }
+    }
+}
+
+async function handleTestAllAgents(ctx, root) {
+    const button = root.querySelector('[data-neoterra-test-all-agents]');
+    const summary = root.querySelector('[data-neoterra-test-all-status]');
+    if (button?.disabled) {
+        return;
+    }
+    activeTestAbort?.abort();
+    const controller = new AbortController();
+    activeTestAbort = controller;
+    if (button) {
+        button.disabled = true;
+    }
+    const live = resolveWorldContext(ctx);
+    const chatId = resolveActiveChatId(live);
+    let completed = 0;
+    let ok = 0;
+    try {
+        for (const agentId of AGENT_IDS) {
+            if (controller.signal.aborted) {
+                break;
+            }
+            const current = resolveWorldContext(ctx);
+            if (resolveActiveChatId(current) !== chatId) {
+                if (summary) {
+                    summary.textContent = `Chat changed; test run cancelled after ${completed} of ${AGENT_IDS.length}.`;
+                }
+                return;
+            }
+            if (summary) {
+                summary.textContent = `Testing ${completed + 1}/${AGENT_IDS.length}…`;
+            }
+            const result = await runAgentTest(current, root, agentId, {
+                signal: controller.signal,
+            });
+            completed += 1;
+            if (result?.ok) {
+                ok += 1;
+            }
+        }
+        if (summary) {
+            summary.textContent = controller.signal.aborted
+                ? `Cancelled after ${completed} of ${AGENT_IDS.length}.`
+                : `${ok}/${AGENT_IDS.length} agents OK.`;
+        }
+    } finally {
+        if (button) {
+            button.disabled = false;
+        }
+        if (activeTestAbort === controller) {
+            activeTestAbort = null;
+        }
+    }
 }
 
 /**
@@ -514,13 +1079,17 @@ export function buildCharacterLimitMarkup(entries, settings) {
     </label>`).join('');
 }
 
-function ensureAgentConfig(root) {
+function ensureAgentConfig(root, ctx = null) {
     const host = root.querySelector('[data-neoterra-agent-config]');
-    if (!host || host.dataset.built === 'true') {
+    if (!host) {
         return;
     }
-    host.innerHTML = buildAgentConfigMarkup();
-    host.dataset.built = 'true';
+    if (host.dataset.built !== 'true') {
+        host.innerHTML = buildAgentConfigMarkup();
+        host.dataset.built = 'true';
+    }
+    agentPickerState = readAgentPickerContext(ctx);
+    syncAgentPickers(root, getSettings(ctx), agentPickerState);
 }
 
 /**
@@ -1057,7 +1626,7 @@ async function importSettings(ctx, root, file) {
         }
     }
     saveSettings(ctx, parsed);
-    ensureAgentConfig(root);
+    ensureAgentConfig(root, ctx);
     paintSettingsPanel(ctx, root);
     syncDependentFields(root, getSettings(ctx));
     bus.emit(EVENTS.SETTINGS_CHANGED, { path: '*', settings: getSettings(ctx) });
@@ -1097,6 +1666,16 @@ export function paintSettingsPanel(ctx, root = document) {
     for (const input of root.querySelectorAll('[data-neoterra-limit-character]')) {
         writeValue(input, settings.contentLimits?.characters?.[input.dataset.neoterraLimitCharacter] ?? '');
     }
+    for (const select of root.querySelectorAll('[data-neoterra-preset-select]')) {
+        select.innerHTML = buildAgentPresetOptionsMarkup(settings);
+        const wanted = settings.agentPresets?.activeId
+            ? `preset:${settings.agentPresets.activeId}`
+            : '';
+        if ([...select.options].some((option) => option.value === wanted)) {
+            select.value = wanted;
+        }
+    }
+    syncAgentPickers(root, settings, agentPickerState);
     return settings;
 }
 
@@ -1190,7 +1769,7 @@ export async function mountSettingsPanel(ctx, {
     const existing = document.getElementById(UI_IDS.SETTINGS_PANEL);
     if (existing) {
         mountedCtx = ctx;
-        ensureAgentConfig(existing);
+        ensureAgentConfig(existing, ctx);
         paintSettingsPanel(ctx, existing);
         refreshNarratorStatus(existing, ctx);
         void ensureCharacterLimits(ctx, existing, externalSignal);
@@ -1246,12 +1825,46 @@ export async function mountSettingsPanel(ctx, {
             event.target.value = '';
             return;
         }
+        if (event.target.matches?.('[data-neoterra-preset-select]')) {
+            // Selecting a saved/recommended preset applies it immediately.
+            applyPresetSelection(ctx, root, event.target.value);
+            return;
+        }
+        if (event.target.matches?.('[data-neoterra-profile-select]')) {
+            handleProfileSelect(ctx, root, event.target);
+            return;
+        }
         onChange(ctx, root, event);
     }, { signal });
     root.addEventListener('click', event => {
+        // Collapsing the extensions panel ends any in-flight connection test.
+        if (event.target.closest?.('.inline-drawer-toggle')) {
+            activeTestAbort?.abort();
+        }
         const promptButton = event.target.closest?.('[data-neoterra-reset-prompt]');
         if (promptButton) {
             onResetPrompt(ctx, root, promptButton.dataset.neoterraResetPrompt);
+            return;
+        }
+        const presetButton = event.target.closest?.(
+            '[data-neoterra-preset-save],[data-neoterra-preset-update],[data-neoterra-preset-delete],[data-neoterra-preset-apply]',
+        );
+        if (presetButton) {
+            handlePresetAction(ctx, root, presetButton);
+            return;
+        }
+        const fetchModelsButton = event.target.closest?.('[data-neoterra-fetch-models]');
+        if (fetchModelsButton) {
+            handleFetchModels(ctx, root, fetchModelsButton.dataset.neoterraFetchModels);
+            return;
+        }
+        const testAgentButton = event.target.closest?.('[data-neoterra-test-agent]');
+        if (testAgentButton) {
+            void runAgentTest(ctx, root, testAgentButton.dataset.neoterraTestAgent);
+            return;
+        }
+        if (event.target.closest?.('[data-neoterra-test-all-agents]')) {
+            void handleTestAllAgents(ctx, root);
             return;
         }
         if (event.target.closest?.('[data-neoterra-export-settings]')) {
@@ -1323,7 +1936,7 @@ export async function mountSettingsPanel(ctx, {
         }
     }, { signal });
 
-    ensureAgentConfig(root);
+    ensureAgentConfig(root, ctx);
     paintSettingsPanel(ctx, root);
     syncDependentFields(root, getSettings(ctx));
     refreshNarratorStatus(root, ctx);
@@ -1337,6 +1950,8 @@ export async function mountSettingsPanel(ctx, {
 export function disposeSettingsPanel() {
     panelAbort?.abort();
     panelAbort = null;
+    activeTestAbort?.abort();
+    activeTestAbort = null;
     mountedCtx = null;
     if (!hasDom()) {
         return;
@@ -1353,6 +1968,7 @@ export function refreshSettingsPanel() {
     const live = resolveWorldContext(mountedCtx);
     const root = document.getElementById(UI_IDS.SETTINGS_PANEL);
     if (root) {
+        agentPickerState = readAgentPickerContext(live);
         const settings = paintSettingsPanel(live, root);
         syncDependentFields(root, settings);
         refreshNarratorStatus(root, live);
