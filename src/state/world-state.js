@@ -247,7 +247,11 @@ function seedCharacter(member, { isPlayer, season, profiles = null, formGroups =
         charId: member.characterId,
         formId: member.formId,
         formGroup: form?.formGroup ?? character?.formGroup ?? null,
-        displayName: form?.displayName ?? character?.displayName ?? member.characterId,
+        // The person's name comes from the base card, not the active form's
+        // display label: a seeded villain form is still Leila Renya, and the
+        // Codex renders the form label separately (`formName`). This also keeps
+        // the exported player card named after the character, not the form.
+        displayName: character?.displayName ?? form?.displayName ?? member.characterId,
         side,
         controlledBy: isPlayer ? 'player' : 'npc',
         status: 'active',

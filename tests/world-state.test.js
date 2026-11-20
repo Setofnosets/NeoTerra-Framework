@@ -777,6 +777,8 @@ test('S2 seeds Leila as the villain form with a villain portrait', () => {
     const leila = state.characters['s2.leila.renya'];
     assert.equal(leila.formId, 's2.leila.renya.femme.feral');
     assert.equal(leila.side, 'villain');
+    // The person keeps her base name; the form is a label, not a rename.
+    assert.equal(leila.displayName, 'Leila Renya');
     assert.equal(leila.controlledBy, 'player');
     assert.equal(leila.formGroup, 's2.leila');
     assert.equal(state.player.formId, 's2.leila.renya.femme.feral');
