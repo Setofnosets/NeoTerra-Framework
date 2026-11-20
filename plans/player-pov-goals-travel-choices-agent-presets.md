@@ -2,8 +2,9 @@
 
 ## Meta
 - Slug: player-pov-goals-travel-choices-agent-presets
-- Status: M2 complete (steps 6–9). M3 next (steps 10–13).
+- Status: M3 complete (steps 10–13)
 - Date: 2026-11-19
+- Commit: 1d8f52b — feat(settings,agents): saved presets, pickers, connection tests, and v1.3.0 (M3)
 - Upstream: `plans/fix-identity-settings-map-travel-chat.md`, `plans/travel-feedback-followup.md`, `plans/character-card-fidelity.md`
 - Requested by: user report (7 items) — see Summary
 
@@ -23,10 +24,10 @@
 - [x] 9. Generated scene description on travel
 
 **M3 — Agent control (steps 10â€“13)**
-- [ ] 10. Saved agent presets
-- [ ] 11. Profile/model/cadence pickers
-- [ ] 12. Per-agent "Test connection"
-- [ ] 13. Docs, changelog, QA script, version 1.3.0
+- [x] 10. Saved agent presets
+- [x] 11. Profile/model/cadence pickers
+- [x] 12. Per-agent "Test connection"
+- [x] 13. Docs, changelog, QA script, version 1.3.0
 
 ## Summary
 
